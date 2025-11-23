@@ -1,43 +1,29 @@
 ## Forex Candlestick Scanner
 
-Lightweight CLI that downloads Forex (or any Yahoo Finance ticker) data via `yfinance` and runs all TA-Lib candlestick detectors to highlight signals for your chosen symbol, timeframe, and dates.
+Python package + CLI that downloads Yahoo Finance data via `yfinance` and runs TA-Lib candlestick detectors for your symbol, timeframe, and date filters.
 
-### Key features
-- Pulls OHLC data from Yahoo Finance with automatic timezone normalization.
-- Supports TA-Lib's entire `CDL*` candlestick catalog or a single pattern.
-- Date filtering by exact day or start/end range.
-- TA-Lib is handled automatically (Windows uses the PyPI wheel; Linux/macOS builds the TA-Lib C library from source in CI).
-- Experimental pattern ranking helper in `pattern_tester.py`.
-
-### Suggested repo/folder names
-- `forex-candlestick-scanner` (descriptive and CLI-friendly)
-- `yfinance-ta-patterns`
-- `forex-ta-screener`
-
-### Quick start (uv-only)
-1) Create a virtual environment and install deps with `uv` (no pip needed):
+### Quick start
 ```bash
-uv venv
+# create env
+python -m venv .venv
 .\.venv\Scripts\activate  # PowerShell; adjust for your shell
-uv sync  # installs yfinance + TA-Lib from PyPI (wheels on Windows; source build may be needed on Linux/macOS)
-```
-If you prefer to refresh the lockfile manually instead of using the existing `uv.lock`:
-```bash
-uv add ./ta_lib-0.6.7-cp314-cp314-win_amd64.whl yfinance
-```
-`pyproject.toml` targets Python `>=3.12`; lower versions may work but are not guaranteed.
 
-2) Run the scanner:
-```bash
-python main.py --pattern KICKING --symbol EURUSD --timeframe 5m --period 60d
+# install the package (editable for local dev)
+pip install -e .
+
+# run CLI (two entrypoints)
+yfinance-ta-patterns --pattern KICKING --symbol EURUSD --timeframe 5m --period 60d
+# or
+yftp --all-patterns --symbol EURUSD --timeframe 5m --period 60d --date 2025-04-01
 ```
+`pyproject.toml` targets Python `>=3.12`.
 
 ### CLI usage
 ```
-python main.py [--pattern NAME | --all-patterns]
-               [--symbol EURUSD] [--period 60d]
-               [--timeframe 15m] [--date YYYY-MM-DD]
-               [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD]
+yfinance-ta-patterns [--pattern NAME | --all-patterns]
+                     [--symbol EURUSD] [--period 60d]
+                     [--timeframe 15m] [--date YYYY-MM-DD]
+                     [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD]
 ```
 - `--pattern`: Single candlestick name (with or without `CDL` prefix).
 - `--all-patterns`: Scan every TA-Lib candlestick detector.
@@ -50,32 +36,34 @@ python main.py [--pattern NAME | --all-patterns]
 ### Examples
 - All patterns for a single day:
 ```bash
-python main.py --all-patterns --symbol EURUSD --timeframe 5m --period 60d --date 2025-04-01
+yftp --all-patterns --symbol EURUSD --timeframe 5m --period 60d --date 2025-04-01
 ```
 - All patterns across a range:
 ```bash
-python main.py --all-patterns --symbol EURUSD --timeframe 5m --period 60d --start-date 2025-04-01 --end-date 2025-04-10
+yftp --all-patterns --symbol EURUSD --timeframe 5m --period 60d --start-date 2025-04-01 --end-date 2025-04-10
 ```
 - One pattern without date filter:
 ```bash
-python main.py --pattern KICKING --symbol EURUSD --timeframe 5m --period 60d
+yftp --pattern KICKING --symbol EURUSD --timeframe 5m --period 60d
 ```
 
 ### Data loader
-`forex_data_loader.py` fetches and normalizes OHLC data. It appends `=X` to symbols when missing and converts timestamps to UTC before shifting to the configured timezone (`Europe/Moscow` by default).
+`yfinance_ta_patterns/forex_data_loader.py` fetches and normalizes OHLC data. It appends `=X` to symbols when missing and converts timestamps to UTC before shifting to the configured timezone (`Europe/Moscow` by default).
 
 ### Pattern analysis
-`pattern_analyzer.py` wraps TA-Lib's `CDL*` functions, returning non-zero signals and applying optional date filters. When `--all-patterns` is used, it iterates over the full catalog and prints hits per pattern.
+`yfinance_ta_patterns/pattern_analyzer.py` wraps TA-Lib's `CDL*` functions, returning non-zero signals and applying optional date filters. When `--all-patterns` is used, it iterates over the full catalog and prints hits per pattern.
 
 ### Pattern ranking helper (optional)
-`pattern_tester.py` contains a backtesting-style ranking tool. It depends on `utils.pattern_helper.PatternHelper` to enumerate patterns; add that helper before running comparisons or exports.
+`yfinance_ta_patterns/pattern_tester.py` contains a backtesting-style ranking tool. It depends on `utils.pattern_helper.PatternHelper` to enumerate patterns; add that helper before running comparisons or exports.
 
 ### Project layout
-- `main.py`: CLI entry point.
-- `forex_data_loader.py`: Data download and timezone normalization.
-- `pattern_analyzer.py`: Candlestick signal extraction.
-- `pattern_tester.py`: Experimental ranking/backtest utilities.
-- TA-Lib is pulled from PyPI wheels at install time (no bundled wheel).
+- `yfinance_ta_patterns/cli.py`: CLI entry point and argument parsing.
+- `yfinance_ta_patterns/forex_data_loader.py`: Data download and timezone normalization.
+- `yfinance_ta_patterns/pattern_analyzer.py`: Candlestick signal extraction.
+- `yfinance_ta_patterns/pattern_tester.py`: Experimental ranking/backtest utilities.
+- `main.py`: Thin wrapper to launch the CLI.
 
-### Notes
-- The project assumes an installed TA-Lib binary; CI builds the TA-Lib C library from source on Linux/macOS and uses the PyPI wheel on Windows. PyPI wheels exist for CPython 3.9–3.14, so local installs can rely on them unless you prefer to build from source. If you adjust the Python version, update `pyproject.toml` accordingly.
+### Packaging and releases
+- Nightly GitHub Actions workflow builds onefile Nuitka binaries for Windows/macOS/Linux and publishes nightly prereleases.
+- A PyPI publish workflow can be enabled by adding a secret `PYPI_API_TOKEN`; tags like `v0.1.0` will build sdist/wheel and upload.
+- TA-Lib is installed from PyPI on Windows; Linux/macOS CI builds the TA-Lib C library from source for the binaries. For local installs, PyPI wheels (`ta-lib` >=0.6.8) cover CPython 3.9–3.14.
