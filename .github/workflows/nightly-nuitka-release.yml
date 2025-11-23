@@ -89,8 +89,8 @@ jobs:
           python -m nuitka main.py `
             --onefile `
             --assume-yes-for-downloads `
-            --output-dir dist `
-            --output-filename $output `
+            --output-dir=dist `
+            --output-filename=$output `
             --windows-console-mode=disable
 
       - name: Build executable (Unix onefile)
@@ -103,8 +103,8 @@ jobs:
           python -m nuitka main.py \
             --onefile \
             --assume-yes-for-downloads \
-            --output-dir dist \
-            --output-filename "${output}"
+            --output-dir=dist \
+            --output-filename="${output}"
           chmod +x "dist/${output}"
 
       - name: Upload artifact
