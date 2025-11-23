@@ -9,3 +9,8 @@ ta_lib-*.whl
 
 # Virtual environments
 .venv
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+htmlcov/

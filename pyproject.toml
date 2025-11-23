@@ -1,10 +1,33 @@
 [project]
-name = "0020"
+name = "yfinance-ta-patterns"
 version = "0.1.0"
-description = "Add your description here"
+description = "CLI and helpers to scan yfinance data for TA-Lib candlestick patterns."
 readme = "README.md"
 requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [
+    { name = "eminsk" },
+]
 dependencies = [
     "ta-lib>=0.6.8",
     "yfinance>=0.2.66",
+    "pandas>=2.2.0",
+    "pytz>=2024.1",
+    "numpy>=1.26",
 ]
+
+[project.scripts]
+yfinance-ta-patterns = "yfinance_ta_patterns.cli:main"
+yftp = "yfinance_ta_patterns.cli:main"
+
+[project.urls]
+Repository = "https://github.com/eminsk/yfinance-ta-patterns"
+Homepage = "https://github.com/eminsk/yfinance-ta-patterns"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["yfinance_ta_patterns*"]
