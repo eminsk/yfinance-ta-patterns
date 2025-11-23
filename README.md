@@ -6,7 +6,7 @@ Lightweight CLI that downloads Forex (or any Yahoo Finance ticker) data via `yfi
 - Pulls OHLC data from Yahoo Finance with automatic timezone normalization.
 - Supports TA-Lib's entire `CDL*` candlestick catalog or a single pattern.
 - Date filtering by exact day or start/end range.
-- Ready-to-use TA-Lib wheel for Windows (`ta_lib-0.6.7-cp314-cp314-win_amd64.whl`).
+- Pulls TA-Lib from PyPI wheels (no bundled wheel needed).
 - Experimental pattern ranking helper in `pattern_tester.py`.
 
 ### Suggested repo/folder names
@@ -19,13 +19,13 @@ Lightweight CLI that downloads Forex (or any Yahoo Finance ticker) data via `yfi
 ```bash
 uv venv
 .\.venv\Scripts\activate  # PowerShell; adjust for your shell
-uv sync  # installs yfinance + TA-Lib from the bundled wheel via uv.lock
+uv sync  # installs yfinance + TA-Lib from PyPI wheels
 ```
 If you prefer to refresh the lockfile manually instead of using the existing `uv.lock`:
 ```bash
 uv add ./ta_lib-0.6.7-cp314-cp314-win_amd64.whl yfinance
 ```
-`pyproject.toml` targets Python `>=3.14`; lower versions may work but are not guaranteed.
+`pyproject.toml` targets Python `>=3.12`; lower versions may work but are not guaranteed.
 
 2) Run the scanner:
 ```bash
@@ -75,8 +75,7 @@ python main.py --pattern KICKING --symbol EURUSD --timeframe 5m --period 60d
 - `forex_data_loader.py`: Data download and timezone normalization.
 - `pattern_analyzer.py`: Candlestick signal extraction.
 - `pattern_tester.py`: Experimental ranking/backtest utilities.
-- `ta_lib-0.6.7-cp314-cp314-win_amd64.whl`: Bundled TA-Lib wheel for Windows.
+- TA-Lib is pulled from PyPI wheels at install time (no bundled wheel).
 
 ### Notes
-- The project assumes an installed TA-Lib binary; the bundled wheel covers Windows CPython 3.14 x64. For other platforms, install an appropriate TA-Lib build.
-- If you adjust the Python version, update `pyproject.toml` accordingly.
+- The project assumes an installed TA-Lib binary; PyPI now ships wheels with the C library embedded for Windows/macOS/Linux on CPython 3.9–3.14. If you adjust the Python version, update `pyproject.toml` accordingly.
