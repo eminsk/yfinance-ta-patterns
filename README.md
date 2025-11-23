@@ -6,7 +6,7 @@ Lightweight CLI that downloads Forex (or any Yahoo Finance ticker) data via `yfi
 - Pulls OHLC data from Yahoo Finance with automatic timezone normalization.
 - Supports TA-Lib's entire `CDL*` candlestick catalog or a single pattern.
 - Date filtering by exact day or start/end range.
-- Pulls TA-Lib from PyPI wheels (no bundled wheel needed).
+- TA-Lib is handled automatically (Windows uses the PyPI wheel; Linux/macOS builds the TA-Lib C library from source in CI).
 - Experimental pattern ranking helper in `pattern_tester.py`.
 
 ### Suggested repo/folder names
@@ -19,7 +19,7 @@ Lightweight CLI that downloads Forex (or any Yahoo Finance ticker) data via `yfi
 ```bash
 uv venv
 .\.venv\Scripts\activate  # PowerShell; adjust for your shell
-uv sync  # installs yfinance + TA-Lib from PyPI wheels
+uv sync  # installs yfinance + TA-Lib from PyPI (wheels on Windows; source build may be needed on Linux/macOS)
 ```
 If you prefer to refresh the lockfile manually instead of using the existing `uv.lock`:
 ```bash
@@ -78,4 +78,4 @@ python main.py --pattern KICKING --symbol EURUSD --timeframe 5m --period 60d
 - TA-Lib is pulled from PyPI wheels at install time (no bundled wheel).
 
 ### Notes
-- The project assumes an installed TA-Lib binary; PyPI now ships wheels with the C library embedded for Windows/macOS/Linux on CPython 3.9–3.14. If you adjust the Python version, update `pyproject.toml` accordingly.
+- The project assumes an installed TA-Lib binary; CI builds the TA-Lib C library from source on Linux/macOS and uses the PyPI wheel on Windows. PyPI wheels exist for CPython 3.9–3.14, so local installs can rely on them unless you prefer to build from source. If you adjust the Python version, update `pyproject.toml` accordingly.

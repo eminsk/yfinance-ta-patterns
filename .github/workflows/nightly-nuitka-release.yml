@@ -10,27 +10,59 @@ permissions:
   actions: read
 
 env:
-  PYTHON_VERSION: "3.12"
   APP_NAME: "yfinance-ta-patterns"
+  TA_LIB_VERSION: "0.6.4"
 
 jobs:
   build:
-    name: Build (${{ matrix.os }})
+    name: Build (${{ matrix.os }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.12", "3.13"]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
+      - name: Set up Python ${{ matrix.python }}
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ matrix.python }}
           allow-prereleases: true
+
+      - name: Build TA-Lib C library (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev libssl-dev libffi-dev zlib1g-dev patchelf wget
+          src="ta-lib-${TA_LIB_VERSION}-src.tar.gz"
+          wget -q "https://github.com/ta-lib/ta-lib/releases/download/v${TA_LIB_VERSION}/${src}"
+          tar -xzf "${src}"
+          pushd "ta-lib-${TA_LIB_VERSION}"
+          ./configure --prefix=/usr/local
+          make -j"$(nproc)"
+          sudo make install
+          popd
+          sudo ldconfig
+
+      - name: Build TA-Lib C library (macOS)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="ta-lib-${TA_LIB_VERSION}-src.tar.gz"
+          curl -L -o "${src}" "https://github.com/ta-lib/ta-lib/releases/download/v${TA_LIB_VERSION}/${src}"
+          tar -xzf "${src}"
+          pushd "ta-lib-${TA_LIB_VERSION}"
+          ./configure --prefix=/usr/local
+          make -j"$(sysctl -n hw.ncpu)"
+          sudo make install
+          popd
 
       - name: Install Python deps (Windows)
         if: matrix.os == 'windows-latest'
@@ -43,14 +75,17 @@ jobs:
         if: matrix.os != 'windows-latest'
         shell: bash
         run: |
+          export TA_INCLUDE_PATH=/usr/local/include
+          export TA_LIBRARY_PATH=/usr/local/lib
           python -m pip install --upgrade pip
-          python -m pip install --upgrade nuitka ta-lib yfinance pandas pytz numpy requests
+          python -m pip install --upgrade nuitka yfinance pandas pytz numpy requests
+          python -m pip install --no-binary=ta-lib ta-lib
 
       - name: Build executable (Windows onefile, no console)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          $output = "${{ env.APP_NAME }}-windows.exe"
+          $output = "${{ env.APP_NAME }}-windows-py${{ matrix.python }}.exe"
           python -m nuitka main.py `
             --onefile `
             --assume-yes-for-downloads `
@@ -64,7 +99,7 @@ jobs:
         run: |
           short_os="${{ matrix.os }}" 
           short_os="${short_os%%-*}"
-          output="${APP_NAME}-${short_os}"
+          output="${APP_NAME}-${short_os}-py${{ matrix.python }}"
           python -m nuitka main.py \
             --onefile \
             --assume-yes-for-downloads \
@@ -75,7 +110,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nuitka-${{ matrix.os }}
+          name: nuitka-${{ matrix.os }}-py${{ matrix.python }}
           path: dist/*
 
   release:
