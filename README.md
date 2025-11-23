@@ -64,6 +64,5 @@ yftp --pattern KICKING --symbol EURUSD --timeframe 5m --period 60d
 - `main.py`: Thin wrapper to launch the CLI.
 
 ### Packaging and releases
-- Nightly GitHub Actions workflow builds onefile Nuitka binaries for Windows/macOS/Linux and publishes nightly prereleases.
-- A PyPI publish workflow can be enabled by adding a secret `PYPI_API_TOKEN`; tags like `v0.1.0` will build sdist/wheel and upload.
-- TA-Lib is installed from PyPI on Windows; Linux/macOS CI builds the TA-Lib C library from source for the binaries. For local installs, PyPI wheels (`ta-lib` >=0.6.8) cover CPython 3.9–3.14.
+- Nightly GitHub Actions workflow builds onefile Nuitka binaries for Windows/macOS/Linux (PyPI wheels for TA-Lib on all platforms) and publishes nightly prereleases.
+- PyPI publish workflow runs on tags (needs secret `PYPI_API_TOKEN`); tags like `v0.1.0` will build sdist/wheel and upload.
