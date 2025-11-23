@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
+ta_lib-*.whl
 
 # Virtual environments
 .venv

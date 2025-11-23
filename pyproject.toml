@@ -3,11 +3,8 @@ name = "0020"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
-    "ta-lib",
+    "ta-lib>=0.6.8",
     "yfinance>=0.2.66",
 ]
-
-[tool.uv.sources]
-ta-lib = { path = "ta_lib-0.6.7-cp314-cp314-win_amd64.whl" }
