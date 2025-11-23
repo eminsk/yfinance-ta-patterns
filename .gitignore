@@ -9,6 +9,7 @@ ta_lib-*.whl
 
 # Virtual environments
 .venv
+.venv-build
 
 # Tests / coverage
 .pytest_cache/
