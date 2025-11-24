@@ -10,6 +10,7 @@ TIMEFRAME_MAP = {
     "M15": "15m",
     "M30": "30m",
     "H1": "1h",
+    "H4": "4h",
     "D1": "1d",
 }
 VALID_INTERVALS = {
@@ -21,6 +22,7 @@ VALID_INTERVALS = {
     "60m",
     "90m",
     "1h",
+    "4h",
     "1d",
     "5d",
     "1wk",
@@ -63,7 +65,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--timeframe",
         default="15m",
-        help="Timeframe (M1, M5, M15, M30, H1, D1) or raw yfinance interval (1m, 5m, 15m, 1h, 1d...).",
+        help=(
+            "Timeframe (M1, M5, M15, M30, H1, H4, D1) "
+            "or raw yfinance interval (1m, 5m, 15m, 1h, 4h, 1d...)."
+        ),
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(

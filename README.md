@@ -29,7 +29,7 @@ yfinance-ta-patterns [--pattern NAME | --all-patterns]
 - `--all-patterns`: Scan every TA-Lib candlestick detector.
 - `--symbol`: Ticker without suffix; `=X` is appended automatically for Forex (default `EURUSD`).
 - `--period`: History window passed to `yfinance` (e.g., `60d`, `1mo`).
-- `--timeframe`: Use `M1/M5/M15/M30/H1/D1` or raw `yfinance` intervals (`1m`, `5m`, `1h`, `1d`, etc.).
+- `--timeframe`: Use `M1/M5/M15/M30/H1/H4/D1` or raw `yfinance` intervals (`1m`, `5m`, `1h`, `4h`, `1d`, etc.). `H4`/`4h` is produced by resampling 1h data.
 - `--date`: Filter signals for a single day.
 - `--start-date` / `--end-date`: Inclusive range filter (cannot be combined with `--date`).
 
@@ -49,6 +49,8 @@ yftp --pattern KICKING --symbol EURUSD --timeframe 5m --period 60d
 
 ### Data loader
 `yfinance_ta_patterns/forex_data_loader.py` fetches and normalizes OHLC data. It appends `=X` to symbols when missing and converts timestamps to UTC before shifting to the configured timezone (`Europe/Moscow` by default).
+
+`H4` timeframes are fetched as `1h` data and resampled to 4-hour candles.
 
 ### Pattern analysis
 `yfinance_ta_patterns/pattern_analyzer.py` wraps TA-Lib's `CDL*` functions, returning non-zero signals and applying optional date filters. When `--all-patterns` is used, it iterates over the full catalog and prints hits per pattern.
