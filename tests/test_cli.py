@@ -4,6 +4,7 @@ from yfinance_ta_patterns.cli import normalize_timeframe
 def test_normalize_timeframe_aliases():
     assert normalize_timeframe("M5") == "5m"
     assert normalize_timeframe("h1") == "1h"
+    assert normalize_timeframe("h4") == "4h"
 
 
 def test_normalize_timeframe_invalid():
