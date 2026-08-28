@@ -1,10 +1,16 @@
-import argparse
+"""Command-line interface for scanning TA-Lib candlestick patterns."""
 
+from __future__ import annotations
+
+import argparse
+import sys
+from collections.abc import Sequence
+
+from . import __version__
 from .forex_data_loader import ForexDataLoader
 from .pattern_analyzer import PatternAnalyzer
 
-
-TIMEFRAME_MAP = {
+TIMEFRAME_MAP: dict[str, str] = {
     "M1": "1m",
     "M5": "5m",
     "M15": "15m",
@@ -13,7 +19,7 @@ TIMEFRAME_MAP = {
     "H4": "4h",
     "D1": "1d",
 }
-VALID_INTERVALS = {
+VALID_INTERVALS: set[str] = {
     "1m",
     "2m",
     "5m",
@@ -41,20 +47,28 @@ def normalize_timeframe(timeframe: str) -> str:
     return interval
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments."""
     parser = argparse.ArgumentParser(
+        prog="yfinance-ta-patterns",
         description="Show TA-Lib candlestick pattern signals for a symbol.",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=(
             "Examples:\n"
             "  # All patterns on a single day\n"
-            "  python main.py --all-patterns --symbol EURUSD --timeframe 5m --period 60d --date 2025-04-01\n\n"
+            "  yftp --all-patterns --symbol EURUSD --timeframe 5m --period 60d --date 2025-04-01\n\n"
             "  # All patterns over a date range\n"
-            "  python main.py --all-patterns --symbol EURUSD --timeframe 5m --period 60d "
+            "  yftp --all-patterns --symbol EURUSD --timeframe 5m --period 60d "
             "--start-date 2025-04-01 --end-date 2025-04-10\n\n"
             "  # Single pattern without date filter\n"
-            "  python main.py --pattern KICKING --symbol EURUSD --timeframe 5m --period 60d\n"
+            "  yftp --pattern KICKING --symbol EURUSD --timeframe 5m --period 60d\n"
         ),
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     parser.add_argument(
         "--symbol",
@@ -92,11 +106,11 @@ def parse_args() -> argparse.Namespace:
         "--end-date",
         help="Optional end date (YYYY-MM-DD) for range filter (inclusive).",
     )
-    return parser.parse_args()
+    return parser.parse_args(args)
 
 
-def main() -> None:
-    args = parse_args()
+def run_cli(args: argparse.Namespace) -> int:
+    """Run CLI logic with parsed arguments."""
     interval = normalize_timeframe(args.timeframe)
 
     if args.date and (args.start_date or args.end_date):
@@ -132,10 +146,7 @@ def main() -> None:
             print(f"Found signals for {args.pattern} ({interval}, {args.period}){range_info}:")
             print(signals.to_string())
     else:
-        print(
-            f"Scanning all patterns for {args.symbol} "
-            f"({interval}, {args.period}){range_info}..."
-        )
+        print(f"Scanning all patterns for {args.symbol} ({interval}, {args.period}){range_info}...")
         found_any = False
         for pattern in sorted(analyzer.pattern_functions):
             signals = analyzer.get_signals(
@@ -146,7 +157,6 @@ def main() -> None:
             )
             pattern_name = pattern.replace("CDL", "")
             if signals.empty:
-                print(f"{pattern_name}: no signals")
                 continue
 
             found_any = True
@@ -159,6 +169,17 @@ def main() -> None:
                 f"No signals for any pattern on period {args.period} "
                 f"timeframe {interval}{range_info}"
             )
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    """Main CLI entrypoint."""
+    parsed = parse_args(argv)
+    try:
+        sys.exit(run_cli(parsed))
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

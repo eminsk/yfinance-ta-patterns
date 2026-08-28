@@ -6,12 +6,18 @@ dist/
 wheels/
 *.egg-info
 ta_lib-*.whl
+release-assets/
+release-upload/
+tmp_download/
+winlogs/
 
 # Virtual environments
 .venv
 .venv-build
 
-# Tests / coverage
+# Tests / coverage / linters
 .pytest_cache/
 .coverage
 htmlcov/
+.mypy_cache/
+.ruff_cache/
