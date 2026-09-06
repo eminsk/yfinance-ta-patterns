@@ -1,12 +1,24 @@
 [project]
 name = "yfinance-ta-patterns"
-version = "0.1.4"
-description = "CLI and helpers to scan yfinance data for TA-Lib candlestick patterns."
+version = "0.2.0"
+description = "Advanced market pattern scanner with AI confidence scoring, trade setups, and LLM market intelligence."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
+keywords = [
+    "yfinance",
+    "technical-analysis",
+    "candlestick-patterns",
+    "ta-lib",
+    "ai",
+    "trading",
+    "forex",
+    "stocks",
+    "crypto",
+    "algorithmic-trading",
+]
 authors = [
-    { name = "eminsk" },
+    { name = "eminsk", email = "M_N_N@tut.by" },
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

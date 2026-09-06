@@ -1,8 +1,27 @@
-# Forex Candlestick Scanner (`yfinance-ta-patterns`)
+# Market Candlestick & AI Pattern Scanner (`yfinance-ta-patterns`)
 
-Python package and CLI that downloads market data via `yfinance` and detects TA-Lib candlestick patterns for customizable symbols, timeframes, and date ranges.
+[![PyPI](https://img.shields.io/pypi/v/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
+[![Python](https://img.shields.io/pypi/pyversions/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+High-performance Python library and CLI that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate probabilistic confidence scores, trade setups, and LLM-ready market briefs.
 
 Compatible with **Python 3.12, 3.13, and 3.14**.
+
+---
+
+## Key Features
+
+- **Multi-Asset Data Loader**: Universal fetching and candle normalization for stocks (`AAPL`, `NVDA`), crypto (`BTC-USD`), commodities (`GC=F`), indices (`^GSPC`), and forex pairs (`EURUSD`).
+- **TA-Lib Pattern Detection**: Full recognition engine across 60+ classic candlestick patterns with date-filtering and timeframe resampling.
+- **AI Pattern Confidence Scorer**: Probabilistic score ($0.0 - 1.0$) evaluating multi-factor confluence:
+  - Multi-EMA trend alignment (20, 50, 200 EMA)
+  - Relative Volume surge (RVOL)
+  - RSI momentum exhaustion & divergence
+  - Volatility expansion (ATR 14) & candle body dominance
+- **Automated Trade Setups**: Computes entry price, ATR-based invalidation stop-loss, and multi-tier take-profit targets (1.5x / 3.0x risk/reward).
+- **AI Market Analyst & LLM Integration**: Generates executive markdown briefs, JSON payloads, and engineered prompts tailored for external AI agents (GPT-4o, Claude 3.5, Gemini, Ollama).
+- **Quantitative Pattern Ranking**: Built-in vectorized backtester ranking patterns by win rate, Sharpe ratio, and total profit/loss.
 
 ---
 
@@ -24,81 +43,136 @@ uv sync --all-extras
 ### 2. Run CLI
 
 ```bash
-# Detect a single pattern
-yftp --pattern KICKING --symbol EURUSD --timeframe 5m --period 60d
+# Detect a single pattern with classic output
+yftp --pattern HAMMER --symbol AAPL --timeframe 1h --period 60d
 
-# Scan all patterns for a specific date
-yftp --all-patterns --symbol EURUSD --timeframe 5m --period 60d --date 2025-04-01
+# Scan all patterns on crypto with AI Confluence Scoring
+yftp --all-patterns --symbol BTC-USD --timeframe 4h --period 60d --ai --min-confidence 0.65
 
-# Scan all patterns across a date range
-yftp --all-patterns --symbol EURUSD --timeframe 15m --period 60d --start-date 2025-04-01 --end-date 2025-04-10
+# Generate an Executive AI Analyst Brief in Markdown
+yftp --all-patterns --symbol NVDA --timeframe 15m --period 10d --ai-analyst --format markdown
+
+# Generate an LLM-ready prompt template for GPT-4o / Claude
+yftp --all-patterns --symbol EURUSD --timeframe 1h --period 60d --prompt
 ```
 
 ---
 
-## CLI Options
+## CLI Reference
 
-```
+```text
 yfinance-ta-patterns [-h] [-v] (--pattern PATTERN | --all-patterns)
                      [--symbol SYMBOL] [--period PERIOD] [--timeframe TIMEFRAME]
                      [--date YYYY-MM-DD] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD]
+                     [--ai] [--min-confidence MIN_CONFIDENCE]
+                     [--ai-analyst] [--prompt] [--format {text,json,markdown}]
 ```
 
-- `-v`, `--version`: Show package version.
-- `--pattern`: Single candlestick pattern name (e.g. `HAMMER`, `DOJI`, `CDLKICKING`). `CDL` prefix is optional.
-- `--all-patterns`: Scan and display signals for all available TA-Lib candlestick patterns.
-- `--symbol`: Ticker symbol (default: `EURUSD`). `=X` suffix is automatically appended for forex symbols.
-- `--period`: History window (e.g., `5d`, `60d`, `1y`, `max`).
-- `--timeframe`: Timeframe alias (`M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`) or raw `yfinance` interval (`1m`, `5m`, `15m`, `1h`, `4h`, `1d`, `1wk`). `H4`/`4h` is automatically resampled from 1h candles.
-- `--date`: Filter signals for a specific date (`YYYY-MM-DD`).
-- `--start-date` / `--end-date`: Date range filter (`YYYY-MM-DD`). Mutually exclusive with `--date`.
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `-v`, `--version` | Show package version. |
+| `--pattern` | Single candlestick pattern (e.g. `HAMMER`, `DOJI`, `CDLKICKING`). |
+| `--all-patterns` | Scan and display signals for all available candlestick patterns. |
+| `--symbol` | Ticker symbol (e.g. `AAPL`, `BTC-USD`, `GC=F`, `EURUSD`). |
+| `--period` | History period (`5d`, `60d`, `1y`, `max`). |
+| `--timeframe` | Interval alias (`M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`) or `yfinance` interval (`1m`, `5m`, `15m`, `1h`, `4h`, `1d`). |
+| `--date` | Filter signals for a specific date (`YYYY-MM-DD`). |
+| `--start-date` / `--end-date` | Date range filter (`YYYY-MM-DD`). |
+| `--ai` | Enrich detected patterns with AI confidence scoring, signal grade, and trade setups. |
+| `--min-confidence` | Minimum confidence threshold for AI scoring ($0.0$ to $1.0$, default: $0.0$). |
+| `--ai-analyst` | Run executive AI market analysis with synthesis and trade setups. |
+| `--prompt` | Generate an LLM prompt ready to pass to ChatGPT, Claude, or local LLMs. |
+| `--format` | Output format: `text` (default), `json`, or `markdown`. |
 
 ---
 
 ## Python API
 
-### Data Loader (`ForexDataLoader`)
+### 1. Universal Multi-Asset Data Loader (`MarketDataLoader`)
 
-Fetches and normalizes OHLC data, handling timezones and resampling:
+Fetches and normalizes OHLC data across equities, crypto, forex, and commodities:
 
 ```python
+from yfinance_ta_patterns import MarketDataLoader
+
+# Stocks
+loader = MarketDataLoader(symbol="NVDA", period="60d", interval="1h")
+df = loader.get_data()
+
+# Crypto
+crypto_loader = MarketDataLoader(symbol="BTC-USD", period="30d", interval="15m")
+crypto_df = crypto_loader.get_data()
+
+# Forex (ForexDataLoader is fully compatible alias)
 from yfinance_ta_patterns import ForexDataLoader
 
-loader = ForexDataLoader(symbol="EURUSD", period="60d", interval="15m", timezone="Europe/Moscow")
-df = loader.get_data()
-print(df.head())
+forex_loader = ForexDataLoader(symbol="EURUSD", period="60d", interval="1h")
+forex_df = forex_loader.get_data()
 ```
 
-### Pattern Analyzer (`PatternAnalyzer`)
+### 2. AI Pattern Confidence Scorer (`AIPatternScorer`)
 
-Evaluates candlestick patterns on any OHLC `DataFrame`:
+Evaluates technical confluence (trend, momentum, volume, volatility) and builds complete risk-managed trade setups:
 
 ```python
-from yfinance_ta_patterns import ForexDataLoader, PatternAnalyzer
+from yfinance_ta_patterns import MarketDataLoader, AIPatternScorer
 
-loader = ForexDataLoader("EURUSD", period="60d", interval="1h")
-data = loader.get_data()
+data = MarketDataLoader("AAPL", period="60d", interval="1d").get_data()
 
-analyzer = PatternAnalyzer(data)
-signals = analyzer.get_signals("HAMMER", start_date="2025-01-01", end_date="2025-01-15")
-print(signals)
+scorer = AIPatternScorer(data)
+scored_signals = scorer.score_all_active(min_confidence=0.60)
+
+for sig in scored_signals:
+    print(f"Pattern: {sig.pattern_name}")
+    print(f"Confidence: {sig.confidence * 100:.1f}% ({sig.grade.value})")
+    print(f"Action: {sig.action}")
+    if sig.setup:
+        print(f"Entry: {sig.setup.entry_price:.2f}")
+        print(f"Stop Loss: {sig.setup.stop_loss:.2f}")
+        print(f"Target 1: {sig.setup.take_profit_1:.2f} (R:R {sig.setup.risk_reward_ratio:.1f})")
+    print("Confluences:", ", ".join(sig.confluences))
+    print("-" * 40)
 ```
 
-### Pattern Ranking & Backtest (`PatternRankingTester`)
+### 3. AI Market Analyst & LLM Prompting (`AIMarketAnalyst`)
 
-Tests all candlestick patterns and ranks them by performance (win rate, total PnL, Sharpe ratio):
+Generates structured briefs and prompt templates for external LLM reasoning agents:
 
 ```python
-from yfinance_ta_patterns import ForexDataLoader, PatternRankingTester
+from yfinance_ta_patterns import MarketDataLoader, AIMarketAnalyst
 
-loader = ForexDataLoader("EURUSD", period="60d", interval="1h")
-data = loader.get_data()
+data = MarketDataLoader("BTC-USD", period="30d", interval="4h").get_data()
+
+analyst = AIMarketAnalyst(data, symbol="BTC-USD")
+results = analyst.analyze(min_confidence=0.65)
+
+# 1. Executive Markdown Brief
+brief = analyst.generate_brief(results)
+print(brief)
+
+# 2. Prompt for GPT-4o / Claude / Local LLM
+llm_prompt = analyst.to_llm_prompt(results)
+
+# 3. JSON Payload for APIs / Microservices
+json_data = analyst.to_json(results)
+```
+
+### 4. Quantitative Backtesting & Pattern Ranking (`PatternRankingTester`)
+
+Tests all candlestick patterns and ranks them by quantitative performance metrics:
+
+```python
+from yfinance_ta_patterns import MarketDataLoader, PatternRankingTester
+
+data = MarketDataLoader("EURUSD", period="60d", interval="1h").get_data()
 
 tester = PatternRankingTester(data, initial_capital=10000.0, position_size=100.0)
 results = tester.test_all_patterns()
 
-top_10 = tester.get_top_patterns(10)
-for r in top_10:
+top_patterns = tester.get_top_patterns(5)
+for r in top_patterns:
     print(
         f"{r.pattern_name}: Win Rate={r.win_rate:.1f}%, PnL={r.total_pnl:.2f}, Sharpe={r.sharpe_ratio:.2f}"
     )
@@ -111,20 +185,21 @@ tester.export_results("pattern_ranking.csv")
 
 ## Development & Testing
 
-Run tests and checks locally:
+Run the test suite and quality checks:
 
 ```bash
-# Run pytest across Python 3.12, 3.13, 3.14
-uv run --python 3.12 --with pytest pytest -v
-uv run --python 3.13 --with pytest pytest -v
-uv run --python 3.14 --with pytest pytest -v
+# Run pytest across test suite
+uv run --extra dev pytest -v
 
 # Linter and formatting check
-uv run --with ruff ruff check .
-uv run --with ruff ruff format --check .
+uv run --extra dev ruff check .
+uv run --extra dev ruff format --check .
 
-# Type checking
-uv run --with mypy --with pandas-stubs --with types-pytz mypy yfinance_ta_patterns
+# Static type check
+uv run --extra dev mypy yfinance_ta_patterns
+
+# Build source distribution and binary wheel
+uv build
 ```
 
 ---

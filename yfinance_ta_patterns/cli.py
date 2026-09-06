@@ -1,13 +1,16 @@
-"""Command-line interface for scanning TA-Lib candlestick patterns."""
+"""Command-line interface for scanning TA-Lib candlestick patterns with AI intelligence."""
 
 from __future__ import annotations
 
 import argparse
 import sys
 from collections.abc import Sequence
+from typing import Any
 
 from . import __version__
-from .forex_data_loader import ForexDataLoader
+from .ai.analyst import AIMarketAnalyst
+from .ai.scorer import AIPatternScorer, PatternConfidenceResult
+from .data import MarketDataLoader
 from .pattern_analyzer import PatternAnalyzer
 
 TIMEFRAME_MAP: dict[str, str] = {
@@ -51,17 +54,18 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse CLI arguments."""
     parser = argparse.ArgumentParser(
         prog="yfinance-ta-patterns",
-        description="Show TA-Lib candlestick pattern signals for a symbol.",
+        description="Scan candlestick patterns with optional AI probabilistic confidence scoring and trade setups.",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  # All patterns on a single day\n"
-            "  yftp --all-patterns --symbol EURUSD --timeframe 5m --period 60d --date 2025-04-01\n\n"
-            "  # All patterns over a date range\n"
-            "  yftp --all-patterns --symbol EURUSD --timeframe 5m --period 60d "
-            "--start-date 2025-04-01 --end-date 2025-04-10\n\n"
-            "  # Single pattern without date filter\n"
-            "  yftp --pattern KICKING --symbol EURUSD --timeframe 5m --period 60d\n"
+            "  # AI-scored patterns with trade setups\n"
+            "  yftp --all-patterns --symbol EURUSD --timeframe 1h --ai --min-confidence 0.65\n\n"
+            "  # AI Market Analyst executive brief\n"
+            "  yftp --all-patterns --symbol AAPL --timeframe 1d --ai-analyst\n\n"
+            "  # Export structured JSON for trading bots or LLMs\n"
+            "  yftp --all-patterns --symbol BTC-USD --timeframe 4h --ai --format json\n\n"
+            "  # Single pattern classic scan\n"
+            "  yftp --pattern HAMMER --symbol EURUSD --timeframe 15m --period 30d\n"
         ),
     )
     parser.add_argument(
@@ -73,9 +77,9 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--symbol",
         default="EURUSD",
-        help="Ticker without suffix (e.g. EURUSD, GBPUSD); '=X' will be appended automatically.",
+        help="Ticker symbol (e.g. EURUSD, AAPL, BTC-USD, NVDA, GC=F).",
     )
-    parser.add_argument("--period", default="60d", help="History period, e.g. 60d")
+    parser.add_argument("--period", default="60d", help="History period, e.g. 60d, 1y, max")
     parser.add_argument(
         "--timeframe",
         default="15m",
@@ -87,7 +91,7 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "--pattern",
-        help="Single candlestick pattern, e.g. KICKING (CDL prefix optional).",
+        help="Single candlestick pattern, e.g. HAMMER (CDL prefix optional).",
     )
     group.add_argument(
         "--all-patterns",
@@ -106,6 +110,34 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
         "--end-date",
         help="Optional end date (YYYY-MM-DD) for range filter (inclusive).",
     )
+    # AI Options
+    parser.add_argument(
+        "--ai",
+        action="store_true",
+        help="Enable AI multi-factor confidence scoring and automated trade setup calculation.",
+    )
+    parser.add_argument(
+        "--min-confidence",
+        type=float,
+        default=0.0,
+        help="Minimum AI confidence score threshold (0.0 to 1.0, e.g. 0.65).",
+    )
+    parser.add_argument(
+        "--ai-analyst",
+        action="store_true",
+        help="Generate an executive AI market intelligence brief.",
+    )
+    parser.add_argument(
+        "--prompt",
+        action="store_true",
+        help="Generate a structured prompt optimized for LLMs (ChatGPT, Claude, Gemini).",
+    )
+    parser.add_argument(
+        "--format",
+        choices=["text", "json", "markdown"],
+        default="text",
+        help="Output presentation format.",
+    )
     return parser.parse_args(args)
 
 
@@ -116,11 +148,18 @@ def run_cli(args: argparse.Namespace) -> int:
     if args.date and (args.start_date or args.end_date):
         raise ValueError("Use either --date or --start-date/--end-date, not both.")
 
-    data = ForexDataLoader(
+    data = MarketDataLoader(
         args.symbol,
         period=args.period,
         interval=interval,
     ).get_data()
+
+    if data.empty:
+        print(
+            f"Error: No data retrieved for symbol '{args.symbol}' ({args.period}, {interval}).",
+            file=sys.stderr,
+        )
+        return 1
 
     analyzer = PatternAnalyzer(data)
     range_info = ""
@@ -129,46 +168,104 @@ def run_cli(args: argparse.Namespace) -> int:
     elif args.start_date or args.end_date:
         range_info = f" from {args.start_date or 'beginning'} to {args.end_date or 'end'}"
 
-    if args.pattern:
+    patterns_to_scan = [args.pattern] if args.pattern else sorted(analyzer.pattern_functions)
+    use_ai = args.ai or args.ai_analyst or args.prompt
+
+    all_scored_results: list[PatternConfidenceResult] = []
+    classic_signals: dict[str, Any] = {}
+
+    scorer = AIPatternScorer(data) if use_ai else None
+
+    for pat in patterns_to_scan:
         signals = analyzer.get_signals(
-            args.pattern,
+            pat,
             date=args.date,
             start_date=args.start_date,
             end_date=args.end_date,
         )
-
         if signals.empty:
+            continue
+
+        clean_name = pat.replace("CDL", "")
+        if scorer:
+            scored = scorer.score_all_signals(
+                signals, clean_name, min_confidence=args.min_confidence
+            )
+            all_scored_results.extend(scored)
+        else:
+            classic_signals[clean_name] = signals
+
+    # 1. LLM Prompt Output
+    if args.prompt:
+        analyst = AIMarketAnalyst(data, all_scored_results)
+        print(analyst.to_llm_prompt(args.symbol, interval))
+        return 0
+
+    # 2. AI Analyst Brief
+    if args.ai_analyst:
+        analyst = AIMarketAnalyst(data, all_scored_results)
+        if args.format == "json":
+            print(analyst.to_json(args.symbol, interval))
+        else:
+            print(analyst.generate_brief(args.symbol, interval))
+        return 0
+
+    # 3. AI Mode Output
+    if args.ai:
+        if not all_scored_results:
+            print(f"No AI-scored signals found for {args.symbol} matching criteria{range_info}.")
+            return 0
+
+        if args.format == "json":
+            analyst = AIMarketAnalyst(data, all_scored_results)
+            print(analyst.to_json(args.symbol, interval))
+            return 0
+
+        print(
+            f"=== AI Pattern Intelligence: {args.symbol} ({interval}, {args.period}){range_info} ==="
+        )
+        for res in all_scored_results:
+            conf_pct = f"{res.confidence_score * 100:.1f}%"
+            print(
+                f"\n[{res.grade.value}] {res.pattern_name} at {res.timestamp} | AI Confidence: {conf_pct}"
+            )
+            print(
+                f"  Regime: {res.trend_regime} | RVOL: {res.rvol:.2f}x | RSI: {res.rsi:.1f} | ATR: {res.atr:.5f}"
+            )
+            if res.trade_setup:
+                ts = res.trade_setup
+                print(
+                    f"  Setup: {ts.direction} @ {ts.entry_price:.5f} | "
+                    f"Stop: {ts.stop_loss:.5f} | TP1: {ts.take_profit_1:.5f} | TP2: {ts.take_profit_2:.5f} "
+                    f"(R/R: {ts.risk_reward_ratio:.1f}:1)"
+                )
+            if res.confluence_factors:
+                print(f"  Confluence: {', '.join(res.confluence_factors)}")
+            if res.risk_factors:
+                print(f"  Risks: {', '.join(res.risk_factors)}")
+            print("-" * 60)
+        return 0
+
+    # 4. Classic TA-Lib Mode Output
+    if not classic_signals:
+        if args.pattern:
             print(
                 f"No signals for pattern {args.pattern} "
                 f"on period {args.period} timeframe {interval}{range_info}"
             )
         else:
-            print(f"Found signals for {args.pattern} ({interval}, {args.period}){range_info}:")
-            print(signals.to_string())
-    else:
-        print(f"Scanning all patterns for {args.symbol} ({interval}, {args.period}){range_info}...")
-        found_any = False
-        for pattern in sorted(analyzer.pattern_functions):
-            signals = analyzer.get_signals(
-                pattern,
-                date=args.date,
-                start_date=args.start_date,
-                end_date=args.end_date,
-            )
-            pattern_name = pattern.replace("CDL", "")
-            if signals.empty:
-                continue
-
-            found_any = True
-            print(f"{pattern_name}:")
-            print(signals.to_string())
-            print("-" * 40)
-
-        if not found_any:
             print(
                 f"No signals for any pattern on period {args.period} "
                 f"timeframe {interval}{range_info}"
             )
+        return 0
+
+    print(f"Scanning patterns for {args.symbol} ({interval}, {args.period}){range_info}...")
+    for pat_name, sig in classic_signals.items():
+        print(f"{pat_name}:")
+        print(sig.to_string())
+        print("-" * 40)
+
     return 0
 
 
