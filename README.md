@@ -46,6 +46,7 @@ uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h
 `yfinance-ta-patterns` is tested and **100% verified (37/37 tests passing)** on upcoming **Python 3.15** (`cpython-3.15.0rc2`).
 
 While upstream wheels for C-dependencies (`ta-lib` and `pandas`) are pending official PyPI release for 3.15 and Free-Threaded No-GIL, pre-compiled native Windows x64 binary wheels are provided in our [Release Assets](https://github.com/eminsk/yfinance-ta-patterns/releases/tag/v0.2.0):
+* `ta_lib-0.7.1-cp313-cp313t-win_amd64.whl` (Python 3.13 Free-Threaded No-GIL)
 * `ta_lib-0.7.1-cp314-cp314t-win_amd64.whl` (Python 3.14 Free-Threaded No-GIL)
 * `ta_lib-0.7.1-cp315-cp315t-win_amd64.whl` (Python 3.15 Free-Threaded No-GIL)
 * `ta_lib-0.7.1-cp315-cp315-win_amd64.whl` (Python 3.15 Standard)
@@ -59,7 +60,7 @@ uv add yfinance-ta-patterns --find-links https://github.com/eminsk/yfinance-ta-p
 #### 🧵 Free-Threaded (No-GIL / PEP 703) Verified
 `yfinance-ta-patterns` is **100% verified on Python 3.13t, 3.14t, and 3.15t Free-Threaded without GIL** (`-X gil=0`). 
 Includes dual-mode execution:
-1. **Native C Acceleration**: Verified with pre-compiled No-GIL wheels (`ta_lib-0.7.1-cp314t` and `ta_lib-0.7.1-cp315t`).
+1. **Native C Acceleration**: Verified with pre-compiled No-GIL wheels (`ta_lib-0.7.1-cp313t`, `cp314t`, and `cp315t`).
 2. **Zero-Dependency Fallback Engine**: Built-in vectorized pure-NumPy engine (`talib_compat`) that executes pattern scanning across all 60+ candlestick patterns thread-safely across all CPU cores without requiring C compilation or external TA-Lib binary drivers.
 
 Or configure your project's `pyproject.toml`:
