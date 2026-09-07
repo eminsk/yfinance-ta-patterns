@@ -7,7 +7,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import talib
+
+from yfinance_ta_patterns.talib_compat import talib
 
 
 @dataclass

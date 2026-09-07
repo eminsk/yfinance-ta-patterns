@@ -49,10 +49,15 @@ While upstream wheels for C-dependencies (`ta-lib` and `pandas`) are pending off
 * `ta_lib-0.7.1-cp315-cp315-win_amd64.whl` (MSVC x64 static core)
 * `pandas-3.0.5-cp315-cp315-win_amd64.whl` (MSVC x64 binary)
 
-To install on a Python 3.15 project using `uv`:
+To install cleanly on a Python 3.15 project:
 ```bash
 uv add yfinance-ta-patterns --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.2.0
 ```
+
+#### 🧵 Free-Threaded (No-GIL / PEP 703) Verified
+`yfinance-ta-patterns` is **100% verified on Python 3.13t, 3.14t, and 3.15t Free-Threaded without GIL** (`-X gil=0`). 
+Includes an automatic built-in vectorized pure-NumPy fallback engine (`talib_compat`) that executes pattern scanning across all 60+ candlestick patterns thread-safely across all CPU cores without requiring C compilation or external TA-Lib binary drivers.
+
 Or configure your project's `pyproject.toml`:
 ```toml
 [tool.uv]

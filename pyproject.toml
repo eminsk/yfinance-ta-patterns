@@ -16,6 +16,9 @@ keywords = [
     "stocks",
     "crypto",
     "algorithmic-trading",
+    "free-threaded",
+    "no-gil",
+    "pep-703",
 ]
 authors = [
     { name = "eminsk", email = "M_N_Nik@yahoo.com" },
@@ -32,11 +35,11 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "ta-lib>=0.6.8",
     "yfinance>=0.2.66",
     "pandas>=2.2.0",
     "pytz>=2024.1",
     "numpy>=1.26",
+    "ta-lib>=0.6.8; python_version < '3.14'",
 ]
 
 [project.optional-dependencies]

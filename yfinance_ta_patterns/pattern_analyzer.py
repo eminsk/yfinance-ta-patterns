@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 import pandas as pd
-import talib
+
+from yfinance_ta_patterns.talib_compat import talib
 
 
 class PatternAnalyzer:
