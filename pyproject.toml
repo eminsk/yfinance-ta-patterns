@@ -18,7 +18,7 @@ keywords = [
     "algorithmic-trading",
 ]
 authors = [
-    { name = "eminsk", email = "M_N_N@tut.by" },
+    { name = "eminsk", email = "M_N_Nik@yahoo.com" },
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -53,8 +53,11 @@ yfinance-ta-patterns = "yfinance_ta_patterns.cli:main"
 yftp = "yfinance_ta_patterns.cli:main"
 
 [project.urls]
-Repository = "https://github.com/eminsk/yfinance-ta-patterns"
 Homepage = "https://github.com/eminsk/yfinance-ta-patterns"
+Repository = "https://github.com/eminsk/yfinance-ta-patterns"
+Documentation = "https://github.com/eminsk/yfinance-ta-patterns#readme"
+"Issue Tracker" = "https://github.com/eminsk/yfinance-ta-patterns/issues"
+Changelog = "https://github.com/eminsk/yfinance-ta-patterns/releases"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

@@ -1,8 +1,10 @@
 # Market Candlestick & AI Pattern Scanner (`yfinance-ta-patterns`)
 
-[![PyPI](https://img.shields.io/pypi/v/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
+[![PyPI](https://img.shields.io/pypi/v/yfinance-ta-patterns?color=blue)](https://pypi.org/project/yfinance-ta-patterns/)
 [![Python](https://img.shields.io/pypi/pyversions/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/eminsk/yfinance-ta-patterns/actions/workflows/ci.yml/badge.svg)](https://github.com/eminsk/yfinance-ta-patterns/actions)
+[![Downloads](https://static.pepy.tech/badge/yfinance-ta-patterns)](https://pepy.tech/project/yfinance-ta-patterns)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 High-performance Python library and CLI that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate probabilistic confidence scores, trade setups, and LLM-ready market briefs.
 
@@ -30,14 +32,13 @@ Compatible with **Python 3.12, 3.13, and 3.14**.
 ### 1. Installation
 
 ```bash
-# Using pip
+# Recommended from PyPI:
+pip install yfinance-ta-patterns
+
+# Or install from source:
+git clone https://github.com/eminsk/yfinance-ta-patterns.git
+cd yfinance-ta-patterns
 pip install -e .
-
-# Or with dev dependencies (pytest, ruff, mypy)
-pip install -e ".[dev]"
-
-# Or using uv
-uv sync --all-extras
 ```
 
 ### 2. Run CLI
@@ -201,6 +202,17 @@ uv run --extra dev mypy yfinance_ta_patterns
 # Build source distribution and binary wheel
 uv build
 ```
+
+---
+ 
+ ## 🌐 High-Performance Systems Ecosystem
+
+`yfinance-ta-patterns` is developed by [**@eminsk**](https://github.com/eminsk) as part of an open-source engineering ecosystem:
+
+* ⚡ [**NanoGEMM**](https://github.com/eminsk/nanogemm) — Minimalist, bare-metal AVX2+FMA SIMD matrix multiplication engine in ~100KB for sub-microsecond CPU neural network inference (`pip install nanogemm`).
+* 🎥 [**screenvideo**](https://github.com/eminsk/screenvideo) — Lightweight desktop screen recorder with WASAPI audio and a standalone pure x64 Flat Assembler (FASM) native edition.
+* 📊 [**xlsx_vievers**](https://github.com/eminsk/xlsx_vievers) — Desktop spreadsheet processor with 80+ formula functions, Chart Wizard, and hardware-accelerated SIMD SSE2 math engine.
+* 🔍 [**StackOverflowAPI**](https://github.com/eminsk/StackOverflowAPI) — Bilingual desktop client for Stack Overflow built with CustomTkinter and native FASM x64 search client.
 
 ---
 
