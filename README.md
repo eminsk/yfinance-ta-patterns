@@ -8,7 +8,7 @@
 
 High-performance Python library and CLI that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate probabilistic confidence scores, trade setups, and LLM-ready market briefs.
 
-Compatible with **Python 3.12, 3.13, and 3.14**.
+Compatible with **Python 3.12, 3.13, 3.14, and Python 3.15 (Release Candidate & Preview)**.
 
 ---
 
@@ -32,13 +32,31 @@ Compatible with **Python 3.12, 3.13, and 3.14**.
 ### 1. Installation
 
 ```bash
-# Recommended from PyPI:
+# Recommended with uv:
+uv add yfinance-ta-patterns
+
+# Or standard pip:
 pip install yfinance-ta-patterns
 
-# Or install from source:
-git clone https://github.com/eminsk/yfinance-ta-patterns.git
-cd yfinance-ta-patterns
-pip install -e .
+# Or run instantly via uvx without installing:
+uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h --ai
+```
+
+#### ⚡ Python 3.15 Ready (Early Adopters)
+`yfinance-ta-patterns` is tested and **100% verified (37/37 tests passing)** on upcoming **Python 3.15** (`cpython-3.15.0rc2`).
+
+While upstream wheels for C-dependencies (`ta-lib` and `pandas`) are pending official PyPI release for 3.15, pre-compiled native Windows x64 binary wheels are provided in our [Release Assets](https://github.com/eminsk/yfinance-ta-patterns/releases/tag/v0.2.0):
+* `ta_lib-0.7.1-cp315-cp315-win_amd64.whl` (MSVC x64 static core)
+* `pandas-3.0.5-cp315-cp315-win_amd64.whl` (MSVC x64 binary)
+
+To install on a Python 3.15 project using `uv`:
+```bash
+uv add yfinance-ta-patterns --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.2.0
+```
+Or configure your project's `pyproject.toml`:
+```toml
+[tool.uv]
+find-links = ["https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.2.0"]
 ```
 
 ### 2. Run CLI
