@@ -59,6 +59,37 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
     return clean
 
 
+
+TIMEFRAME_MAP: dict[str, str] = {
+    "M1": "1m",
+    "M2": "2m",
+    "M5": "5m",
+    "M15": "15m",
+    "M30": "30m",
+    "H1": "1h",
+    "H4": "4h",
+    "D1": "1d",
+    "W1": "1wk",
+    "MN1": "1mo",
+}
+
+
+def normalize_interval(interval: str) -> str:
+    """Normalize interval notation (e.g. 'm1', 'M1' -> '1m', 'h4', 'H4' -> '4h')."""
+    clean = interval.strip()
+    upper = clean.upper()
+    if upper in TIMEFRAME_MAP:
+        return TIMEFRAME_MAP[upper]
+    lower = clean.lower()
+    if lower in ("m1", "m2", "m5", "m15", "m30"):
+        return f"{lower[1:]}m"
+    if lower in ("h1", "h4"):
+        return f"{lower[1:]}h"
+    if lower == "d1":
+        return "1d"
+    return lower
+
+
 class MarketDataLoader:
     """Universal market data loader for Yahoo Finance tickers."""
 
@@ -71,14 +102,20 @@ class MarketDataLoader:
         asset_type: str = "auto",
     ) -> None:
         """Initialize data loader with symbol and timeframe parameters."""
+        norm_interval = normalize_interval(interval)
         self.symbol: str = symbol
         self.asset_type: str = asset_type
         self.ticker: str = normalize_ticker(symbol, asset_type=asset_type)
-        self.period: str = period
-        self.interval: str = interval
+        # Yahoo Finance restricts 1m/2m data to the last 7-8 days.
+        # Auto-adjust period to '7d' if default '60d' is passed with 1m/2m.
+        if norm_interval in ("1m", "2m") and period == "60d":
+            self.period: str = "7d"
+        else:
+            self.period: str = period
+        self.interval: str = norm_interval
         self.timezone: str = timezone
-        self._download_interval: str = self._resolve_download_interval(interval)
-        self._resample_rule: str | None = "4h" if interval == "4h" else None
+        self._download_interval: str = self._resolve_download_interval(norm_interval)
+        self._resample_rule: str | None = "4h" if norm_interval == "4h" else None
 
     @staticmethod
     def _resolve_download_interval(interval: str) -> str:

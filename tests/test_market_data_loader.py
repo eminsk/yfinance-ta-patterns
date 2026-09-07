@@ -58,3 +58,30 @@ def test_market_data_loader_process_timezone() -> None:
     processed = loader.process(df)
     assert isinstance(processed.index, pd.DatetimeIndex)
     assert processed.index.tz is not None
+
+
+def test_market_data_loader_intervals_and_period() -> None:
+    """MarketDataLoader handles m1, h4 aliases and adjusts period for 1m."""
+    from yfinance_ta_patterns.data import normalize_interval
+
+    assert normalize_interval("m1") == "1m"
+    assert normalize_interval("M1") == "1m"
+    assert normalize_interval("h4") == "4h"
+    assert normalize_interval("H4") == "4h"
+    assert normalize_interval("d1") == "1d"
+
+    # m1 with default 60d period auto-adjusts to 7d
+    loader_m1 = MarketDataLoader("EURUSD", interval="m1")
+    assert loader_m1.interval == "1m"
+    assert loader_m1.period == "7d"
+
+    # custom period for 1m is preserved
+    loader_m1_custom = MarketDataLoader("EURUSD", interval="1m", period="3d")
+    assert loader_m1_custom.period == "3d"
+
+    # h4 sets resample rule and download interval 1h
+    loader_h4 = MarketDataLoader("EURUSD", interval="h4")
+    assert loader_h4.interval == "4h"
+    assert loader_h4._download_interval == "1h"
+    assert loader_h4._resample_rule == "4h"
+    assert loader_h4.period == "60d"

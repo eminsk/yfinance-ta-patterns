@@ -10,7 +10,7 @@ from typing import Any
 from . import __version__
 from .ai.analyst import AIMarketAnalyst
 from .ai.scorer import AIPatternScorer, PatternConfidenceResult
-from .data import MarketDataLoader
+from .data import MarketDataLoader, normalize_interval
 from .pattern_analyzer import PatternAnalyzer
 
 TIMEFRAME_MAP: dict[str, str] = {
@@ -42,8 +42,7 @@ VALID_INTERVALS: set[str] = {
 
 def normalize_timeframe(timeframe: str) -> str:
     """Convert human-friendly timeframe names into yfinance intervals."""
-    tf = timeframe.upper()
-    interval = TIMEFRAME_MAP.get(tf, timeframe.lower())
+    interval = normalize_interval(timeframe)
     if interval not in VALID_INTERVALS:
         allowed = ", ".join(sorted(VALID_INTERVALS))
         raise ValueError(f"Unsupported timeframe '{timeframe}'. Allowed: {allowed}")
@@ -148,15 +147,17 @@ def run_cli(args: argparse.Namespace) -> int:
     if args.date and (args.start_date or args.end_date):
         raise ValueError("Use either --date or --start-date/--end-date, not both.")
 
-    data = MarketDataLoader(
+    loader = MarketDataLoader(
         args.symbol,
         period=args.period,
         interval=interval,
-    ).get_data()
+    )
+    data = loader.get_data()
+    period = loader.period
 
     if data.empty:
         print(
-            f"Error: No data retrieved for symbol '{args.symbol}' ({args.period}, {interval}).",
+            f"Error: No data retrieved for symbol '{args.symbol}' ({period}, {interval}).",
             file=sys.stderr,
         )
         return 1
@@ -222,7 +223,7 @@ def run_cli(args: argparse.Namespace) -> int:
             return 0
 
         print(
-            f"=== AI Pattern Intelligence: {args.symbol} ({interval}, {args.period}){range_info} ==="
+            f"=== AI Pattern Intelligence: {args.symbol} ({interval}, {period}){range_info} ==="
         )
         for res in all_scored_results:
             conf_pct = f"{res.confidence_score * 100:.1f}%"
@@ -251,16 +252,16 @@ def run_cli(args: argparse.Namespace) -> int:
         if args.pattern:
             print(
                 f"No signals for pattern {args.pattern} "
-                f"on period {args.period} timeframe {interval}{range_info}"
+                f"on period {period} timeframe {interval}{range_info}"
             )
         else:
             print(
-                f"No signals for any pattern on period {args.period} "
+                f"No signals for any pattern on period {period} "
                 f"timeframe {interval}{range_info}"
             )
         return 0
 
-    print(f"Scanning patterns for {args.symbol} ({interval}, {args.period}){range_info}...")
+    print(f"Scanning patterns for {args.symbol} ({interval}, {period}){range_info}...")
     for pat_name, sig in classic_signals.items():
         print(f"{pat_name}:")
         print(sig.to_string())
