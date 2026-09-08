@@ -7,13 +7,16 @@ even if native C ta-lib binaries are not installed.
 
 from __future__ import annotations
 
+import importlib
 from typing import Any
 
 import numpy as np
 
 _talib: Any = None
+HAS_NATIVE_TALIB: bool = False
+
 try:
-    import talib as _talib
+    _talib = importlib.import_module("talib")
     HAS_NATIVE_TALIB = True
 except (ImportError, ModuleNotFoundError):
     _talib = None
