@@ -8,6 +8,14 @@ import pandas as pd
 import pytz
 import yfinance as yf
 
+try:
+    import sklearn  # noqa: F401
+
+    HAS_SKLEARN = True
+except (ImportError, ModuleNotFoundError):
+    HAS_SKLEARN = False
+
+
 # Common standard 6-character currency pairs
 _COMMON_FOREX_PAIRS = {
     "EURUSD",
@@ -189,6 +197,7 @@ class MarketDataLoader:
         """Fetch raw market data via yfinance."""
         start_val = self.start or self.start_date
         end_val = self.end or self.end_date
+        repair_opt = self.repair and HAS_SKLEARN
 
         if start_val or end_val:
             data = yf.download(
@@ -197,7 +206,7 @@ class MarketDataLoader:
                 end=end_val,
                 interval=self._download_interval,
                 auto_adjust=self.auto_adjust,
-                repair=self.repair,
+                repair=repair_opt,
                 progress=False,
             )
         else:
@@ -206,7 +215,7 @@ class MarketDataLoader:
                 period=self.period,
                 interval=self._download_interval,
                 auto_adjust=self.auto_adjust,
-                repair=self.repair,
+                repair=repair_opt,
                 progress=False,
             )
         return cast(pd.DataFrame, data)
