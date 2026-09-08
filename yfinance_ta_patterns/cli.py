@@ -15,7 +15,6 @@ from .ai.scorer import AIPatternScorer, PatternConfidenceResult
 from .data import MarketDataLoader, normalize_interval
 from .pattern_analyzer import PatternAnalyzer
 
-
 TIMEFRAME_MAP: dict[str, str] = {
     "M1": "1m",
     "M5": "5m",
