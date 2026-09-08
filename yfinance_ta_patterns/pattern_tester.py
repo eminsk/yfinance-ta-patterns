@@ -139,6 +139,7 @@ class PatternRankingTester:
         "_execution",
         "_force_exit_on_last_bar",
         "_fx_rates",
+        "_holding_period",
         "_initial_capital",
         "_min_signals",
         "_news_dates",
@@ -171,6 +172,7 @@ class PatternRankingTester:
         min_signals: int = 1,
         fx_rates: dict[str, float] | None = None,
         sharpe_mode: str = "periodic",
+        holding_period: int | None = None,
     ) -> None:
         """Initialize pattern tester.
 
@@ -209,6 +211,8 @@ class PatternRankingTester:
             Dictionary of cross-currency exchange rates for Forex conversion
         sharpe_mode : str
             Sharpe mode: 'periodic' (returns per bar, with 0% on idle bars) or 'trades'
+        holding_period : int, optional
+            Number of bars to hold a trade before exiting (useful for single-direction patterns like Hammer)
         """
         self._data: pd.DataFrame = data
         self._initial_capital: float = initial_capital
@@ -226,6 +230,7 @@ class PatternRankingTester:
         self._min_signals: int = max(min_signals, 1)
         self._fx_rates: dict[str, float] = fx_rates or {}
         self._sharpe_mode: str = sharpe_mode
+        self._holding_period: int | None = holding_period
 
         if periods_per_year is not None:
             self._periods_per_year: float = periods_per_year
@@ -518,12 +523,43 @@ class PatternRankingTester:
         loop_limit = (n - 1) if is_next_open else n
 
         for i in range(loop_limit):
+            exec_price = opens[i + 1] if is_next_open else closes[i]
+            exec_idx = (i + 1) if is_next_open else i
+
+            # Check time-based holding period exit
+            if (
+                self._holding_period is not None
+                and position != 0.0
+                and entry_idx is not None
+                and (exec_idx - entry_idx) >= self._holding_period
+            ):
+                if position > 0.0:
+                    eff_exit = exec_price - self._slippage
+                    raw_pnl = position * (eff_exit - entry_price) - self._commission
+                    direction = "LONG"
+                else:
+                    eff_exit = exec_price + self._slippage
+                    raw_pnl = (-position) * (entry_price - eff_exit) - self._commission
+                    direction = "SHORT"
+                pnl = self._convert_pnl_to_account_currency(raw_pnl, exec_price)
+                trades.append(
+                    {
+                        "entry_time": times[entry_idx],
+                        "exit_time": times[exec_idx],
+                        "exit_idx": exec_idx,
+                        "direction": direction,
+                        "entry_price": entry_price,
+                        "exit_price": exec_price,
+                        "pnl": pnl,
+                        "time_exit": True,
+                    }
+                )
+                position = 0.0
+                entry_idx = None
+
             signal = signals[i]
             if signal == 0:
                 continue
-
-            exec_price = opens[i + 1] if is_next_open else closes[i]
-            exec_idx = (i + 1) if is_next_open else i
 
             if signal == 1:
                 # Close Short if currently short

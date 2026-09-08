@@ -108,3 +108,23 @@ def test_comparison_report_and_export(sample_ohlc_dataset):
         assert os.path.exists(csv_path)
         exported_df = pd.read_csv(csv_path)
         assert "Pattern" in exported_df.columns
+
+
+def test_calculate_trades_holding_period(sample_ohlc_dataset):
+    # Only buy signals (like CDLHAMMER)
+    signals = np.zeros(len(sample_ohlc_dataset))
+    signals[2] = 1
+    signals[8] = 1
+    signals[15] = 1
+
+    # Without holding_period: single long held until the end
+    tester_default = PatternRankingTester(sample_ohlc_dataset, holding_period=None)
+    trades_default = tester_default._calculate_trades(signals)
+    assert len(trades_default) == 1
+
+    # With holding_period=3: exits after 3 bars, allowing subsequent entries
+    tester_holding = PatternRankingTester(sample_ohlc_dataset, holding_period=3)
+    trades_holding = tester_holding._calculate_trades(signals)
+    assert len(trades_holding) == 3
+    for trade in trades_holding:
+        assert trade["time_exit"] is True

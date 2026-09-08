@@ -216,12 +216,12 @@ tester = PatternRankingTester(
     symbol="EURUSD",
     initial_capital=10000.0,
     position_size=1000.0,
-    execution="next_open",      # Unbiased: enters on Open of bar i+1
-    allow_short=True,           # Full symmetric short trades on bearish signals
-    commission=1.50,            # Transaction fee per trade
-    slippage=0.0001,            # Execution slippage in price units
-    min_signals=5,              # Exclude patterns with < 5 signals (reduces overfitting)
-    sharpe_mode="periodic",     # Accounts for 0% returns during idle hold periods
+    execution="next_open",  # Unbiased: enters on Open of bar i+1
+    allow_short=True,  # Full symmetric short trades on bearish signals
+    commission=1.50,  # Transaction fee per trade
+    slippage=0.0001,  # Execution slippage in price units
+    min_signals=5,  # Exclude patterns with < 5 signals (reduces overfitting)
+    sharpe_mode="periodic",  # Accounts for 0% returns during idle hold periods
 )
 results = tester.test_all_patterns(min_signals=5)
 
