@@ -183,9 +183,20 @@ def run_cli(args: argparse.Namespace) -> int:
     end_arg = args.end_date
 
     if args.date:
-        # Load with 60-day warm-up lookback buffer so indicators (EMA, RSI, ATR) compute accurately
+        # Scale lookback buffer based on timeframe so indicators (EMA200, RSI, ATR) have enough warm-up history
         target_dt = pd.to_datetime(args.date)
-        start_arg = (target_dt - pd.Timedelta(days=60)).strftime("%Y-%m-%d")
+        if interval in ("1d", "1wk", "1mo"):
+            lookback_days = 365  # 1 full year (~252 trading days) to ensure full EMA200 warm-up
+        elif interval in ("4h", "1h", "60m"):
+            lookback_days = 90
+        elif interval in ("15m", "30m"):
+            lookback_days = 60
+        elif interval == "5m":
+            lookback_days = 30
+        else:  # 1m, 2m
+            lookback_days = 7
+
+        start_arg = (target_dt - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")
         end_arg = (target_dt + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
     loader = MarketDataLoader(
@@ -280,10 +291,7 @@ def run_cli(args: argparse.Namespace) -> int:
             print(analyst.to_json(args.symbol, interval))
             return 0
 
-
-        print(
-            f"=== AI Pattern Intelligence: {args.symbol} ({interval}, {period}){range_info} ==="
-        )
+        print(f"=== AI Pattern Intelligence: {args.symbol} ({interval}, {period}){range_info} ===")
         for res in all_scored_results:
             conf_pct = f"{res.confidence_score * 100:.1f}%"
             print(
@@ -314,10 +322,7 @@ def run_cli(args: argparse.Namespace) -> int:
                 f"on period {period} timeframe {interval}{range_info}"
             )
         else:
-            print(
-                f"No signals for any pattern on period {period} "
-                f"timeframe {interval}{range_info}"
-            )
+            print(f"No signals for any pattern on period {period} timeframe {interval}{range_info}")
         return 0
 
     print(f"Scanning patterns for {args.symbol} ({interval}, {period}){range_info}...")

@@ -11,20 +11,95 @@ import pandas as pd
 from yfinance_ta_patterns.data import normalize_interval
 from yfinance_ta_patterns.talib_compat import talib
 
-# Standard annual periods for timeframe-aware Sharpe Ratio calculation
+# Standard annual periods for timeframe-aware Sharpe Ratio calculation (Equities: 252 days, 6.5h session)
 TIMEFRAME_PERIODS_PER_YEAR: dict[str, float] = {
-    "1m": 252.0 * 390.0,   # 98,280 periods/year
-    "2m": 252.0 * 195.0,   # 49,140 periods/year
-    "5m": 252.0 * 78.0,    # 19,656 periods/year
-    "15m": 252.0 * 26.0,   # 6,552 periods/year
-    "30m": 252.0 * 13.0,   # 3,276 periods/year
-    "60m": 252.0 * 6.5,    # 1,638 periods/year
-    "1h": 252.0 * 6.5,     # 1,638 periods/year
-    "4h": 252.0 * 2.0,     # 504 periods/year
-    "1d": 252.0,           # 252 trading days/year
-    "1wk": 52.0,           # 52 weeks/year
-    "1mo": 12.0,           # 12 months/year
+    "1m": 252.0 * 390.0,  # 98,280 periods/year
+    "2m": 252.0 * 195.0,  # 49,140 periods/year
+    "5m": 252.0 * 78.0,  # 19,656 periods/year
+    "15m": 252.0 * 26.0,  # 6,552 periods/year
+    "30m": 252.0 * 13.0,  # 3,276 periods/year
+    "60m": 252.0 * 6.5,  # 1,638 periods/year
+    "1h": 252.0 * 6.5,  # 1,638 periods/year
+    "4h": 252.0 * 2.0,  # 504 periods/year
+    "1d": 252.0,  # 252 trading days/year
+    "1wk": 52.0,  # 52 weeks/year
+    "1mo": 12.0,  # 12 months/year
 }
+
+# 24/7 continuous markets (Cryptocurrency: 365 days, 24h = 8,760 hours/year)
+CRYPTO_PERIODS_PER_YEAR: dict[str, float] = {
+    "1m": 365.0 * 1440.0,  # 525,600 periods/year
+    "2m": 365.0 * 720.0,  # 262,800 periods/year
+    "5m": 365.0 * 288.0,  # 105,120 periods/year
+    "15m": 365.0 * 96.0,  # 35,040 periods/year
+    "30m": 365.0 * 48.0,  # 17,520 periods/year
+    "60m": 365.0 * 24.0,  # 8,760 periods/year
+    "1h": 365.0 * 24.0,  # 8,760 periods/year
+    "4h": 365.0 * 6.0,  # 2,190 periods/year
+    "1d": 365.0,  # 365 days/year
+    "1wk": 52.0,
+    "1mo": 12.0,
+}
+
+# 24/5 continuous markets (Forex: ~260 trading days, 24h = 6,240 hours/year)
+FOREX_PERIODS_PER_YEAR: dict[str, float] = {
+    "1m": 260.0 * 1440.0,  # 374,400 periods/year
+    "2m": 260.0 * 720.0,  # 187,200 periods/year
+    "5m": 260.0 * 288.0,  # 74,880 periods/year
+    "15m": 260.0 * 96.0,  # 24,960 periods/year
+    "30m": 260.0 * 48.0,  # 12,480 periods/year
+    "60m": 260.0 * 24.0,  # 6,240 periods/year
+    "1h": 260.0 * 24.0,  # 6,240 periods/year
+    "4h": 260.0 * 6.0,  # 1,560 periods/year
+    "1d": 260.0,  # 260 days/year
+    "1wk": 52.0,
+    "1mo": 12.0,
+}
+
+# Default baseline FX exchange rates to USD for major cross currencies
+DEFAULT_FX_USD_RATES: dict[str, float] = {
+    "EURUSD": 1.08,
+    "GBPUSD": 1.28,
+    "AUDUSD": 0.65,
+    "NZDUSD": 0.60,
+    "USDJPY": 150.0,
+    "USDCHF": 0.89,
+    "USDCAD": 1.37,
+}
+
+
+def is_crypto_symbol(symbol: str) -> bool:
+    """Identify if a symbol is a 24/7 cryptocurrency."""
+    if not symbol:
+        return False
+    s = symbol.upper()
+    return (
+        "-USD" in s
+        or "-EUR" in s
+        or "-USDT" in s
+        or s.startswith(("BTC", "ETH", "SOL", "DOGE", "XRP"))
+    )
+
+
+def is_forex_symbol(symbol: str) -> bool:
+    """Identify if a symbol is a 24/5 Forex pair."""
+    if not symbol:
+        return False
+    s = symbol.upper()
+    if s.endswith("=X"):
+        return True
+    clean = s.replace("/", "")
+    return len(clean) == 6 and clean.isalpha() and not is_crypto_symbol(s)
+
+
+def resolve_periods_per_year(timeframe: str, symbol: str = "") -> float:
+    """Resolve asset-aware annualization factor for Sharpe Ratio calculation."""
+    tf = normalize_interval(timeframe) if timeframe else "1d"
+    if symbol and is_crypto_symbol(symbol):
+        return CRYPTO_PERIODS_PER_YEAR.get(tf, 365.0)
+    elif symbol and is_forex_symbol(symbol):
+        return FOREX_PERIODS_PER_YEAR.get(tf, 260.0)
+    return TIMEFRAME_PERIODS_PER_YEAR.get(tf, 252.0)
 
 
 @dataclass
@@ -46,6 +121,8 @@ class PatternResult:
     periodic_sharpe: float = 0.0
     trade_sharpe: float = 0.0
     avg_strength: float = 100.0
+    profit_factor: float = 0.0
+    score: float = 0.0
 
 
 class PatternRankingTester:
@@ -153,7 +230,7 @@ class PatternRankingTester:
         if periods_per_year is not None:
             self._periods_per_year: float = periods_per_year
         else:
-            self._periods_per_year = TIMEFRAME_PERIODS_PER_YEAR.get(self._timeframe, 252.0)
+            self._periods_per_year = resolve_periods_per_year(self._timeframe, self._symbol)
 
         self.equity_curve: list[float] = [initial_capital]
         self.trades: list[dict[str, Any]] = []
@@ -168,32 +245,56 @@ class PatternRankingTester:
         if not self._symbol or exit_price <= 0:
             return raw_pnl
         sym = self._symbol.upper().replace("=X", "").replace("-USD", "").replace("/", "")
-        # Common 6-letter FX pair e.g. USDJPY, EURUSD, EURJPY
+        # Common 6-letter FX pair e.g. USDJPY, EURUSD, EURJPY, EURGBP
         if len(sym) == 6 and sym.isalpha():
             base, quote = sym[:3], sym[3:6]
-            # 1. Quote matches account currency (e.g. EURUSD with USD account) -> already in USD
+            # 1. Quote matches account currency (e.g. EURUSD with USD account) -> raw_pnl is already in account currency
             if quote == self._account_currency:
                 return raw_pnl
             # 2. Base matches account currency (e.g. USDJPY with USD account) -> raw_pnl is in quote, divide by exit_price
             if base == self._account_currency:
                 return raw_pnl / exit_price
-            # 3. Cross pair (e.g. EURJPY, GBPJPY with USD account) -> raw_pnl in quote (JPY)
-            if self._fx_rates:
-                direct_pair = f"{self._account_currency}{quote}"
-                inv_pair = f"{quote}{self._account_currency}"
-                if direct_pair in self._fx_rates and self._fx_rates[direct_pair] > 0:
-                    return raw_pnl / self._fx_rates[direct_pair]
-                elif inv_pair in self._fx_rates and self._fx_rates[inv_pair] > 0:
-                    return raw_pnl * self._fx_rates[inv_pair]
+
+            # 3. Arbitrary cross pair (e.g. EURJPY, EURGBP, AUDJPY) -> raw_pnl is in quote currency
+            rates = {**DEFAULT_FX_USD_RATES, **self._fx_rates}
+            direct_pair = f"{quote}{self._account_currency}"
+            inv_pair = f"{self._account_currency}{quote}"
+
+            if direct_pair in rates and rates[direct_pair] > 0:
+                return raw_pnl * rates[direct_pair]
+            elif inv_pair in rates and rates[inv_pair] > 0:
+                return raw_pnl / rates[inv_pair]
+
+            # Cross-currency via USD bridge if account currency is not USD
+            quote_in_usd: float | None = None
+            if quote == "USD":
+                quote_in_usd = 1.0
+            elif f"{quote}USD" in rates and rates[f"{quote}USD"] > 0:
+                quote_in_usd = rates[f"{quote}USD"]
+            elif f"USD{quote}" in rates and rates[f"USD{quote}"] > 0:
+                quote_in_usd = 1.0 / rates[f"USD{quote}"]
+
+            if quote_in_usd is not None:
+                pnl_usd = raw_pnl * quote_in_usd
+                if self._account_currency == "USD":
+                    return pnl_usd
+                acct_pair = f"{self._account_currency}USD"
+                inv_acct_pair = f"USD{self._account_currency}"
+                if acct_pair in rates and rates[acct_pair] > 0:
+                    return pnl_usd / rates[acct_pair]
+                elif inv_acct_pair in rates and rates[inv_acct_pair] > 0:
+                    return pnl_usd * rates[inv_acct_pair]
+
             # Fallback for USD account when quote is JPY (e.g. EURJPY): raw_pnl in JPY
             if self._account_currency == "USD" and quote == "JPY" and exit_price > 50:
-                # If pair is EURJPY, exit_price ~ 160. EURUSD ~ 1.08 => USDJPY ~ 160/1.08 ~ 148
                 return raw_pnl / (exit_price / 1.08 if base == "EUR" else exit_price)
         return raw_pnl
 
-
     def test_all_patterns(
-        self, filter_news: bool = False, min_signals: int | None = None
+        self,
+        filter_news: bool = False,
+        min_signals: int | None = None,
+        sort_by: str = "win_rate",
     ) -> list[PatternResult]:
         """Test all patterns and return ranked results.
 
@@ -203,6 +304,8 @@ class PatternRankingTester:
             If True, exclude trades during news events
         min_signals : int, optional
             Minimum total signals required to include in ranked results (default from __init__)
+        sort_by : str
+            Ranking criteria: 'win_rate' (default, sorts by win_rate then total_pnl) or 'composite' (sorts by score)
 
         Returns:
         --------
@@ -224,8 +327,11 @@ class PatternRankingTester:
                 print(f"Error testing {pattern_name}: {exc}")
                 continue
 
-        # Sort by win rate, then by total PnL
-        self._results.sort(key=lambda x: (x.win_rate, x.total_pnl), reverse=True)
+        # Sort results
+        if sort_by == "composite":
+            self._results.sort(key=lambda x: (x.score, x.total_pnl), reverse=True)
+        else:
+            self._results.sort(key=lambda x: (x.win_rate, x.total_pnl), reverse=True)
         return self._results
 
     def _test_single_pattern(
@@ -339,7 +445,9 @@ class PatternRankingTester:
         if n_bars > 1:
             prev_eq = bar_equity[:-1]
             non_zero = prev_eq > 0
-            bar_returns[non_zero] = (bar_equity[1:][non_zero] - prev_eq[non_zero]) / prev_eq[non_zero]
+            bar_returns[non_zero] = (bar_equity[1:][non_zero] - prev_eq[non_zero]) / prev_eq[
+                non_zero
+            ]
 
         std_bar_ret = float(np.std(bar_returns))
         periodic_sharpe = (
@@ -353,6 +461,26 @@ class PatternRankingTester:
         # Pattern strength tracking
         active_strengths = [s for s in strengths if s > 0]
         avg_strength = float(np.mean(active_strengths)) if active_strengths else 100.0
+
+        # Profit Factor
+        win_sum = sum(t["pnl"] for t in winning_trades)
+        loss_sum = abs(sum(t["pnl"] for t in losing_trades))
+        if loss_sum > 0:
+            profit_factor = win_sum / loss_sum
+        elif win_sum > 0:
+            profit_factor = float("inf")
+        else:
+            profit_factor = 0.0
+
+        # Composite performance score balancing win rate, profit factor, Sharpe, and trade volume
+        pf_capped = min(profit_factor, 10.0) if np.isfinite(profit_factor) else 10.0
+        sharpe_clamped = max(primary_sharpe, 0.0)
+        score = (
+            (win_rate / 100.0)
+            * (1.0 + pf_capped)
+            * (1.0 + sharpe_clamped)
+            * float(np.log1p(len(trades)))
+        )
 
         return PatternResult(
             pattern_name=pattern_name.replace("CDL", ""),
@@ -370,6 +498,8 @@ class PatternRankingTester:
             periodic_sharpe=periodic_sharpe,
             trade_sharpe=trade_sharpe,
             avg_strength=avg_strength,
+            profit_factor=profit_factor,
+            score=score,
         )
 
     def _calculate_trades(self, signals: np.ndarray) -> list[dict[str, Any]]:
@@ -384,7 +514,7 @@ class PatternRankingTester:
         times = self._data.index.to_numpy()
         n = len(signals)
 
-        is_next_open = (self._execution == "next_open")
+        is_next_open = self._execution == "next_open"
         loop_limit = (n - 1) if is_next_open else n
 
         for i in range(loop_limit):
@@ -519,11 +649,12 @@ class PatternRankingTester:
                     "Max Profit": f"{result.max_profit:.2f}",
                     "Max Loss": f"{result.max_loss:.2f}",
                     "Max Drawdown": f"{result.max_drawdown:.2f}",
+                    "Profit Factor": f"{result.profit_factor:.2f}",
                     "Sharpe Ratio": f"{result.sharpe_ratio:.2f}",
+                    "Score": f"{result.score:.2f}",
                 }
             )
 
         df = pd.DataFrame(data)
         df.to_csv(filename, index=False)
         print(f"Results exported to {filename}")
-

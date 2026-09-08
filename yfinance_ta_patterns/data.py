@@ -59,7 +59,6 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
     return clean
 
 
-
 TIMEFRAME_MAP: dict[str, str] = {
     "M1": "1m",
     "M2": "2m",
@@ -130,14 +129,17 @@ def validate_ohlc(data: pd.DataFrame, strict: bool = False) -> pd.DataFrame:
         if compare_cols:
             top = cleaned[compare_cols].max(axis=1)
             bot = cleaned[compare_cols].min(axis=1)
-            broken_bars = (cleaned["High"] < top) | (cleaned["Low"] > bot) | (cleaned["High"] < cleaned["Low"])
+            broken_bars = (
+                (cleaned["High"] < top)
+                | (cleaned["Low"] > bot)
+                | (cleaned["High"] < cleaned["Low"])
+            )
             if broken_bars.any():
                 if strict:
                     raise ValueError("Inconsistent OHLC bar geometry detected.")
                 cleaned = cleaned[~broken_bars]
 
     return cleaned
-
 
 
 class MarketDataLoader:
@@ -160,9 +162,9 @@ class MarketDataLoader:
         self.symbol: str = symbol
         self.asset_type: str = asset_type
         self.ticker: str = normalize_ticker(symbol, asset_type=asset_type)
-        # Yahoo Finance restricts 1m/2m data to the last 7-8 days.
-        # Auto-adjust period to '7d' if default '60d' is passed with 1m/2m.
-        self.period: str = "7d" if (norm_interval in ("1m", "2m") and period == "60d") else period
+        # Yahoo Finance restricts 1m data to the last 7-8 days (2m is supported up to 60d).
+        # Auto-adjust period to '7d' if default '60d' is passed with 1m.
+        self.period: str = "7d" if (norm_interval == "1m" and period == "60d") else period
         self.interval: str = norm_interval
         self.timezone: str = timezone
         self.start: str | None = start
@@ -230,6 +232,8 @@ class MarketDataLoader:
 
         # Anchor resampling in UTC (origin='epoch') to preserve institutional 4h candle bounds
         resampled = data.resample(self._resample_rule, origin="epoch").agg(agg).dropna()
+        if "Volume" in resampled.columns and (resampled["Volume"] > 0).any():
+            resampled = resampled[resampled["Volume"] > 0]
         return cast(pd.DataFrame, resampled)
 
     def process(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -269,4 +273,3 @@ class MarketDataLoader:
     def load_data(self) -> pd.DataFrame:
         """Alias for get_data to ensure CLI and script compatibility."""
         return self.get_data()
-

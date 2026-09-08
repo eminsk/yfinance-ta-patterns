@@ -49,7 +49,6 @@ class TradeSetup:
         }
 
 
-
 @dataclass(slots=True, frozen=True)
 class PatternConfidenceResult:
     """Comprehensive AI evaluation of a detected candlestick pattern."""
@@ -88,19 +87,23 @@ class PatternConfidenceResult:
 
 
 def calc_wilder_rsi(close: pd.Series, period: int = 14) -> pd.Series:
-    """Calculate Relative Strength Index (RSI) using canonical Wilder's exponential smoothing."""
+    """Calculate Relative Strength Index (RSI) using canonical Wilder's exponential smoothing.
+
+    Initial bars before period remain NaN in accordance with TA-Lib lookback invariants.
+    """
     n = len(close)
     if n <= 1:
-        return pd.Series(50.0, index=close.index)
+        return pd.Series(np.nan, index=close.index)
 
     delta = close.diff().to_numpy()
     gain = np.where(delta > 0, delta, 0.0)
     loss = np.where(delta < 0, -delta, 0.0)
 
-    rsi = np.full(n, 50.0, dtype=np.float64)
-    eff_period = min(period, n - 1) if n > 1 else 1
-    if eff_period < 1:
-        eff_period = 1
+    rsi = np.full(n, np.nan, dtype=np.float64)
+    if n <= period:
+        return pd.Series(rsi, index=close.index)
+
+    eff_period = period
 
     # First value at eff_period using SMA of initial gains/losses
     avg_g = float(np.mean(gain[1 : eff_period + 1]))
@@ -121,15 +124,17 @@ def calc_wilder_rsi(close: pd.Series, period: int = 14) -> pd.Series:
             rs = avg_g / avg_l
             rsi[i] = 100.0 - (100.0 / (1.0 + rs))
 
-    # Backfill initial bars before eff_period
-    for i in range(eff_period):
-        rsi[i] = rsi[eff_period]
-
+    # Initial bars before eff_period remain NaN (zero future lookahead)
     return pd.Series(rsi, index=close.index)
 
 
-def calc_wilder_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
-    """Calculate Average True Range (ATR) using canonical Wilder's exponential smoothing."""
+def calc_wilder_atr(
+    high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14
+) -> pd.Series:
+    """Calculate Average True Range (ATR) using canonical Wilder's exponential smoothing.
+
+    Initial bars before period - 1 remain NaN in accordance with TA-Lib lookback invariants.
+    """
     n = len(close)
     if n == 0:
         return pd.Series(dtype=np.float64)
@@ -143,20 +148,16 @@ def calc_wilder_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: i
     for i in range(1, n):
         tr[i] = max(h[i] - lo[i], abs(h[i] - c[i - 1]), abs(lo[i] - c[i - 1]))
 
+    atr = np.full(n, np.nan, dtype=np.float64)
+    if n < period:
+        return pd.Series(atr, index=close.index)
 
-    atr = np.zeros(n, dtype=np.float64)
-    eff_period = min(period, n)
-    if eff_period <= 1:
-        return pd.Series(tr, index=close.index)
-
+    eff_period = period
     atr[eff_period - 1] = float(np.mean(tr[:eff_period]))
     for i in range(eff_period, n):
         atr[i] = (atr[i - 1] * (period - 1) + tr[i]) / period
 
-    # Backfill initial bars
-    for i in range(eff_period - 1):
-        atr[i] = atr[eff_period - 1]
-
+    # Initial bars before eff_period - 1 remain NaN (zero future lookahead)
     return pd.Series(atr, index=close.index)
 
 
@@ -186,20 +187,16 @@ class AIPatternScorer:
         low = self.df["Low"]
 
         # EMAs for Trend Regime
-        # Spans: 20, 50, and 200. When dataset has < 200 bars, EMA200 is set to NaN
-        # rather than falsely collapsing to a short EMA.
-        self.df["_EMA20"] = close.ewm(span=20, adjust=False).mean()
-        self.df["_EMA50"] = close.ewm(span=50, adjust=False).mean()
-        if len(self.df) >= 200:
-            self.df["_EMA200"] = close.ewm(span=200, adjust=False).mean()
-        else:
-            self.df["_EMA200"] = np.nan
+        # Standard lookbacks: 20, 50, and 200 bars. Initial bars before min_periods remain NaN.
+        self.df["_EMA20"] = close.ewm(span=20, adjust=False, min_periods=20).mean()
+        self.df["_EMA50"] = close.ewm(span=50, adjust=False, min_periods=50).mean()
+        self.df["_EMA200"] = close.ewm(span=200, adjust=False, min_periods=200).mean()
 
         # Average True Range (Wilder's ATR 14 - Issue 15)
-        self.df["_ATR14"] = calc_wilder_atr(high, low, close, period=min(14, len(self.df)))
+        self.df["_ATR14"] = calc_wilder_atr(high, low, close, period=14)
 
         # Relative Strength Index (Wilder's RSI 14 - Issue 14)
-        self.df["_RSI14"] = calc_wilder_rsi(close, period=min(14, len(self.df)))
+        self.df["_RSI14"] = calc_wilder_rsi(close, period=14)
 
         # Relative Volume (RVOL 20 - strictly historical, excludes current candle from baseline)
         if "Volume" in self.df.columns and self.df["Volume"].sum() > 0:
@@ -213,12 +210,15 @@ class AIPatternScorer:
         else:
             self.df["_RVOL"] = 1.0
 
-
     def _determine_trend_regime(
         self, close: float, ema20: float, ema50: float, ema200: float
     ) -> str:
         """Classify prevailing trend regime."""
-        if not np.isnan(ema200):
+        has_200 = not np.isnan(ema200)
+        has_50 = not np.isnan(ema50)
+        has_20 = not np.isnan(ema20)
+
+        if has_200 and has_50 and has_20:
             if close > ema20 > ema50 > ema200:
                 return "STRONG_BULLISH"
             elif close > ema50 and ema50 >= ema200:
@@ -228,8 +228,7 @@ class AIPatternScorer:
             elif close < ema50 and ema50 <= ema200:
                 return "BEARISH"
             return "NEUTRAL"
-        else:
-            # When historical bars < 200, evaluate trend using EMA20 and EMA50
+        elif has_50 and has_20:
             if close > ema20 > ema50:
                 return "STRONG_BULLISH"
             elif close > ema50:
@@ -239,6 +238,13 @@ class AIPatternScorer:
             elif close < ema50:
                 return "BEARISH"
             return "NEUTRAL"
+        elif has_20:
+            if close > ema20:
+                return "BULLISH"
+            elif close < ema20:
+                return "BEARISH"
+            return "NEUTRAL"
+        return "NEUTRAL"
 
     def score_signal(
         self,
@@ -258,8 +264,13 @@ class AIPatternScorer:
         ema20 = float(cast(Any, row["_EMA20"]))
         ema50 = float(cast(Any, row["_EMA50"]))
         ema200 = float(cast(Any, row["_EMA200"]))
-        atr = max(float(cast(Any, row["_ATR14"])), 0.00001)
-        rsi = float(cast(Any, row["_RSI14"]))
+
+        raw_atr = float(cast(Any, row["_ATR14"]))
+        atr = max(raw_atr if not np.isnan(raw_atr) else (close * 0.01), 0.00001)
+
+        raw_rsi = float(cast(Any, row["_RSI14"]))
+        rsi = raw_rsi if not np.isnan(raw_rsi) else 50.0
+
         rvol = float(cast(Any, row["_RVOL"]))
 
         trend = self._determine_trend_regime(close, ema20, ema50, ema200)
@@ -314,36 +325,39 @@ class AIPatternScorer:
             )
 
         # Factor 3: Momentum & Exhaustion (RSI 14)
-        if is_bullish:
-            if 30 <= rsi <= 45:
-                confidence += 0.10
-                confluence_factors.append(
-                    f"Momentum Reset: RSI at {rsi:.1f} indicates prime dip-buying territory"
-                )
-            elif rsi < 30:
-                confidence += 0.08
-                confluence_factors.append(
-                    f"Oversold Rebound: RSI at {rsi:.1f} supports potential reversal"
-                )
-            elif rsi > 75:
-                confidence -= 0.15
-                risk_factors.append(f"Overbought Warning: RSI at {rsi:.1f} signals exhaustion risk")
-        else:
-            if 55 <= rsi <= 70:
-                confidence += 0.10
-                confluence_factors.append(
-                    f"Bearish Continuation: RSI at {rsi:.1f} in standard distribution zone"
-                )
-            elif rsi > 70:
-                confidence += 0.08
-                confluence_factors.append(
-                    f"Overbought Rejection: RSI at {rsi:.1f} supports reversal setup"
-                )
-            elif rsi < 25:
-                confidence -= 0.15
-                risk_factors.append(
-                    f"Oversold Warning: RSI at {rsi:.1f} indicates high risk of short squeeze"
-                )
+        if not np.isnan(raw_rsi):
+            if is_bullish:
+                if 30 <= rsi <= 45:
+                    confidence += 0.10
+                    confluence_factors.append(
+                        f"Momentum Reset: RSI at {rsi:.1f} indicates prime dip-buying territory"
+                    )
+                elif rsi < 30:
+                    confidence += 0.08
+                    confluence_factors.append(
+                        f"Oversold Rebound: RSI at {rsi:.1f} supports potential reversal"
+                    )
+                elif rsi > 75:
+                    confidence -= 0.15
+                    risk_factors.append(
+                        f"Overbought Warning: RSI at {rsi:.1f} signals exhaustion risk"
+                    )
+            else:
+                if 55 <= rsi <= 70:
+                    confidence += 0.10
+                    confluence_factors.append(
+                        f"Bearish Continuation: RSI at {rsi:.1f} shows sustained selling momentum"
+                    )
+                elif rsi > 70:
+                    confidence += 0.08
+                    confluence_factors.append(
+                        f"Overbought Rejection: RSI at {rsi:.1f} supports bearish reversal"
+                    )
+                elif rsi < 25:
+                    confidence -= 0.15
+                    risk_factors.append(
+                        f"Oversold Risk: RSI at {rsi:.1f} warns of potential snapback"
+                    )
 
         # Factor 4: Candle Geometry & Range Significance
         candle_range = high - low
@@ -438,7 +452,6 @@ class AIPatternScorer:
             rr_tp1=rr_tp1,
             rr_tp2=rr_tp2,
         )
-
 
     def score_all_signals(
         self,

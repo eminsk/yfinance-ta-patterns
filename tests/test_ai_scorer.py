@@ -52,10 +52,15 @@ def test_scorer_indicator_initialization(sample_market_data: pd.DataFrame) -> No
     assert "_RSI14" in scorer.df.columns
     assert "_RVOL" in scorer.df.columns
 
-    # Assert valid ranges
-    assert (scorer.df["_RSI14"] >= 0).all() and (scorer.df["_RSI14"] <= 100).all()
-    assert (scorer.df["_ATR14"] > 0).all()
+    # Assert valid ranges on non-NaN values
+    valid_rsi = scorer.df["_RSI14"].dropna()
+    assert (valid_rsi >= 0).all() and (valid_rsi <= 100).all()
+    valid_atr = scorer.df["_ATR14"].dropna()
+    assert (valid_atr > 0).all()
     assert (scorer.df["_RVOL"] > 0).all()
+    # Confirm initial lookback period is NaN as per TA-Lib invariants
+    assert np.isnan(scorer.df["_RSI14"].iloc[:14]).all()
+    assert np.isnan(scorer.df["_ATR14"].iloc[:13]).all()
 
 
 def test_bullish_signal_with_strong_confluence(sample_market_data: pd.DataFrame) -> None:

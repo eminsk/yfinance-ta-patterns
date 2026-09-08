@@ -1,6 +1,6 @@
 """
 TA-Lib Compatibility and Pure-Python / NumPy Fallback Engine.
-Allows yfinance-ta-patterns to run on any Python version (including 
+Allows yfinance-ta-patterns to run on any Python version (including
 Python 3.13t, 3.14t, 3.15t Free-Threaded No-GIL, PyPy, and ARM)
 even if native C ta-lib binaries are not installed.
 """
@@ -25,21 +25,66 @@ except (ImportError, ModuleNotFoundError):
 
 # Full canonical list of 61 TA-Lib candlestick patterns
 ALL_CDL_PATTERNS = [
-    "CDL2CROWS", "CDL3BLACKCROWS", "CDL3INSIDE", "CDL3LINESTRIKE",
-    "CDL3OUTSIDE", "CDL3STARSINSOUTH", "CDL3WHITESOLDIERS", "CDLABANDONEDBABY",
-    "CDLADVANCEBLOCK", "CDLBELTHOLD", "CDLBREAKAWAY", "CDLCLOSINGMARUBOZU",
-    "CDLCONCEALBABYSWALL", "CDLCOUNTERATTACK", "CDLDARKCLOUDCOVER", "CDLDOJI",
-    "CDLDOJISTAR", "CDLDRAGONFLYDOJI", "CDLENGULFING", "CDLEVENINGDOJISTAR",
-    "CDLEVENINGSTAR", "CDLGAPSIDESIDEWHITE", "CDLGRAVESTONEDOJI", "CDLHAMMER",
-    "CDLHANGINGMAN", "CDLHARAMI", "CDLHARAMICROSS", "CDLHIGHWAVE",
-    "CDLHIKKAKE", "CDLHIKKAKEMOD", "CDLHOMINGPIGEON", "CDLIDENTICAL3CROWS",
-    "CDLINNECK", "CDLINVERTEDHAMMER", "CDLKICKING", "CDLKICKINGBYLENGTH",
-    "CDLLADDERBOTTOM", "CDLLONGLEGGEDDOJI", "CDLLONGLINE", "CDLMARUBOZU",
-    "CDLMATCHINGLOW", "CDLMATHOLD", "CDLMORNINGDOJISTAR", "CDLMORNINGSTAR",
-    "CDLONNECK", "CDLPIERCING", "CDLRICKSHAWMAN", "CDLRISEFALL3METHODS",
-    "CDLSEPARATINGLINES", "CDLSHOOTINGSTAR", "CDLSHORTLINE", "CDLSPINNINGTOP",
-    "CDLSTALLEDPATTERN", "CDLSTICKSANDWICH", "CDLTAKURI", "CDLTASUKIGAP",
-    "CDLTHRUSTING", "CDLTRISTAR", "CDLUNIQUE3RIVER", "CDLUPSIDEGAP2CROWS",
+    "CDL2CROWS",
+    "CDL3BLACKCROWS",
+    "CDL3INSIDE",
+    "CDL3LINESTRIKE",
+    "CDL3OUTSIDE",
+    "CDL3STARSINSOUTH",
+    "CDL3WHITESOLDIERS",
+    "CDLABANDONEDBABY",
+    "CDLADVANCEBLOCK",
+    "CDLBELTHOLD",
+    "CDLBREAKAWAY",
+    "CDLCLOSINGMARUBOZU",
+    "CDLCONCEALBABYSWALL",
+    "CDLCOUNTERATTACK",
+    "CDLDARKCLOUDCOVER",
+    "CDLDOJI",
+    "CDLDOJISTAR",
+    "CDLDRAGONFLYDOJI",
+    "CDLENGULFING",
+    "CDLEVENINGDOJISTAR",
+    "CDLEVENINGSTAR",
+    "CDLGAPSIDESIDEWHITE",
+    "CDLGRAVESTONEDOJI",
+    "CDLHAMMER",
+    "CDLHANGINGMAN",
+    "CDLHARAMI",
+    "CDLHARAMICROSS",
+    "CDLHIGHWAVE",
+    "CDLHIKKAKE",
+    "CDLHIKKAKEMOD",
+    "CDLHOMINGPIGEON",
+    "CDLIDENTICAL3CROWS",
+    "CDLINNECK",
+    "CDLINVERTEDHAMMER",
+    "CDLKICKING",
+    "CDLKICKINGBYLENGTH",
+    "CDLLADDERBOTTOM",
+    "CDLLONGLEGGEDDOJI",
+    "CDLLONGLINE",
+    "CDLMARUBOZU",
+    "CDLMATCHINGLOW",
+    "CDLMATHOLD",
+    "CDLMORNINGDOJISTAR",
+    "CDLMORNINGSTAR",
+    "CDLONNECK",
+    "CDLPIERCING",
+    "CDLRICKSHAWMAN",
+    "CDLRISEFALL3METHODS",
+    "CDLSEPARATINGLINES",
+    "CDLSHOOTINGSTAR",
+    "CDLSHORTLINE",
+    "CDLSPINNINGTOP",
+    "CDLSTALLEDPATTERN",
+    "CDLSTICKSANDWICH",
+    "CDLTAKURI",
+    "CDLTASUKIGAP",
+    "CDLTHRUSTING",
+    "CDLTRISTAR",
+    "CDLUNIQUE3RIVER",
+    "CDLUPSIDEGAP2CROWS",
     "CDLXSIDEGAP3METHODS",
 ]
 
@@ -53,6 +98,7 @@ def _to_arrays(open_, high, low, close):
 
 
 # --- Vectorized Pattern Implementations ---
+
 
 def cdl_doji(open_, high, low, close):
     o, h, lo, c = _to_arrays(open_, high, low, close)
@@ -119,10 +165,10 @@ def cdl_engulfing(open_, high, low, close):
         return res
     prev_o, prev_c = o[:-1], c[:-1]
     curr_o, curr_c = o[1:], c[1:]
-    
+
     bullish = (prev_c < prev_o) & (curr_c > curr_o) & (curr_o <= prev_c) & (curr_c >= prev_o)
     bearish = (prev_c > prev_o) & (curr_c < curr_o) & (curr_o >= prev_c) & (curr_c <= prev_o)
-    
+
     res[1:][bullish] = 100
     res[1:][bearish] = -100
     return res
@@ -135,16 +181,16 @@ def cdl_harami(open_, high, low, close):
         return res
     prev_o, prev_c = o[:-1], c[:-1]
     curr_o, curr_c = o[1:], c[1:]
-    
+
     prev_top = np.maximum(prev_o, prev_c)
     prev_bot = np.minimum(prev_o, prev_c)
     curr_top = np.maximum(curr_o, curr_c)
     curr_bot = np.minimum(curr_o, curr_c)
-    
+
     inside = (curr_top <= prev_top) & (curr_bot >= prev_bot)
     bullish = inside & (prev_c < prev_o) & (curr_c > curr_o)
     bearish = inside & (prev_c > prev_o) & (curr_c < curr_o)
-    
+
     res[1:][bullish] = 100
     res[1:][bearish] = -100
     return res
@@ -211,6 +257,7 @@ def _make_unsupported_pattern(name: str):
             f"Pure-Python fallback is currently implemented for {len(CUSTOM_PATTERNS)} patterns: "
             f"{', '.join(sorted(CUSTOM_PATTERNS.keys()))}."
         )
+
     return _unsupported
 
 
@@ -229,7 +276,9 @@ CUSTOM_PATTERNS = {
 }
 
 SUPPORTED_FALLBACK_PATTERNS: frozenset[str] = frozenset(CUSTOM_PATTERNS.keys())
-UNSUPPORTED_FALLBACK_PATTERNS: frozenset[str] = frozenset(set(ALL_CDL_PATTERNS) - set(CUSTOM_PATTERNS.keys()))
+UNSUPPORTED_FALLBACK_PATTERNS: frozenset[str] = frozenset(
+    set(ALL_CDL_PATTERNS) - set(CUSTOM_PATTERNS.keys())
+)
 
 
 class TALibWrapper:
@@ -257,4 +306,3 @@ class TALibWrapper:
 
 
 talib: Any = _talib if HAS_NATIVE_TALIB else TALibWrapper()
-

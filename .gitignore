@@ -21,3 +21,7 @@ winlogs/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+
+# Local documents
+*.docx
+*.pdf

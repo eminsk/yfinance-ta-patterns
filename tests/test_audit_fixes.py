@@ -14,8 +14,10 @@ from yfinance_ta_patterns.ai.scorer import (
 )
 from yfinance_ta_patterns.data import MarketDataLoader, validate_ohlc
 from yfinance_ta_patterns.pattern_tester import (
+    DEFAULT_FX_USD_RATES,
     TIMEFRAME_PERIODS_PER_YEAR,
     PatternRankingTester,
+    resolve_periods_per_year,
 )
 from yfinance_ta_patterns.talib_compat import (
     SUPPORTED_FALLBACK_PATTERNS,
@@ -43,7 +45,7 @@ def test_pattern_tester_lookahead(synthetic_ohlcv_data: pd.DataFrame) -> None:
     """Issue 1: Test that default execution is next_open (enters on Open[i+1], not Close[i])."""
     tester = PatternRankingTester(synthetic_ohlcv_data, execution="next_open")
     signals = np.zeros(len(synthetic_ohlcv_data))
-    signals[2] = 1   # Signal fires at bar 2
+    signals[2] = 1  # Signal fires at bar 2
     signals[5] = -1  # Exit signal fires at bar 5
 
     trades = tester._calculate_trades(signals)
@@ -79,7 +81,7 @@ def test_pattern_tester_short_signal(synthetic_ohlcv_data: pd.DataFrame) -> None
     tester = PatternRankingTester(synthetic_ohlcv_data, allow_short=True)
     signals = np.zeros(len(synthetic_ohlcv_data))
     signals[3] = -1  # Bearish signal fires at bar 3
-    signals[8] = 1   # Bullish exit signal fires at bar 8
+    signals[8] = 1  # Bullish exit signal fires at bar 8
 
     trades = tester._calculate_trades(signals)
     assert len(trades) == 1
@@ -138,7 +140,6 @@ def test_equity_curve_and_drawdown(synthetic_ohlcv_data: pd.DataFrame) -> None:
     # Check that equity_curve is populated on tester
     assert len(tester.equity_curve) >= 1
     assert tester.equity_curve[0] == 10000.0
-
 
 
 def test_date_filter_loading() -> None:
@@ -223,7 +224,26 @@ def test_h4_alignment_utc() -> None:
 
 def test_wilder_rsi_formula() -> None:
     """Issue 14: Wilder's RSI calculation matches canonical exponential smoothing."""
-    closes = pd.Series([44.34, 44.09, 44.15, 43.61, 44.33, 44.83, 45.10, 45.42, 45.84, 46.08, 45.89, 46.03, 45.61, 46.28, 46.28, 46.00])
+    closes = pd.Series(
+        [
+            44.34,
+            44.09,
+            44.15,
+            43.61,
+            44.33,
+            44.83,
+            45.10,
+            45.42,
+            45.84,
+            46.08,
+            45.89,
+            46.03,
+            45.61,
+            46.28,
+            46.28,
+            46.00,
+        ]
+    )
     rsi = calc_wilder_rsi(closes, period=14)
     # At index 14 (15th bar), Wilder RSI textbook value is ~70.46
     assert np.isclose(rsi.iloc[14], 70.46, atol=0.1)
@@ -239,7 +259,8 @@ def test_wilder_atr_formula() -> None:
 
     atr = calc_wilder_atr(highs, lows, closes, period=14)
     assert len(atr) == 20
-    assert (atr > 0).all()
+    assert np.isnan(atr.iloc[:13]).all()
+    assert (atr.dropna() > 0).all()
     # High - Low is constant 2.0, so ATR should converge to 2.0
     assert np.isclose(atr.iloc[-1], 2.0, atol=0.05)
 
@@ -291,16 +312,12 @@ def test_talib_fallback_sets() -> None:
     assert "CDLPIERCING" in UNSUPPORTED_FALLBACK_PATTERNS
 
     # Supported pattern runs
-    res = wrapper.CDLDOJI(
-        np.array([10.0]), np.array([11.0]), np.array([9.0]), np.array([10.0])
-    )
+    res = wrapper.CDLDOJI(np.array([10.0]), np.array([11.0]), np.array([9.0]), np.array([10.0]))
     assert res[0] == 100
 
     # Unsupported pattern raises NotImplementedError
     with pytest.raises(NotImplementedError):
-        wrapper.CDLPIERCING(
-            np.array([10.0]), np.array([11.0]), np.array([9.0]), np.array([10.0])
-        )
+        wrapper.CDLPIERCING(np.array([10.0]), np.array([11.0]), np.array([9.0]), np.array([10.0]))
 
 
 def test_forex_quote_currency_conversion() -> None:
@@ -434,3 +451,129 @@ def test_min_signals_ranking_filter(synthetic_ohlcv_data: pd.DataFrame) -> None:
     # No pattern should have 999 signals on a small synthetic dataset
     assert len(results) == 0
 
+
+def test_calc_wilder_rsi_initial_nan_lookback() -> None:
+    """Issue: Wilder RSI must keep initial period (14) bars as NaN without lookahead."""
+    np.random.seed(42)
+    prices = pd.Series(100.0 + np.cumsum(np.random.randn(50)))
+    rsi = calc_wilder_rsi(prices, period=14)
+
+    # First 14 values (0 to 13) must strictly be NaN
+    assert np.isnan(rsi.iloc[:14]).all()
+    # 15th value (index 14) is the first computed RSI
+    assert not np.isnan(rsi.iloc[14])
+    # All valid RSI values are bounded in [0, 100]
+    valid_rsi = rsi.dropna()
+    assert (valid_rsi >= 0.0).all() and (valid_rsi <= 100.0).all()
+
+
+def test_calc_wilder_atr_initial_nan_lookback() -> None:
+    """Issue: Wilder ATR must keep initial period - 1 (13) bars as NaN without lookahead."""
+    np.random.seed(42)
+    base = 100.0 + np.cumsum(np.random.randn(50))
+    high = pd.Series(base + 2.0)
+    low = pd.Series(base - 2.0)
+    close = pd.Series(base)
+
+    atr = calc_wilder_atr(high, low, close, period=14)
+
+    # First 13 values (0 to 12) must strictly be NaN
+    assert np.isnan(atr.iloc[:13]).all()
+    # 14th value (index 13) is the first computed ATR
+    assert not np.isnan(atr.iloc[13])
+    # All valid ATR values are strictly positive
+    valid_atr = atr.dropna()
+    assert (valid_atr > 0.0).all()
+
+
+def test_ema_exact_min_periods_nan() -> None:
+    """Issue: EMA20, EMA50, and EMA200 must strictly adhere to min_periods without downscaling."""
+    n = 250
+    dates = pd.date_range("2025-01-01", periods=n, freq="1d", tz="UTC")
+    df = pd.DataFrame(
+        {
+            "Open": [100.0 + i for i in range(n)],
+            "High": [102.0 + i for i in range(n)],
+            "Low": [98.0 + i for i in range(n)],
+            "Close": [101.0 + i for i in range(n)],
+            "Volume": [10000.0] * n,
+        },
+        index=dates,
+    )
+    scorer = AIPatternScorer(df)
+
+    # EMA20: first 19 bars are NaN, 20th bar (index 19) is valid
+    assert np.isnan(scorer.df["_EMA20"].iloc[:19]).all()
+    assert not np.isnan(scorer.df["_EMA20"].iloc[19])
+
+    # EMA50: first 49 bars are NaN, 50th bar (index 49) is valid
+    assert np.isnan(scorer.df["_EMA50"].iloc[:49]).all()
+    assert not np.isnan(scorer.df["_EMA50"].iloc[49])
+
+    # EMA200: first 199 bars are NaN, 200th bar (index 199) is valid
+    assert np.isnan(scorer.df["_EMA200"].iloc[:199]).all()
+    assert not np.isnan(scorer.df["_EMA200"].iloc[199])
+
+
+def test_market_data_loader_2m_interval_retention() -> None:
+    """Issue: 2m interval retains up to 60 days on Yahoo Finance, only 1m is restricted to 7d."""
+    loader_2m = MarketDataLoader("AAPL", interval="2m", period="60d")
+    assert loader_2m.period == "60d"
+
+    loader_1m = MarketDataLoader("AAPL", interval="1m", period="60d")
+    assert loader_1m.period == "7d"
+
+
+def test_universal_cross_fx_eurgbp_conversion() -> None:
+    """Issue: Arbitrary Forex cross pairs (e.g. EURGBP) convert quote profit to USD."""
+    df = pd.DataFrame(
+        {
+            "Open": [0.85, 0.85],
+            "High": [0.86, 0.86],
+            "Low": [0.84, 0.84],
+            "Close": [0.85, 0.85],
+        },
+        index=pd.date_range("2025-01-01", periods=2, freq="1d", tz="UTC"),
+    )
+    # Default baseline rate: GBPUSD = 1.28
+    tester_default = PatternRankingTester(df, symbol="EURGBP", account_currency="USD")
+    raw_pnl_gbp = 100.0
+    converted = tester_default._convert_pnl_to_account_currency(raw_pnl_gbp, 0.85)
+    assert np.isclose(converted, 100.0 * DEFAULT_FX_USD_RATES["GBPUSD"])  # 128.0 USD
+
+    # Custom rate override: GBPUSD = 1.35
+    tester_custom = PatternRankingTester(
+        df, symbol="EURGBP", account_currency="USD", fx_rates={"GBPUSD": 1.35}
+    )
+    converted_custom = tester_custom._convert_pnl_to_account_currency(raw_pnl_gbp, 0.85)
+    assert np.isclose(converted_custom, 135.0)
+
+
+def test_asset_aware_periods_per_year() -> None:
+    """Issue: Sharpe annualization scales correctly for 24/7 Crypto, 24/5 Forex, and Equities."""
+    # Crypto: 365 days / 24h
+    assert resolve_periods_per_year("1d", "BTC-USD") == 365.0
+    assert resolve_periods_per_year("1h", "BTC-USD") == 8760.0
+    assert resolve_periods_per_year("4h", "ETH-USD") == 2190.0
+
+    # Forex: 260 days / 24h
+    assert resolve_periods_per_year("1d", "EURUSD=X") == 260.0
+    assert resolve_periods_per_year("1h", "EURUSD=X") == 6240.0
+    assert resolve_periods_per_year("4h", "USDJPY=X") == 1560.0
+
+    # Equities: 252 days / 6.5h
+    assert resolve_periods_per_year("1d", "AAPL") == 252.0
+    assert resolve_periods_per_year("1h", "AAPL") == 1638.0
+    assert resolve_periods_per_year("4h", "AAPL") == 504.0
+
+
+def test_pattern_ranking_profit_factor_and_score(synthetic_ohlcv_data: pd.DataFrame) -> None:
+    """Issue: PatternResult contains profit_factor and composite score for ranking."""
+    tester = PatternRankingTester(synthetic_ohlcv_data)
+    results = tester.test_all_patterns(sort_by="composite")
+    assert isinstance(results, list)
+    for res in results:
+        assert hasattr(res, "profit_factor")
+        assert hasattr(res, "score")
+        assert res.profit_factor >= 0.0
+        assert res.score >= 0.0

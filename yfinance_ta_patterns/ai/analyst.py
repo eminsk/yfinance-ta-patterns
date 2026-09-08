@@ -43,7 +43,6 @@ class AIMarketAnalyst:
             first_20 = float(self.data.iloc[0]["Close"])
             ret_20 = ((close - first_20) / first_20) * 100.0
 
-
         return {
             "current_price": close,
             "last_high": high,

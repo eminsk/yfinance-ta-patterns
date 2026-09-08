@@ -71,6 +71,7 @@ def test_fallback_cdl_engulfing():
 
 def test_pattern_analyzer_with_fallback(sample_data):
     import yfinance_ta_patterns.pattern_analyzer as pa
+
     orig_talib = pa.talib
     try:
         pa.talib = TALibWrapper(force_fallback=True)
@@ -111,4 +112,3 @@ def test_fallback_unsupported_pattern_raises_error(sample_data):
         )
     assert "CDLPIERCING" in str(exc_info.value)
     assert "requires native TA-Lib binary" in str(exc_info.value)
-
