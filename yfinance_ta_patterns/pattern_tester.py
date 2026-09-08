@@ -8,7 +8,23 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from yfinance_ta_patterns.data import normalize_interval
 from yfinance_ta_patterns.talib_compat import talib
+
+# Standard annual periods for timeframe-aware Sharpe Ratio calculation
+TIMEFRAME_PERIODS_PER_YEAR: dict[str, float] = {
+    "1m": 252.0 * 390.0,   # 98,280 periods/year
+    "2m": 252.0 * 195.0,   # 49,140 periods/year
+    "5m": 252.0 * 78.0,    # 19,656 periods/year
+    "15m": 252.0 * 26.0,   # 6,552 periods/year
+    "30m": 252.0 * 13.0,   # 3,276 periods/year
+    "60m": 252.0 * 6.5,    # 1,638 periods/year
+    "1h": 252.0 * 6.5,     # 1,638 periods/year
+    "4h": 252.0 * 2.0,     # 504 periods/year
+    "1d": 252.0,           # 252 trading days/year
+    "1wk": 52.0,           # 52 weeks/year
+    "1mo": 12.0,           # 12 months/year
+}
 
 
 @dataclass
@@ -25,6 +41,8 @@ class PatternResult:
     max_profit: float
     max_loss: float
     sharpe_ratio: float
+    max_drawdown: float = 0.0
+    equity_curve: list[float] | None = None
 
 
 class PatternRankingTester:
@@ -34,11 +52,20 @@ class PatternRankingTester:
     """
 
     __slots__ = (
+        "_account_currency",
+        "_allow_short",
         "_data",
+        "_execution",
+        "_force_exit_on_last_bar",
         "_initial_capital",
         "_news_dates",
+        "_periods_per_year",
         "_position_size",
         "_results",
+        "_symbol",
+        "_timeframe",
+        "equity_curve",
+        "trades",
     )
 
     def __init__(
@@ -47,6 +74,13 @@ class PatternRankingTester:
         initial_capital: float = 10000.0,
         position_size: float = 100.0,
         news_dates: list[str] | None = None,
+        execution: str = "next_open",
+        timeframe: str = "1d",
+        periods_per_year: float | None = None,
+        symbol: str = "",
+        account_currency: str = "USD",
+        force_exit_on_last_bar: bool = True,
+        allow_short: bool = True,
     ) -> None:
         """Initialize pattern tester.
 
@@ -57,20 +91,62 @@ class PatternRankingTester:
         initial_capital : float
             Initial capital
         position_size : float
-            Position size per trade
+            Position size per trade (in base/quote units)
         news_dates : list[str], optional
             List of dates with important news (YYYY-MM-DD)
+        execution : str
+            Execution mode: 'next_open' (unbiased, enters on open of bar i+1)
+            or 'close' (legacy, enters on close of bar i)
+        timeframe : str
+            Timeframe notation (e.g. '1d', '1h', '15m', '4h') for Sharpe scaling
+        periods_per_year : float, optional
+            Custom periods per year override for annualization
+        symbol : str
+            Ticker symbol for currency/asset conversion
+        account_currency : str
+            Account base currency (default 'USD')
+        force_exit_on_last_bar : bool
+            Whether to close active position at final bar close
+        allow_short : bool
+            Whether to execute short trades on bearish signals
         """
         self._data: pd.DataFrame = data
         self._initial_capital: float = initial_capital
         self._position_size: float = position_size
         self._results: list[PatternResult] = []
         self._news_dates: set[str] = set(news_dates) if news_dates else set()
+        self._execution: str = execution
+        self._timeframe: str = normalize_interval(timeframe) if timeframe else "1d"
+        self._symbol: str = symbol
+        self._account_currency: str = account_currency
+        self._force_exit_on_last_bar: bool = force_exit_on_last_bar
+        self._allow_short: bool = allow_short
+
+        if periods_per_year is not None:
+            self._periods_per_year: float = periods_per_year
+        else:
+            self._periods_per_year = TIMEFRAME_PERIODS_PER_YEAR.get(self._timeframe, 252.0)
+
+        self.equity_curve: list[float] = [initial_capital]
+        self.trades: list[dict[str, Any]] = []
 
     @staticmethod
     def get_all_patterns() -> list[str]:
         """Get all TA-Lib candlestick pattern function names."""
         return [f for f in dir(talib) if f.startswith("CDL")]
+
+    def _convert_pnl_to_account_currency(self, raw_pnl: float, exit_price: float) -> float:
+        """Normalize Forex / CFD PnL into account base currency."""
+        if not self._symbol or exit_price <= 0:
+            return raw_pnl
+        sym = self._symbol.upper().replace("=X", "").replace("-USD", "")
+        # Common 6-letter FX pair e.g. USDJPY where base=USD, quote=JPY
+        if len(sym) == 6 and sym.isalpha():
+            base, quote = sym[:3], sym[3:6]
+            if self._account_currency == "USD":
+                if quote == "JPY" and base == "USD":
+                    return raw_pnl / exit_price
+        return raw_pnl
 
     def test_all_patterns(self, filter_news: bool = False) -> list[PatternResult]:
         """Test all patterns and return ranked results.
@@ -92,6 +168,9 @@ class PatternRankingTester:
                 result = self._test_single_pattern(pattern_name, filter_news)
                 if result and result.total_signals > 0:
                     self._results.append(result)
+            except NotImplementedError:
+                # Silently skip patterns not implemented in pure-Python fallback
+                continue
             except Exception as exc:
                 print(f"Error testing {pattern_name}: {exc}")
                 continue
@@ -118,17 +197,24 @@ class PatternRankingTester:
                 self._data["Low"].values,
                 self._data["Close"].values,
             )
+        except NotImplementedError:
+            # Propagate up so test_all_patterns can skip
+            raise
         except Exception as exc:
             print(f"Error detecting pattern {pattern_name}: {exc}")
             return None
 
-        # Generate signals
+        # Generate signals and preserve pattern strength
         signals = np.zeros(len(self._data))
+        strengths = np.zeros(len(self._data))
         for i in range(len(pattern_values)):
-            if pattern_values[i] > 0:  # Bullish pattern
+            val = pattern_values[i]
+            if val > 0:  # Bullish pattern
                 signals[i] = 1
-            elif pattern_values[i] < 0:  # Bearish pattern
+                strengths[i] = abs(val)
+            elif val < 0:  # Bearish pattern
                 signals[i] = -1
+                strengths[i] = abs(val)
 
         # Filter by news if requested
         if filter_news and self._news_dates:
@@ -160,11 +246,28 @@ class PatternRankingTester:
         max_profit = max(t["pnl"] for t in trades) if trades else 0.0
         max_loss = min(t["pnl"] for t in trades) if trades else 0.0
 
-        # Calculate Sharpe ratio
+        # Build equity curve and calculate maximum drawdown
+        equity = self._initial_capital
+        curve = [equity]
+        peak = equity
+        max_drawdown = 0.0
+        for t in trades:
+            equity += t["pnl"]
+            curve.append(equity)
+            if equity > peak:
+                peak = equity
+            dd = peak - equity
+            if dd > max_drawdown:
+                max_drawdown = dd
+
+        self.equity_curve = curve
+        self.trades = trades
+
+        # Calculate Sharpe ratio scaled by timeframe frequency
         pnls = [t["pnl"] for t in trades]
         std_pnl = float(np.std(pnls))
         sharpe = (
-            (float(np.mean(pnls)) / std_pnl) * float(np.sqrt(252))
+            (float(np.mean(pnls)) / std_pnl) * float(np.sqrt(self._periods_per_year))
             if len(pnls) > 1 and std_pnl > 0
             else 0.0
         )
@@ -180,43 +283,101 @@ class PatternRankingTester:
             max_profit=max_profit,
             max_loss=max_loss,
             sharpe_ratio=sharpe,
+            max_drawdown=max_drawdown,
+            equity_curve=curve,
         )
 
     def _calculate_trades(self, signals: np.ndarray) -> list[dict[str, Any]]:
-        """Calculate trades from signals."""
+        """Calculate trades from signals with next_open execution and symmetric Short trading."""
         trades: list[dict[str, Any]] = []
         position: float = 0.0
         entry_idx: int | None = None
+        entry_price: float = 0.0
 
         closes = self._data["Close"].values
+        opens = self._data["Open"].values
         times = self._data.index.to_numpy()
+        n = len(signals)
 
-        for i in range(len(signals)):
+        is_next_open = (self._execution == "next_open")
+        loop_limit = (n - 1) if is_next_open else n
+
+        for i in range(loop_limit):
             signal = signals[i]
+            if signal == 0:
+                continue
 
-            # BUY signal
-            if signal == 1 and position == 0.0:
-                entry_idx = i
-                position = self._position_size / closes[i]
+            exec_price = opens[i + 1] if is_next_open else closes[i]
+            exec_idx = (i + 1) if is_next_open else i
 
-            # SELL signal
-            elif signal == -1 and position > 0.0 and entry_idx is not None:
-                exit_price = closes[i]
-                entry_price = closes[entry_idx]
-                pnl = position * (exit_price - entry_price)
+            if signal == 1:
+                # Close Short if currently short
+                if position < 0.0 and entry_idx is not None:
+                    raw_pnl = (-position) * (entry_price - exec_price)
+                    pnl = self._convert_pnl_to_account_currency(raw_pnl, exec_price)
+                    trades.append(
+                        {
+                            "entry_time": times[entry_idx],
+                            "exit_time": times[exec_idx],
+                            "direction": "SHORT",
+                            "entry_price": entry_price,
+                            "exit_price": exec_price,
+                            "pnl": pnl,
+                        }
+                    )
+                    position = 0.0
+                    entry_idx = None
+                # Open Long if flat
+                elif position == 0.0:
+                    entry_idx = exec_idx
+                    entry_price = exec_price
+                    position = self._position_size / exec_price
 
-                trades.append(
-                    {
-                        "entry_time": times[entry_idx],
-                        "exit_time": times[i],
-                        "entry_price": entry_price,
-                        "exit_price": exit_price,
-                        "pnl": pnl,
-                    }
-                )
+            elif signal == -1:
+                # Close Long if currently long
+                if position > 0.0 and entry_idx is not None:
+                    raw_pnl = position * (exec_price - entry_price)
+                    pnl = self._convert_pnl_to_account_currency(raw_pnl, exec_price)
+                    trades.append(
+                        {
+                            "entry_time": times[entry_idx],
+                            "exit_time": times[exec_idx],
+                            "direction": "LONG",
+                            "entry_price": entry_price,
+                            "exit_price": exec_price,
+                            "pnl": pnl,
+                        }
+                    )
+                    position = 0.0
+                    entry_idx = None
+                # Open Short if flat and shorts are allowed
+                elif position == 0.0 and self._allow_short:
+                    entry_idx = exec_idx
+                    entry_price = exec_price
+                    position = -self._position_size / exec_price
 
-                position = 0.0
-                entry_idx = None
+
+        # Force-close position on the last bar if still open
+        if self._force_exit_on_last_bar and position != 0.0 and entry_idx is not None:
+            last_exit_price = closes[-1]
+            if position > 0.0:
+                raw_pnl = position * (last_exit_price - entry_price)
+                direction = "LONG"
+            else:
+                raw_pnl = (-position) * (entry_price - last_exit_price)
+                direction = "SHORT"
+            pnl = self._convert_pnl_to_account_currency(raw_pnl, last_exit_price)
+            trades.append(
+                {
+                    "entry_time": times[entry_idx],
+                    "exit_time": times[-1],
+                    "direction": direction,
+                    "entry_price": entry_price,
+                    "exit_price": last_exit_price,
+                    "pnl": pnl,
+                    "forced_exit": True,
+                }
+            )
 
         return trades
 
@@ -225,27 +386,26 @@ class PatternRankingTester:
         return self._results[:n]
 
     def get_comparison_report(self) -> pd.DataFrame:
-        """Get comparison report with/without news filter."""
-        # Test without news filter
+        """Get comparison report with/without news filter, correctly matched by pattern."""
         results_no_filter = self.test_all_patterns(filter_news=False)
-
-        # Test with news filter
         results_with_filter = self.test_all_patterns(filter_news=True)
 
-        # Create comparison DataFrame
+        map_with_filter = {r.pattern_name: r for r in results_with_filter}
+
         data: list[dict[str, Any]] = []
-        for r_no, r_yes in zip(results_no_filter[:20], results_with_filter[:20], strict=False):
+        for r_no in results_no_filter[:20]:
+            r_yes = map_with_filter.get(r_no.pattern_name)
             data.append(
                 {
                     "Pattern": r_no.pattern_name,
                     "Win Rate (No News Filter)": f"{r_no.win_rate:.1f}%",
-                    "Win Rate (With News Filter)": f"{r_yes.win_rate:.1f}%",
+                    "Win Rate (With News Filter)": f"{r_yes.win_rate:.1f}%" if r_yes else "N/A",
                     "Total PnL (No Filter)": f"${r_no.total_pnl:.2f}",
-                    "Total PnL (With Filter)": f"${r_yes.total_pnl:.2f}",
+                    "Total PnL (With Filter)": f"${r_yes.total_pnl:.2f}" if r_yes else "N/A",
                     "Signals (No Filter)": r_no.total_signals,
-                    "Signals (With Filter)": r_yes.total_signals,
+                    "Signals (With Filter)": r_yes.total_signals if r_yes else 0,
                     "Sharpe (No Filter)": f"{r_no.sharpe_ratio:.2f}",
-                    "Sharpe (With Filter)": f"{r_yes.sharpe_ratio:.2f}",
+                    "Sharpe (With Filter)": f"{r_yes.sharpe_ratio:.2f}" if r_yes else "N/A",
                 }
             )
 
@@ -267,6 +427,7 @@ class PatternRankingTester:
                     "Avg PnL": f"{result.avg_pnl:.2f}",
                     "Max Profit": f"{result.max_profit:.2f}",
                     "Max Loss": f"{result.max_loss:.2f}",
+                    "Max Drawdown": f"{result.max_drawdown:.2f}",
                     "Sharpe Ratio": f"{result.sharpe_ratio:.2f}",
                 }
             )
@@ -274,3 +435,4 @@ class PatternRankingTester:
         df = pd.DataFrame(data)
         df.to_csv(filename, index=False)
         print(f"Results exported to {filename}")
+

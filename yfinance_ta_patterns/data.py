@@ -90,6 +90,56 @@ def normalize_interval(interval: str) -> str:
     return lower
 
 
+def validate_ohlc(data: pd.DataFrame, strict: bool = False) -> pd.DataFrame:
+    """Validate OHLC price integrity, drop corrupted rows, and check invariants.
+
+    Parameters:
+    -----------
+    data : pd.DataFrame
+        OHLCV market dataframe
+    strict : bool
+        If True, raises ValueError on bad data or missing OHLC; if False, validates available columns
+
+    Returns:
+    --------
+    pd.DataFrame: Cleaned and validated dataframe
+    """
+    if data.empty:
+        return data
+
+    req_cols = [c for c in ["Open", "High", "Low", "Close"] if c in data.columns]
+    if not req_cols:
+        return data
+
+    if strict and len(req_cols) < 4:
+        missing = [c for c in ["Open", "High", "Low", "Close"] if c not in data.columns]
+        raise ValueError(f"Missing required OHLC columns: {missing}")
+
+    cleaned = data.dropna(subset=req_cols).copy()
+
+    # Check for non-positive prices
+    bad_prices = (cleaned[req_cols] <= 0).any(axis=1)
+    if bad_prices.any():
+        if strict:
+            raise ValueError("Corrupted OHLC data: non-positive prices found.")
+        cleaned = cleaned[~bad_prices]
+
+    # Check bar geometry invariants if High and Low are present
+    if "High" in cleaned.columns and "Low" in cleaned.columns:
+        compare_cols = [c for c in ["Open", "Close"] if c in cleaned.columns]
+        if compare_cols:
+            top = cleaned[compare_cols].max(axis=1)
+            bot = cleaned[compare_cols].min(axis=1)
+            broken_bars = (cleaned["High"] < top) | (cleaned["Low"] > bot) | (cleaned["High"] < cleaned["Low"])
+            if broken_bars.any():
+                if strict:
+                    raise ValueError("Inconsistent OHLC bar geometry detected.")
+                cleaned = cleaned[~broken_bars]
+
+    return cleaned
+
+
+
 class MarketDataLoader:
     """Universal market data loader for Yahoo Finance tickers."""
 
@@ -100,6 +150,10 @@ class MarketDataLoader:
         interval: str = "15m",
         timezone: str = "Europe/Moscow",
         asset_type: str = "auto",
+        start: str | None = None,
+        end: str | None = None,
+        auto_adjust: bool = False,
+        repair: bool = True,
     ) -> None:
         """Initialize data loader with symbol and timeframe parameters."""
         norm_interval = normalize_interval(interval)
@@ -111,6 +165,12 @@ class MarketDataLoader:
         self.period: str = "7d" if (norm_interval in ("1m", "2m") and period == "60d") else period
         self.interval: str = norm_interval
         self.timezone: str = timezone
+        self.start: str | None = start
+        self.end: str | None = end
+        self.start_date: str | None = start
+        self.end_date: str | None = end
+        self.auto_adjust: bool = auto_adjust
+        self.repair: bool = repair
         self._download_interval: str = self._resolve_download_interval(norm_interval)
         self._resample_rule: str | None = "4h" if norm_interval == "4h" else None
 
@@ -123,13 +183,28 @@ class MarketDataLoader:
 
     def fetch(self) -> pd.DataFrame:
         """Fetch raw market data via yfinance."""
-        data = yf.download(
-            self.ticker,
-            period=self.period,
-            interval=self._download_interval,
-            auto_adjust=True,
-            progress=False,
-        )
+        start_val = self.start or self.start_date
+        end_val = self.end or self.end_date
+
+        if start_val or end_val:
+            data = yf.download(
+                self.ticker,
+                start=start_val,
+                end=end_val,
+                interval=self._download_interval,
+                auto_adjust=self.auto_adjust,
+                repair=self.repair,
+                progress=False,
+            )
+        else:
+            data = yf.download(
+                self.ticker,
+                period=self.period,
+                interval=self._download_interval,
+                auto_adjust=self.auto_adjust,
+                repair=self.repair,
+                progress=False,
+            )
         return cast(pd.DataFrame, data)
 
     def _resample_if_needed(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -153,10 +228,12 @@ class MarketDataLoader:
             if col_str not in agg:
                 agg[col_str] = "last"
 
-        return cast(pd.DataFrame, data.resample(self._resample_rule).agg(agg).dropna())
+        # Anchor resampling in UTC (origin='epoch') to preserve institutional 4h candle bounds
+        resampled = data.resample(self._resample_rule, origin="epoch").agg(agg).dropna()
+        return cast(pd.DataFrame, resampled)
 
     def process(self, data: pd.DataFrame) -> pd.DataFrame:
-        """Normalize column indexing and apply timezone conversion."""
+        """Normalize column indexing, validate OHLC, resample in UTC, and convert timezone."""
         if data.empty:
             return data
 
@@ -164,16 +241,32 @@ class MarketDataLoader:
         if isinstance(data.columns, pd.MultiIndex):
             data.columns = data.columns.droplevel(1)
 
+        data = validate_ohlc(data)
+        if data.empty:
+            return data
+
         idx = data.index
         if isinstance(idx, pd.DatetimeIndex):
             if idx.tz is None:
-                data.index = idx.tz_localize(pytz.UTC).tz_convert(self.timezone)
+                data.index = idx.tz_localize(pytz.UTC)
             else:
-                data.index = idx.tz_convert(pytz.UTC).tz_convert(self.timezone)
+                data.index = idx.tz_convert(pytz.UTC)
+
+        # Resample in UTC before local timezone conversion (Issue 8)
+        if self._resample_rule:
+            data = self._resample_if_needed(data)
+
+        # Convert to target user timezone
+        if isinstance(data.index, pd.DatetimeIndex):
+            data.index = data.index.tz_convert(self.timezone)
 
         return data
 
     def get_data(self) -> pd.DataFrame:
-        """Full pipeline: fetch, process, and resample if needed."""
-        processed = self.process(self.fetch())
-        return self._resample_if_needed(processed)
+        """Full pipeline: fetch raw OHLCV and process with validation and resampling."""
+        return self.process(self.fetch())
+
+    def load_data(self) -> pd.DataFrame:
+        """Alias for get_data to ensure CLI and script compatibility."""
+        return self.get_data()
+

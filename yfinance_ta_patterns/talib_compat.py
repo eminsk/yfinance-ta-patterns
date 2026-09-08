@@ -204,11 +204,14 @@ def cdl_3blackcrows(open_, high, low, close):
     return res
 
 
-def _make_noop_pattern():
-    def _noop(open_, high, low, close):
-        o = np.asarray(open_)
-        return np.zeros(len(o), dtype=np.int32)
-    return _noop
+def _make_unsupported_pattern(name: str):
+    def _unsupported(*args: Any, **kwargs: Any) -> np.ndarray:
+        raise NotImplementedError(
+            f"Candlestick pattern '{name}' requires native TA-Lib binary. "
+            f"Pure-Python fallback is currently implemented for {len(CUSTOM_PATTERNS)} patterns: "
+            f"{', '.join(sorted(CUSTOM_PATTERNS.keys()))}."
+        )
+    return _unsupported
 
 
 CUSTOM_PATTERNS = {
@@ -225,6 +228,9 @@ CUSTOM_PATTERNS = {
     "CDL3BLACKCROWS": cdl_3blackcrows,
 }
 
+SUPPORTED_FALLBACK_PATTERNS: frozenset[str] = frozenset(CUSTOM_PATTERNS.keys())
+UNSUPPORTED_FALLBACK_PATTERNS: frozenset[str] = frozenset(set(ALL_CDL_PATTERNS) - set(CUSTOM_PATTERNS.keys()))
+
 
 class TALibWrapper:
     """Wrapper that routes to native TA-Lib if available, or pure-NumPy fallback engine."""
@@ -240,7 +246,7 @@ class TALibWrapper:
         if upper in CUSTOM_PATTERNS:
             return CUSTOM_PATTERNS[upper]
         if upper.startswith("CDL") and upper in ALL_CDL_PATTERNS:
-            return _make_noop_pattern()
+            return _make_unsupported_pattern(upper)
 
         raise AttributeError(f"Module 'talib' has no attribute '{name}'")
 
@@ -251,3 +257,4 @@ class TALibWrapper:
 
 
 talib: Any = _talib if HAS_NATIVE_TALIB else TALibWrapper()
+

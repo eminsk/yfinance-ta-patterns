@@ -147,10 +147,21 @@ def run_cli(args: argparse.Namespace) -> int:
     if args.date and (args.start_date or args.end_date):
         raise ValueError("Use either --date or --start-date/--end-date, not both.")
 
+    start_arg = args.start_date
+    end_arg = args.end_date
+
+    if args.date:
+        # Load with 60-day warm-up lookback buffer so indicators (EMA, RSI, ATR) compute accurately
+        target_dt = pd.to_datetime(args.date)
+        start_arg = (target_dt - pd.Timedelta(days=60)).strftime("%Y-%m-%d")
+        end_arg = (target_dt + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+
     loader = MarketDataLoader(
         args.symbol,
         period=args.period,
         interval=interval,
+        start=start_arg,
+        end=end_arg,
     )
     data = loader.get_data()
     period = loader.period
@@ -196,15 +207,25 @@ def run_cli(args: argparse.Namespace) -> int:
         else:
             classic_signals[clean_name] = signals
 
+    # Align historical analysis when a historical --date is specified (Issue 20)
+    analyst_data = data
+    if args.date and not data.empty:
+        target_cutoff = pd.to_datetime(args.date) + pd.Timedelta(days=1)
+        if data.index.tz is not None and target_cutoff.tz is None:
+            target_cutoff = target_cutoff.tz_localize(data.index.tz)
+        sliced = data[data.index < target_cutoff]
+        if not sliced.empty:
+            analyst_data = sliced
+
     # 1. LLM Prompt Output
     if args.prompt:
-        analyst = AIMarketAnalyst(data, all_scored_results)
+        analyst = AIMarketAnalyst(analyst_data, all_scored_results)
         print(analyst.to_llm_prompt(args.symbol, interval))
         return 0
 
     # 2. AI Analyst Brief
     if args.ai_analyst:
-        analyst = AIMarketAnalyst(data, all_scored_results)
+        analyst = AIMarketAnalyst(analyst_data, all_scored_results)
         if args.format == "json":
             print(analyst.to_json(args.symbol, interval))
         else:
@@ -218,9 +239,10 @@ def run_cli(args: argparse.Namespace) -> int:
             return 0
 
         if args.format == "json":
-            analyst = AIMarketAnalyst(data, all_scored_results)
+            analyst = AIMarketAnalyst(analyst_data, all_scored_results)
             print(analyst.to_json(args.symbol, interval))
             return 0
+
 
         print(
             f"=== AI Pattern Intelligence: {args.symbol} ({interval}, {period}){range_info} ==="

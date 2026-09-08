@@ -31,6 +31,8 @@ class TradeSetup:
     take_profit_2: float
     risk_reward_ratio: float
     risk_per_unit: float
+    rr_tp1: float = 1.5
+    rr_tp2: float = 3.0
 
     def to_dict(self) -> dict[str, Any]:
         """Convert setup to plain dictionary."""
@@ -41,8 +43,11 @@ class TradeSetup:
             "take_profit_1": round(self.take_profit_1, 5),
             "take_profit_2": round(self.take_profit_2, 5),
             "risk_reward_ratio": round(self.risk_reward_ratio, 2),
+            "rr_tp1": round(self.rr_tp1, 2),
+            "rr_tp2": round(self.rr_tp2, 2),
             "risk_per_unit": round(self.risk_per_unit, 5),
         }
+
 
 
 @dataclass(slots=True, frozen=True)
@@ -82,12 +87,87 @@ class PatternConfidenceResult:
         }
 
 
+def calc_wilder_rsi(close: pd.Series, period: int = 14) -> pd.Series:
+    """Calculate Relative Strength Index (RSI) using canonical Wilder's exponential smoothing."""
+    n = len(close)
+    if n <= 1:
+        return pd.Series(50.0, index=close.index)
+
+    delta = close.diff().to_numpy()
+    gain = np.where(delta > 0, delta, 0.0)
+    loss = np.where(delta < 0, -delta, 0.0)
+
+    rsi = np.full(n, 50.0, dtype=np.float64)
+    eff_period = min(period, n - 1) if n > 1 else 1
+    if eff_period < 1:
+        eff_period = 1
+
+    # First value at eff_period using SMA of initial gains/losses
+    avg_g = float(np.mean(gain[1 : eff_period + 1]))
+    avg_l = float(np.mean(loss[1 : eff_period + 1]))
+
+    if avg_l == 0.0:
+        rsi[eff_period] = 100.0 if avg_g > 0 else 50.0
+    else:
+        rs = avg_g / avg_l
+        rsi[eff_period] = 100.0 - (100.0 / (1.0 + rs))
+
+    for i in range(eff_period + 1, n):
+        avg_g = (avg_g * (period - 1) + gain[i]) / period
+        avg_l = (avg_l * (period - 1) + loss[i]) / period
+        if avg_l == 0.0:
+            rsi[i] = 100.0 if avg_g > 0 else 50.0
+        else:
+            rs = avg_g / avg_l
+            rsi[i] = 100.0 - (100.0 / (1.0 + rs))
+
+    # Backfill initial bars before eff_period
+    for i in range(eff_period):
+        rsi[i] = rsi[eff_period]
+
+    return pd.Series(rsi, index=close.index)
+
+
+def calc_wilder_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    """Calculate Average True Range (ATR) using canonical Wilder's exponential smoothing."""
+    n = len(close)
+    if n == 0:
+        return pd.Series(dtype=np.float64)
+
+    h = high.to_numpy()
+    l = low.to_numpy()
+    c = close.to_numpy()
+
+    tr = np.zeros(n, dtype=np.float64)
+    tr[0] = max(h[0] - l[0], 1e-6)
+    for i in range(1, n):
+        tr[i] = max(h[i] - l[i], abs(h[i] - c[i - 1]), abs(l[i] - c[i - 1]))
+
+    atr = np.zeros(n, dtype=np.float64)
+    eff_period = min(period, n)
+    if eff_period <= 1:
+        return pd.Series(tr, index=close.index)
+
+    atr[eff_period - 1] = float(np.mean(tr[:eff_period]))
+    for i in range(eff_period, n):
+        atr[i] = (atr[i - 1] * (period - 1) + tr[i]) / period
+
+    # Backfill initial bars
+    for i in range(eff_period - 1):
+        atr[i] = atr[eff_period - 1]
+
+    return pd.Series(atr, index=close.index)
+
+
 class AIPatternScorer:
     """Probabilistic multi-factor technical scoring engine for candlestick patterns.
 
-    Evaluates market context (Trend, Momentum, Volume Expansion, Volatility)
-    to transform discrete TA-Lib signals (+100/-100) into calibrated probability
-    scores (0.0 to 1.0) and actionable risk-managed trade setups.
+    Evaluates market context (Trend regime, RVOL volume expansion, Wilder RSI momentum,
+    and ATR volatility) to transform discrete TA-Lib signals (+100/-100) into calibrated
+    confidence scores (0.0 to 1.0) and actionable risk-managed trade setups.
+
+    Note: This is an interpretable, deterministic quantitative confluence scoring engine,
+    not a black-box deep learning model.
     """
 
     def __init__(self, data: pd.DataFrame) -> None:
@@ -99,7 +179,7 @@ class AIPatternScorer:
         self._calculate_technical_indicators()
 
     def _calculate_technical_indicators(self) -> None:
-        """Vectorized computation of EMA, RSI, ATR, and RVOL indicators."""
+        """Vectorized computation of EMA, Wilder RSI, Wilder ATR, and shifted RVOL indicators."""
         close = self.df["Close"]
         high = self.df["High"]
         low = self.df["Low"]
@@ -109,31 +189,21 @@ class AIPatternScorer:
         self.df["_EMA50"] = close.ewm(span=min(50, len(self.df)), adjust=False).mean()
         self.df["_EMA200"] = close.ewm(span=min(200, len(self.df)), adjust=False).mean()
 
-        # Average True Range (ATR 14)
-        prev_close = close.shift(1).fillna(close)
-        tr1 = high - low
-        tr2 = (high - prev_close).abs()
-        tr3 = (low - prev_close).abs()
-        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        self.df["_ATR14"] = tr.rolling(window=min(14, len(self.df)), min_periods=1).mean()
+        # Average True Range (Wilder's ATR 14 - Issue 15)
+        self.df["_ATR14"] = calc_wilder_atr(high, low, close, period=min(14, len(self.df)))
 
-        # Relative Strength Index (RSI 14)
-        delta = close.diff()
-        gain = delta.clip(lower=0)
-        loss = -delta.clip(upper=0)
-        avg_gain = gain.rolling(window=min(14, len(self.df)), min_periods=1).mean()
-        avg_loss = loss.rolling(window=min(14, len(self.df)), min_periods=1).mean()
-        rs = avg_gain / avg_loss.replace(0, np.nan)
-        rsi = 100 - (100 / (1 + rs))
-        self.df["_RSI14"] = rsi.fillna(50.0)
+        # Relative Strength Index (Wilder's RSI 14 - Issue 14)
+        self.df["_RSI14"] = calc_wilder_rsi(close, period=min(14, len(self.df)))
 
-        # Relative Volume (RVOL 20)
+        # Relative Volume (RVOL 20 - Issue 16: excludes current candle from baseline)
         if "Volume" in self.df.columns and self.df["Volume"].sum() > 0:
             vol = self.df["Volume"]
-            avg_vol = vol.rolling(window=min(20, len(self.df)), min_periods=1).mean()
+            prev_vol = vol.shift(1).bfill().fillna(vol)
+            avg_vol = prev_vol.rolling(window=min(20, len(self.df)), min_periods=1).mean()
             self.df["_RVOL"] = (vol / avg_vol.replace(0, np.nan)).fillna(1.0)
         else:
             self.df["_RVOL"] = 1.0
+
 
     def _determine_trend_regime(
         self, close: float, ema20: float, ema50: float, ema200: float
@@ -315,24 +385,26 @@ class AIPatternScorer:
     ) -> TradeSetup:
         """Construct ATR-governed entry, stop loss, and tiered profit targets."""
         buffer = 0.2 * atr
+        rr_tp1 = 1.5
+        rr_tp2 = 3.0
+        rrr = 1.5  # Primary target risk-reward ratio matching TP1
+
         if is_bullish:
             direction = "BUY"
             entry = close
             # Stop below the low minus ATR buffer
             stop_loss = low - buffer
             risk = entry - stop_loss
-            tp1 = entry + (1.5 * risk)
-            tp2 = entry + (3.0 * risk)
-            rrr = 2.0
+            tp1 = entry + (rr_tp1 * risk)
+            tp2 = entry + (rr_tp2 * risk)
         else:
             direction = "SELL"
             entry = close
             # Stop above the high plus ATR buffer
             stop_loss = high + buffer
             risk = stop_loss - entry
-            tp1 = entry - (1.5 * risk)
-            tp2 = entry - (3.0 * risk)
-            rrr = 2.0
+            tp1 = entry - (rr_tp1 * risk)
+            tp2 = entry - (rr_tp2 * risk)
 
         return TradeSetup(
             direction=direction,
@@ -342,7 +414,10 @@ class AIPatternScorer:
             take_profit_2=tp2,
             risk_reward_ratio=rrr,
             risk_per_unit=risk,
+            rr_tp1=rr_tp1,
+            rr_tp2=rr_tp2,
         )
+
 
     def score_all_signals(
         self,

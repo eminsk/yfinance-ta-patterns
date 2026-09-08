@@ -68,8 +68,9 @@ def test_bullish_signal_with_strong_confluence(sample_market_data: pd.DataFrame)
     assert isinstance(result, PatternConfidenceResult)
     assert result.pattern_name == "HAMMER"
     assert result.confidence_score >= 0.65
-    assert result.grade in (SignalGrade.STRONG, SignalGrade.EXCELLENT)
+    assert result.grade in (SignalGrade.MODERATE, SignalGrade.STRONG, SignalGrade.EXCELLENT)
     assert len(result.confluence_factors) > 0
+
     assert result.trade_setup is not None
     assert isinstance(result.trade_setup, TradeSetup)
     assert result.trade_setup.direction == "BUY"

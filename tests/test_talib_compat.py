@@ -98,3 +98,17 @@ def test_concurrent_multithreading_without_gil(sample_data):
 
     assert len(results) == 50
     assert results[0][0] == 100
+
+
+def test_fallback_unsupported_pattern_raises_error(sample_data):
+    wrapper = TALibWrapper(force_fallback=True)
+    with pytest.raises(NotImplementedError) as exc_info:
+        wrapper.CDLPIERCING(
+            sample_data["Open"].values,
+            sample_data["High"].values,
+            sample_data["Low"].values,
+            sample_data["Close"].values,
+        )
+    assert "CDLPIERCING" in str(exc_info.value)
+    assert "requires native TA-Lib binary" in str(exc_info.value)
+

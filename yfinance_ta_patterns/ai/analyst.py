@@ -36,9 +36,13 @@ class AIMarketAnalyst:
         vol = float(last_row["Volume"]) if "Volume" in last_row else 0.0
 
         ret_20 = 0.0
-        if len(self.data) >= 20:
-            first_20 = float(self.data.iloc[-20]["Close"])
+        if len(self.data) >= 21:
+            first_20 = float(self.data.iloc[-21]["Close"])
             ret_20 = ((close - first_20) / first_20) * 100.0
+        elif len(self.data) > 1:
+            first_20 = float(self.data.iloc[0]["Close"])
+            ret_20 = ((close - first_20) / first_20) * 100.0
+
 
         return {
             "current_price": close,
