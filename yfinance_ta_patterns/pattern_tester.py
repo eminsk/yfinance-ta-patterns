@@ -143,10 +143,10 @@ class PatternRankingTester:
         # Common 6-letter FX pair e.g. USDJPY where base=USD, quote=JPY
         if len(sym) == 6 and sym.isalpha():
             base, quote = sym[:3], sym[3:6]
-            if self._account_currency == "USD":
-                if quote == "JPY" and base == "USD":
-                    return raw_pnl / exit_price
+            if self._account_currency == "USD" and quote == "JPY" and base == "USD":
+                return raw_pnl / exit_price
         return raw_pnl
+
 
     def test_all_patterns(self, filter_news: bool = False) -> list[PatternResult]:
         """Test all patterns and return ranked results.

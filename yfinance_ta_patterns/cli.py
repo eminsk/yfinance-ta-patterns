@@ -7,8 +7,11 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
+import pandas as pd
+
 from . import __version__
 from .ai.analyst import AIMarketAnalyst
+
 from .ai.scorer import AIPatternScorer, PatternConfidenceResult
 from .data import MarketDataLoader, normalize_interval
 from .pattern_analyzer import PatternAnalyzer

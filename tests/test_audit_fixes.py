@@ -134,10 +134,11 @@ def test_equity_curve_and_drawdown(synthetic_ohlcv_data: pd.DataFrame) -> None:
     trades = tester._calculate_trades(signals)
     assert len(trades) == 1
     # Run _test_single_pattern
-    res = tester._test_single_pattern("CDLDOJI", filter_news=False)
+    _ = tester._test_single_pattern("CDLDOJI", filter_news=False)
     # Check that equity_curve is populated on tester
     assert len(tester.equity_curve) >= 1
     assert tester.equity_curve[0] == 10000.0
+
 
 
 def test_date_filter_loading() -> None:

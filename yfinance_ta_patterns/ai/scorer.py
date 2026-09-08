@@ -135,13 +135,14 @@ def calc_wilder_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: i
         return pd.Series(dtype=np.float64)
 
     h = high.to_numpy()
-    l = low.to_numpy()
+    lo = low.to_numpy()
     c = close.to_numpy()
 
     tr = np.zeros(n, dtype=np.float64)
-    tr[0] = max(h[0] - l[0], 1e-6)
+    tr[0] = max(h[0] - lo[0], 1e-6)
     for i in range(1, n):
-        tr[i] = max(h[i] - l[i], abs(h[i] - c[i - 1]), abs(l[i] - c[i - 1]))
+        tr[i] = max(h[i] - lo[i], abs(h[i] - c[i - 1]), abs(lo[i] - c[i - 1]))
+
 
     atr = np.zeros(n, dtype=np.float64)
     eff_period = min(period, n)
