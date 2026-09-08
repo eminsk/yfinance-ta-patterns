@@ -115,3 +115,17 @@ def test_scorer_raises_on_too_few_rows() -> None:
     df_tiny = pd.DataFrame({"Open": [1, 2], "High": [2, 3], "Low": [1, 1], "Close": [2, 2]})
     with pytest.raises(ValueError, match="at least 5 candles"):
         AIPatternScorer(df_tiny)
+
+
+def test_score_all_active_and_properties(sample_market_data: pd.DataFrame) -> None:
+    """Verify score_all_active and convenience alias properties match README."""
+    scorer = AIPatternScorer(sample_market_data)
+    results = scorer.score_all_active(min_confidence=0.0)
+    assert isinstance(results, list)
+    if results:
+        sig = results[0]
+        assert sig.confidence == sig.confidence_score
+        assert sig.setup == sig.trade_setup
+        assert sig.confluences == sig.confluence_factors
+        assert sig.risks == sig.risk_factors
+        assert sig.action in ("BUY", "SELL", "HOLD")

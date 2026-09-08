@@ -85,6 +85,33 @@ class PatternConfidenceResult:
             "trade_setup": self.trade_setup.to_dict() if self.trade_setup else None,
         }
 
+    @property
+    def confidence(self) -> float:
+        """Convenience alias for confidence_score."""
+        return self.confidence_score
+
+    @property
+    def setup(self) -> TradeSetup | None:
+        """Convenience alias for trade_setup."""
+        return self.trade_setup
+
+    @property
+    def confluences(self) -> list[str]:
+        """Convenience alias for confluence_factors."""
+        return self.confluence_factors
+
+    @property
+    def risks(self) -> list[str]:
+        """Convenience alias for risk_factors."""
+        return self.risk_factors
+
+    @property
+    def action(self) -> str:
+        """Trading action direction ('BUY', 'SELL', or 'HOLD')."""
+        if self.trade_setup:
+            return self.trade_setup.direction
+        return "BUY" if self.raw_signal > 0 else ("SELL" if self.raw_signal < 0 else "HOLD")
+
 
 def calc_wilder_rsi(close: pd.Series, period: int = 14) -> pd.Series:
     """Calculate Relative Strength Index (RSI) using canonical Wilder's exponential smoothing.
@@ -470,3 +497,44 @@ class AIPatternScorer:
 
         results.sort(key=lambda r: r.confidence_score, reverse=True)
         return results
+
+    def score_all_active(
+        self,
+        min_confidence: float = 0.5,
+        patterns: list[str] | None = None,
+        date: str | None = None,
+    ) -> list[PatternConfidenceResult]:
+        """Scan data for active patterns and return scored results above min_confidence.
+
+        Args:
+            min_confidence: Threshold between 0.0 and 1.0 to filter low-conviction signals.
+            patterns: Optional list of pattern names (e.g. ['CDLHAMMER', 'CDLENGULFING']).
+                      If None, scans all available patterns.
+            date: Optional date filter string.
+
+        Returns:
+            List of PatternConfidenceResult sorted by confidence score descending.
+        """
+        from ..pattern_analyzer import PatternAnalyzer
+
+        analyzer = PatternAnalyzer(self.df)
+        patterns_to_scan = (
+            patterns if patterns is not None else sorted(analyzer.pattern_functions)
+        )
+
+        all_scored: list[PatternConfidenceResult] = []
+        for pat in patterns_to_scan:
+            try:
+                signals = analyzer.get_signals(pat, date=date)
+            except NotImplementedError:
+                continue
+            if signals.empty:
+                continue
+            clean_name = pat.replace("CDL", "")
+            scored = self.score_all_signals(
+                signals, clean_name, min_confidence=min_confidence
+            )
+            all_scored.extend(scored)
+
+        all_scored.sort(key=lambda r: r.confidence_score, reverse=True)
+        return all_scored

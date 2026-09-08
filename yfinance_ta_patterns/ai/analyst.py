@@ -60,31 +60,14 @@ class AIMarketAnalyst:
         Returns:
             List of PatternConfidenceResult sorted by confidence score descending.
         """
-        from ..pattern_analyzer import PatternAnalyzer
         from .scorer import AIPatternScorer
 
-        analyzer = PatternAnalyzer(self.data)
         scorer = AIPatternScorer(self.data)
-
-        patterns_to_scan = (
-            patterns if patterns is not None else sorted(analyzer.pattern_functions)
+        self.scored_results = scorer.score_all_active(
+            min_confidence=min_confidence,
+            patterns=patterns,
+            date=date,
         )
-
-        all_scored: list[PatternConfidenceResult] = []
-        for pat in patterns_to_scan:
-            try:
-                signals = analyzer.get_signals(pat, date=date)
-            except NotImplementedError:
-                continue
-            if signals.empty:
-                continue
-            clean_name = pat.replace("CDL", "")
-            scored = scorer.score_all_signals(
-                signals, clean_name, min_confidence=min_confidence
-            )
-            all_scored.extend(scored)
-
-        self.scored_results = sorted(all_scored, key=lambda r: r.confidence_score, reverse=True)
         return self.scored_results
 
     def get_market_regime_summary(self) -> dict[str, Any]:
