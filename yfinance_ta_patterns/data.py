@@ -156,9 +156,11 @@ class MarketDataLoader:
         end: str | None = None,
         auto_adjust: bool = False,
         repair: bool = True,
+        timeframe: str | None = None,
     ) -> None:
         """Initialize data loader with symbol and timeframe parameters."""
-        norm_interval = normalize_interval(interval)
+        effective_interval = timeframe if timeframe is not None else interval
+        norm_interval = normalize_interval(effective_interval)
         self.symbol: str = symbol
         self.asset_type: str = asset_type
         self.ticker: str = normalize_ticker(symbol, asset_type=asset_type)

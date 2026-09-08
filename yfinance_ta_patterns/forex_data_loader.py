@@ -17,6 +17,7 @@ class ForexDataLoader(MarketDataLoader):
         period: str = "60d",
         interval: str = "15m",
         timezone: str = "Europe/Moscow",
+        timeframe: str | None = None,
     ) -> None:
         """Initialize ForexDataLoader forcing forex asset type."""
         super().__init__(
@@ -25,4 +26,5 @@ class ForexDataLoader(MarketDataLoader):
             interval=interval,
             timezone=timezone,
             asset_type="forex",
+            timeframe=timeframe,
         )

@@ -85,3 +85,12 @@ def test_market_data_loader_intervals_and_period() -> None:
     assert loader_h4._download_interval == "1h"
     assert loader_h4._resample_rule == "4h"
     assert loader_h4.period == "60d"
+
+
+def test_market_data_loader_timeframe_keyword_alias() -> None:
+    """MarketDataLoader accepts both interval and timeframe keyword arguments interchangeably."""
+    loader_tf = MarketDataLoader("EURUSD", timeframe="1h", period="30d")
+    assert loader_tf.interval == "1h"
+
+    loader_forex_tf = ForexDataLoader("GBPUSD", timeframe="4h")
+    assert loader_forex_tf.interval == "4h"
