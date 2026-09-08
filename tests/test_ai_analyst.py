@@ -113,3 +113,36 @@ def test_analyst_empty_results(
 
     brief = analyst.generate_brief("SPY", "1d")
     assert "No active patterns identified" in brief
+
+
+def test_analyst_auto_analyze_and_readme_flow() -> None:
+    """Verify AIMarketAnalyst(data, symbol=...) with .analyze() matches README workflow."""
+    dates = pd.date_range("2025-01-01", periods=30, freq="1D", tz="UTC")
+    df = pd.DataFrame(
+        {
+            "Open": [100.0] * 30,
+            "High": [105.0] * 30,
+            "Low": [95.0] * 30,
+            "Close": [100.0] * 30,
+            "Volume": [10000.0] * 30,
+        },
+        index=dates,
+    )
+    analyst = AIMarketAnalyst(df, symbol="BTC-USD", timeframe="4h")
+    results = analyst.analyze(min_confidence=0.0)
+    assert isinstance(results, list)
+
+    brief = analyst.generate_brief(results)
+    assert "# AI Technical Intelligence Brief: BTC-USD (4h)" in brief
+
+    llm_prompt = analyst.to_llm_prompt(results)
+    assert "BTC-USD" in llm_prompt
+
+    json_data = analyst.to_json(results)
+    parsed = json.loads(json_data)
+    assert parsed["symbol"] == "BTC-USD"
+    assert parsed["timeframe"] == "4h"
+
+    # Also verify zero-argument calls work
+    brief_default = analyst.generate_brief()
+    assert "# AI Technical Intelligence Brief: BTC-USD (4h)" in brief_default

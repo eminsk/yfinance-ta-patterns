@@ -19,10 +19,73 @@ class AIMarketAnalyst:
     3. Context-rich prompt templates optimized for LLMs (GPT-4o, Claude 3.5, Gemini).
     """
 
-    def __init__(self, data: pd.DataFrame, scored_results: list[PatternConfidenceResult]) -> None:
-        """Initialize analyst with market data and evaluated patterns."""
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        scored_results: list[PatternConfidenceResult] | None = None,
+        *,
+        symbol: str = "ASSET",
+        timeframe: str = "1d",
+    ) -> None:
+        """Initialize analyst with market data and optional evaluated patterns.
+
+        Args:
+            data: OHLCV market DataFrame.
+            scored_results: Optional pre-computed list of PatternConfidenceResult.
+            symbol: Ticker symbol (e.g. 'BTC-USD', 'EURUSD'). Default is 'ASSET'.
+            timeframe: Timeframe or interval (e.g. '4h', '1d'). Default is '1d'.
+        """
         self.data = data
-        self.scored_results = sorted(scored_results, key=lambda r: r.confidence_score, reverse=True)
+        self.symbol = symbol
+        self.timeframe = timeframe
+        self.scored_results: list[PatternConfidenceResult] = (
+            sorted(scored_results, key=lambda r: r.confidence_score, reverse=True)
+            if scored_results is not None
+            else []
+        )
+
+    def analyze(
+        self,
+        min_confidence: float = 0.5,
+        patterns: list[str] | None = None,
+        date: str | None = None,
+    ) -> list[PatternConfidenceResult]:
+        """Automatically scan and score candlestick patterns across the dataset.
+
+        Args:
+            min_confidence: Threshold between 0.0 and 1.0 to filter low-conviction signals.
+            patterns: Optional list of specific pattern names to scan. If None, scans all patterns.
+            date: Optional single-date filter string.
+
+        Returns:
+            List of PatternConfidenceResult sorted by confidence score descending.
+        """
+        from ..pattern_analyzer import PatternAnalyzer
+        from .scorer import AIPatternScorer
+
+        analyzer = PatternAnalyzer(self.data)
+        scorer = AIPatternScorer(self.data)
+
+        patterns_to_scan = (
+            patterns if patterns is not None else sorted(analyzer.pattern_functions)
+        )
+
+        all_scored: list[PatternConfidenceResult] = []
+        for pat in patterns_to_scan:
+            try:
+                signals = analyzer.get_signals(pat, date=date)
+            except NotImplementedError:
+                continue
+            if signals.empty:
+                continue
+            clean_name = pat.replace("CDL", "")
+            scored = scorer.score_all_signals(
+                signals, clean_name, min_confidence=min_confidence
+            )
+            all_scored.extend(scored)
+
+        self.scored_results = sorted(all_scored, key=lambda r: r.confidence_score, reverse=True)
+        return self.scored_results
 
     def get_market_regime_summary(self) -> dict[str, Any]:
         """Extract current volatility, volume, and price trends from data."""
@@ -57,23 +120,51 @@ class AIMarketAnalyst:
             ),
         }
 
-    def generate_brief(self, symbol: str, timeframe: str) -> str:
+    def _resolve_context(
+        self,
+        symbol_or_results: str | list[PatternConfidenceResult] | None = None,
+        timeframe: str | None = None,
+    ) -> tuple[str, str, list[PatternConfidenceResult]]:
+        """Flexibly resolve (symbol, timeframe, results) across overloaded method calls."""
+        if isinstance(symbol_or_results, list):
+            results = symbol_or_results
+            symbol = self.symbol
+            tf = timeframe or self.timeframe
+        elif isinstance(symbol_or_results, str):
+            results = self.scored_results
+            symbol = symbol_or_results
+            tf = timeframe or self.timeframe
+        else:
+            results = self.scored_results
+            symbol = self.symbol
+            tf = timeframe or self.timeframe
+        return symbol, tf, results
+
+    def generate_brief(
+        self,
+        symbol_or_results: str | list[PatternConfidenceResult] | None = None,
+        timeframe: str | None = None,
+    ) -> str:
         """Format an executive markdown brief of technical findings."""
+        symbol, tf, results = self._resolve_context(symbol_or_results, timeframe)
         regime = self.get_market_regime_summary()
+        high_conv = sum(
+            1 for r in results if r.grade in (SignalGrade.EXCELLENT, SignalGrade.STRONG)
+        )
         lines: list[str] = [
-            f"# AI Technical Intelligence Brief: {symbol} ({timeframe})",
+            f"# AI Technical Intelligence Brief: {symbol} ({tf})",
             f"**Current Price:** `{regime['current_price']}` | **20-Bar Return:** `{regime['return_20_bars_pct']:+.2f}%`",
-            f"**Signals Analyzed:** `{regime['total_signals_detected']}` (High Conviction: `{regime['high_conviction_signals']}`)",
+            f"**Signals Analyzed:** `{len(results)}` (High Conviction: `{high_conv}`)",
             "",
             "---",
             "## Key Pattern Setups",
         ]
 
-        if not self.scored_results:
+        if not results:
             lines.append("No active patterns identified matching the selected criteria.")
             return "\n".join(lines)
 
-        for i, res in enumerate(self.scored_results[:5], 1):
+        for i, res in enumerate(results[:5], 1):
             grade_badge = f"[{res.grade.value}]"
             conf_pct = f"{res.confidence_score * 100:.1f}%"
             lines.append(f"### {i}. {res.pattern_name} - {grade_badge} (Confidence: {conf_pct})")
@@ -103,22 +194,40 @@ class AIMarketAnalyst:
 
         return "\n".join(lines)
 
-    def to_dict(self, symbol: str, timeframe: str) -> dict[str, Any]:
+    def to_dict(
+        self,
+        symbol_or_results: str | list[PatternConfidenceResult] | None = None,
+        timeframe: str | None = None,
+    ) -> dict[str, Any]:
         """Convert intelligence report to a complete dictionary."""
+        symbol, tf, results = self._resolve_context(symbol_or_results, timeframe)
         return {
             "symbol": symbol,
-            "timeframe": timeframe,
+            "timeframe": tf,
             "market_summary": self.get_market_regime_summary(),
-            "patterns": [r.to_dict() for r in self.scored_results],
+            "patterns": [r.to_dict() for r in results],
         }
 
-    def to_json(self, symbol: str, timeframe: str, indent: int = 2) -> str:
+    def to_json(
+        self,
+        symbol_or_results: str | list[PatternConfidenceResult] | None = None,
+        timeframe: str | None = None,
+        indent: int = 2,
+    ) -> str:
         """Serialize intelligence report to JSON string."""
-        return json.dumps(self.to_dict(symbol, timeframe), indent=indent, default=str)
+        return json.dumps(
+            self.to_dict(symbol_or_results, timeframe),
+            indent=indent,
+            default=str,
+        )
 
-    def to_llm_prompt(self, symbol: str, timeframe: str) -> str:
+    def to_llm_prompt(
+        self,
+        symbol_or_results: str | list[PatternConfidenceResult] | None = None,
+        timeframe: str | None = None,
+    ) -> str:
         """Create a tailored prompt for Large Language Models to provide second-opinion analysis."""
-        brief = self.generate_brief(symbol, timeframe)
+        brief = self.generate_brief(symbol_or_results, timeframe)
         return (
             "You are a Senior Quantitative Portfolio Manager and Technical Analyst. "
             "Review the following algorithmic pattern detection and market intelligence report. "
