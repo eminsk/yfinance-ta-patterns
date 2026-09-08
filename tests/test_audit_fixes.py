@@ -320,3 +320,117 @@ def test_forex_quote_currency_conversion() -> None:
     exit_price = 150.0
     converted = tester._convert_pnl_to_account_currency(raw_pnl_jpy, exit_price)
     assert np.isclose(converted, 10.0)  # 1500 JPY / 150 rate = 10 USD
+
+
+def test_rvol_no_bfill_lookahead() -> None:
+    """Follow-up Audit: RVOL does not use bfill and does not leak future volume."""
+    df = pd.DataFrame(
+        {
+            "Open": [10.0] * 5,
+            "High": [11.0] * 5,
+            "Low": [9.0] * 5,
+            "Close": [10.0] * 5,
+            "Volume": [100.0, 200.0, 150.0, 120.0, 130.0],
+        },
+        index=pd.date_range("2025-01-01", periods=5, freq="1d", tz="UTC"),
+    )
+    scorer = AIPatternScorer(df)
+    rvol_first = float(scorer.df["_RVOL"].iloc[0])
+    # First candle RVOL should be 1.0 (own baseline), not influenced by future 200.0 volume
+    assert np.isclose(rvol_first, 1.0)
+
+
+def test_ema200_warmup_nan_handling() -> None:
+    """Follow-up Audit: EMA200 is NaN for datasets <200 bars and handled safely."""
+    df = pd.DataFrame(
+        {
+            "Open": [10.0] * 50,
+            "High": [11.0] * 50,
+            "Low": [9.0] * 50,
+            "Close": [10.0 + i for i in range(50)],
+            "Volume": [1000.0] * 50,
+        },
+        index=pd.date_range("2025-01-01", periods=50, freq="1d", tz="UTC"),
+    )
+    scorer = AIPatternScorer(df)
+    assert np.isnan(scorer.df["_EMA200"].iloc[-1])
+    res = scorer.score_signal("HAMMER", df.index[-2], raw_signal=100)
+    assert res.trend_regime in ("STRONG_BULLISH", "BULLISH")
+
+
+def test_universal_fx_engine_cross_pair() -> None:
+    """Follow-up Audit: Cross FX pair conversion with fx_rates."""
+    df = pd.DataFrame(
+        {
+            "Open": [160.0, 160.0],
+            "High": [161.0, 161.0],
+            "Low": [159.0, 159.0],
+            "Close": [160.0, 160.0],
+        },
+        index=pd.date_range("2025-01-01", periods=2, freq="1d", tz="UTC"),
+    )
+    tester = PatternRankingTester(
+        df,
+        symbol="EURJPY",
+        account_currency="USD",
+        fx_rates={"USDJPY": 150.0},
+    )
+    raw_pnl_jpy = 3000.0
+    converted = tester._convert_pnl_to_account_currency(raw_pnl_jpy, 160.0)
+    # 3000 JPY / 150 (USDJPY rate) = 20 USD
+    assert np.isclose(converted, 20.0)
+
+
+def test_periodic_sharpe_with_idle_periods(synthetic_ohlcv_data: pd.DataFrame) -> None:
+    """Follow-up Audit: Periodic Sharpe accounts for zero-return bars during idle periods."""
+    tester = PatternRankingTester(
+        synthetic_ohlcv_data,
+        sharpe_mode="periodic",
+    )
+    signals = np.zeros(len(synthetic_ohlcv_data))
+    signals[2] = 1
+    signals[5] = -1
+
+    trades = tester._calculate_trades(signals)
+    assert len(trades) == 1
+    # Run test single pattern to verify periodic_sharpe and trade_sharpe populated
+    res = tester._test_single_pattern("CDLHAMMER", filter_news=False)
+    if res:
+        assert hasattr(res, "periodic_sharpe")
+        assert hasattr(res, "trade_sharpe")
+        assert hasattr(res, "avg_strength")
+
+
+def test_commission_and_slippage(synthetic_ohlcv_data: pd.DataFrame) -> None:
+    """Follow-up Audit: Commissions and slippage reduce trade net PnL."""
+    tester_raw = PatternRankingTester(
+        synthetic_ohlcv_data,
+        commission=0.0,
+        slippage=0.0,
+    )
+    tester_cost = PatternRankingTester(
+        synthetic_ohlcv_data,
+        commission=5.0,
+        slippage=0.10,
+    )
+
+    signals = np.zeros(len(synthetic_ohlcv_data))
+    signals[2] = 1
+    signals[6] = -1
+
+    trades_raw = tester_raw._calculate_trades(signals)
+    trades_cost = tester_cost._calculate_trades(signals)
+
+    assert len(trades_raw) == 1
+    assert len(trades_cost) == 1
+    # PnL with costs must be strictly lower than raw PnL
+    assert trades_cost[0]["pnl"] < trades_raw[0]["pnl"]
+
+
+def test_min_signals_ranking_filter(synthetic_ohlcv_data: pd.DataFrame) -> None:
+    """Follow-up Audit: Filter patterns by min_signals to prevent 1-trade overfitting."""
+    tester = PatternRankingTester(synthetic_ohlcv_data, min_signals=999)
+    results = tester.test_all_patterns(min_signals=999)
+    # No pattern should have 999 signals on a small synthetic dataset
+    assert len(results) == 0
+

@@ -57,11 +57,18 @@ To install cleanly on a Python 3.15 / Free-Threaded project:
 uv add yfinance-ta-patterns --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.2.0
 ```
 
-#### 🧵 Free-Threaded (No-GIL / PEP 703) Verified
+#### 🧵 Free-Threaded (No-GIL / PEP 703) & Zero-Dependency Execution
 `yfinance-ta-patterns` is **100% verified on Python 3.13t, 3.14t, and 3.15t Free-Threaded without GIL** (`-X gil=0`). 
 Includes dual-mode execution:
-1. **Native C Acceleration**: Verified with pre-compiled No-GIL wheels (`ta_lib-0.7.1-cp313t`, `cp314t`, and `cp315t`).
-2. **Zero-Dependency Fallback Engine**: Built-in vectorized pure-NumPy engine (`talib_compat`) that executes pattern scanning across all 60+ candlestick patterns thread-safely across all CPU cores without requiring C compilation or external TA-Lib binary drivers.
+1. **Native C Acceleration**: Verified with pre-compiled No-GIL wheels (`ta_lib-0.7.1-cp313t`, `cp314t`, and `cp315t`) for full 60+ pattern detection.
+2. **Zero-Dependency Fallback Engine (`talib_compat`)**: Built-in vectorized pure-NumPy engine providing thread-safe detection for the 11 primary candlestick patterns without C compilers or system TA-Lib binaries:
+
+| Supported Fallback Patterns (`SUPPORTED_FALLBACK_PATTERNS`) |
+|------------------------------------------------------------|
+| `CDLDOJI`, `CDLHAMMER`, `CDLINVERTEDHAMMER`, `CDLENGULFING`, `CDLSHOOTINGSTAR`, `CDLHANGINGMAN`, `CDLMORNINGSTAR`, `CDLEVENINGSTAR`, `CDLMARUBOZU`, `CDLBELTHOLD`, `CDLKICKING` |
+
+> [!NOTE]
+> For patterns outside the core 11 (e.g. `CDLPIERCING`, `CDLHARAMI`), the fallback raises `NotImplementedError` with clear instructions to install native TA-Lib.
 
 Or configure your project's `pyproject.toml`:
 ```toml
@@ -93,6 +100,8 @@ yftp --all-patterns --symbol EURUSD --timeframe 1h --period 60d --prompt
 yfinance-ta-patterns [-h] [-v] (--pattern PATTERN | --all-patterns)
                      [--symbol SYMBOL] [--period PERIOD] [--timeframe TIMEFRAME]
                      [--date YYYY-MM-DD] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD]
+                     [--execution {next_open,close}] [--min-signals MIN_SIGNALS]
+                     [--commission COMMISSION] [--slippage SLIPPAGE] [--auto-adjust]
                      [--ai] [--min-confidence MIN_CONFIDENCE]
                      [--ai-analyst] [--prompt] [--format {text,json,markdown}]
 ```
@@ -109,6 +118,11 @@ yfinance-ta-patterns [-h] [-v] (--pattern PATTERN | --all-patterns)
 | `--timeframe` | Interval alias (`M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`) or `yfinance` interval (`1m`, `5m`, `15m`, `1h`, `4h`, `1d`). |
 | `--date` | Filter signals for a specific date (`YYYY-MM-DD`). |
 | `--start-date` / `--end-date` | Date range filter (`YYYY-MM-DD`). |
+| `--execution` | Execution timing: `next_open` (unbiased, enters on bar i+1) or `close` (legacy). |
+| `--min-signals` | Minimum signal count required for ranking (reduces overfitting from 1-trade samples). |
+| `--commission` | Fixed transaction cost per round-trip trade in backtester. |
+| `--slippage` | Slippage in price units applied adversely to entries and exits. |
+| `--auto-adjust` | Enable dividend and split adjustments (recommended for long multi-year stock backtests). |
 | `--ai` | Enrich detected patterns with AI confidence scoring, signal grade, and trade setups. |
 | `--min-confidence` | Minimum confidence threshold for AI scoring ($0.0$ to $1.0$, default: $0.0$). |
 | `--ai-analyst` | Run executive AI market analysis with synthesis and trade setups. |

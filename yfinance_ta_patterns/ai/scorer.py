@@ -186,9 +186,14 @@ class AIPatternScorer:
         low = self.df["Low"]
 
         # EMAs for Trend Regime
-        self.df["_EMA20"] = close.ewm(span=min(20, len(self.df)), adjust=False).mean()
-        self.df["_EMA50"] = close.ewm(span=min(50, len(self.df)), adjust=False).mean()
-        self.df["_EMA200"] = close.ewm(span=min(200, len(self.df)), adjust=False).mean()
+        # Spans: 20, 50, and 200. When dataset has < 200 bars, EMA200 is set to NaN
+        # rather than falsely collapsing to a short EMA.
+        self.df["_EMA20"] = close.ewm(span=20, adjust=False).mean()
+        self.df["_EMA50"] = close.ewm(span=50, adjust=False).mean()
+        if len(self.df) >= 200:
+            self.df["_EMA200"] = close.ewm(span=200, adjust=False).mean()
+        else:
+            self.df["_EMA200"] = np.nan
 
         # Average True Range (Wilder's ATR 14 - Issue 15)
         self.df["_ATR14"] = calc_wilder_atr(high, low, close, period=min(14, len(self.df)))
@@ -196,10 +201,13 @@ class AIPatternScorer:
         # Relative Strength Index (Wilder's RSI 14 - Issue 14)
         self.df["_RSI14"] = calc_wilder_rsi(close, period=min(14, len(self.df)))
 
-        # Relative Volume (RVOL 20 - Issue 16: excludes current candle from baseline)
+        # Relative Volume (RVOL 20 - strictly historical, excludes current candle from baseline)
         if "Volume" in self.df.columns and self.df["Volume"].sum() > 0:
-            vol = self.df["Volume"]
-            prev_vol = vol.shift(1).bfill().fillna(vol)
+            vol = self.df["Volume"].astype(float)
+            prev_vol = vol.shift(1).copy()
+            if len(prev_vol) > 0:
+                prev_vol.iloc[0] = vol.iloc[0]
+            prev_vol = prev_vol.ffill().fillna(vol)
             avg_vol = prev_vol.rolling(window=min(20, len(self.df)), min_periods=1).mean()
             self.df["_RVOL"] = (vol / avg_vol.replace(0, np.nan)).fillna(1.0)
         else:
@@ -210,15 +218,27 @@ class AIPatternScorer:
         self, close: float, ema20: float, ema50: float, ema200: float
     ) -> str:
         """Classify prevailing trend regime."""
-        if close > ema20 > ema50 > ema200:
-            return "STRONG_BULLISH"
-        elif close > ema50 and ema50 >= ema200:
-            return "BULLISH"
-        elif close < ema20 < ema50 < ema200:
-            return "STRONG_BEARISH"
-        elif close < ema50 and ema50 <= ema200:
-            return "BEARISH"
-        return "NEUTRAL"
+        if not np.isnan(ema200):
+            if close > ema20 > ema50 > ema200:
+                return "STRONG_BULLISH"
+            elif close > ema50 and ema50 >= ema200:
+                return "BULLISH"
+            elif close < ema20 < ema50 < ema200:
+                return "STRONG_BEARISH"
+            elif close < ema50 and ema50 <= ema200:
+                return "BEARISH"
+            return "NEUTRAL"
+        else:
+            # When historical bars < 200, evaluate trend using EMA20 and EMA50
+            if close > ema20 > ema50:
+                return "STRONG_BULLISH"
+            elif close > ema50:
+                return "BULLISH"
+            elif close < ema20 < ema50:
+                return "STRONG_BEARISH"
+            elif close < ema50:
+                return "BEARISH"
+            return "NEUTRAL"
 
     def score_signal(
         self,

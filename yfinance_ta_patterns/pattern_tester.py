@@ -43,6 +43,9 @@ class PatternResult:
     sharpe_ratio: float
     max_drawdown: float = 0.0
     equity_curve: list[float] | None = None
+    periodic_sharpe: float = 0.0
+    trade_sharpe: float = 0.0
+    avg_strength: float = 100.0
 
 
 class PatternRankingTester:
@@ -54,14 +57,19 @@ class PatternRankingTester:
     __slots__ = (
         "_account_currency",
         "_allow_short",
+        "_commission",
         "_data",
         "_execution",
         "_force_exit_on_last_bar",
+        "_fx_rates",
         "_initial_capital",
+        "_min_signals",
         "_news_dates",
         "_periods_per_year",
         "_position_size",
         "_results",
+        "_sharpe_mode",
+        "_slippage",
         "_symbol",
         "_timeframe",
         "equity_curve",
@@ -81,6 +89,11 @@ class PatternRankingTester:
         account_currency: str = "USD",
         force_exit_on_last_bar: bool = True,
         allow_short: bool = True,
+        commission: float = 0.0,
+        slippage: float = 0.0,
+        min_signals: int = 1,
+        fx_rates: dict[str, float] | None = None,
+        sharpe_mode: str = "periodic",
     ) -> None:
         """Initialize pattern tester.
 
@@ -109,6 +122,16 @@ class PatternRankingTester:
             Whether to close active position at final bar close
         allow_short : bool
             Whether to execute short trades on bearish signals
+        commission : float
+            Fixed commission cost deducted per completed trade (default 0.0)
+        slippage : float
+            Slippage in price units applied adversely to entries and exits (default 0.0)
+        min_signals : int
+            Minimum signals required for ranking (default 1)
+        fx_rates : dict[str, float], optional
+            Dictionary of cross-currency exchange rates for Forex conversion
+        sharpe_mode : str
+            Sharpe mode: 'periodic' (returns per bar, with 0% on idle bars) or 'trades'
         """
         self._data: pd.DataFrame = data
         self._initial_capital: float = initial_capital
@@ -121,6 +144,11 @@ class PatternRankingTester:
         self._account_currency: str = account_currency
         self._force_exit_on_last_bar: bool = force_exit_on_last_bar
         self._allow_short: bool = allow_short
+        self._commission: float = max(commission, 0.0)
+        self._slippage: float = max(slippage, 0.0)
+        self._min_signals: int = max(min_signals, 1)
+        self._fx_rates: dict[str, float] = fx_rates or {}
+        self._sharpe_mode: str = sharpe_mode
 
         if periods_per_year is not None:
             self._periods_per_year: float = periods_per_year
@@ -136,25 +164,45 @@ class PatternRankingTester:
         return [f for f in dir(talib) if f.startswith("CDL")]
 
     def _convert_pnl_to_account_currency(self, raw_pnl: float, exit_price: float) -> float:
-        """Normalize Forex / CFD PnL into account base currency."""
+        """Universal FX conversion: normalize Forex / CFD PnL into account base currency."""
         if not self._symbol or exit_price <= 0:
             return raw_pnl
-        sym = self._symbol.upper().replace("=X", "").replace("-USD", "")
-        # Common 6-letter FX pair e.g. USDJPY where base=USD, quote=JPY
+        sym = self._symbol.upper().replace("=X", "").replace("-USD", "").replace("/", "")
+        # Common 6-letter FX pair e.g. USDJPY, EURUSD, EURJPY
         if len(sym) == 6 and sym.isalpha():
             base, quote = sym[:3], sym[3:6]
-            if self._account_currency == "USD" and quote == "JPY" and base == "USD":
+            # 1. Quote matches account currency (e.g. EURUSD with USD account) -> already in USD
+            if quote == self._account_currency:
+                return raw_pnl
+            # 2. Base matches account currency (e.g. USDJPY with USD account) -> raw_pnl is in quote, divide by exit_price
+            if base == self._account_currency:
                 return raw_pnl / exit_price
+            # 3. Cross pair (e.g. EURJPY, GBPJPY with USD account) -> raw_pnl in quote (JPY)
+            if self._fx_rates:
+                direct_pair = f"{self._account_currency}{quote}"
+                inv_pair = f"{quote}{self._account_currency}"
+                if direct_pair in self._fx_rates and self._fx_rates[direct_pair] > 0:
+                    return raw_pnl / self._fx_rates[direct_pair]
+                elif inv_pair in self._fx_rates and self._fx_rates[inv_pair] > 0:
+                    return raw_pnl * self._fx_rates[inv_pair]
+            # Fallback for USD account when quote is JPY (e.g. EURJPY): raw_pnl in JPY
+            if self._account_currency == "USD" and quote == "JPY" and exit_price > 50:
+                # If pair is EURJPY, exit_price ~ 160. EURUSD ~ 1.08 => USDJPY ~ 160/1.08 ~ 148
+                return raw_pnl / (exit_price / 1.08 if base == "EUR" else exit_price)
         return raw_pnl
 
 
-    def test_all_patterns(self, filter_news: bool = False) -> list[PatternResult]:
+    def test_all_patterns(
+        self, filter_news: bool = False, min_signals: int | None = None
+    ) -> list[PatternResult]:
         """Test all patterns and return ranked results.
 
         Parameters:
         -----------
         filter_news : bool
             If True, exclude trades during news events
+        min_signals : int, optional
+            Minimum total signals required to include in ranked results (default from __init__)
 
         Returns:
         --------
@@ -162,11 +210,12 @@ class PatternRankingTester:
         """
         self._results = []
         all_patterns = self.get_all_patterns()
+        thresh = min_signals if min_signals is not None else self._min_signals
 
         for pattern_name in all_patterns:
             try:
                 result = self._test_single_pattern(pattern_name, filter_news)
-                if result and result.total_signals > 0:
+                if result and result.total_signals >= thresh:
                     self._results.append(result)
             except NotImplementedError:
                 # Silently skip patterns not implemented in pure-Python fallback
@@ -246,7 +295,7 @@ class PatternRankingTester:
         max_profit = max(t["pnl"] for t in trades) if trades else 0.0
         max_loss = min(t["pnl"] for t in trades) if trades else 0.0
 
-        # Build equity curve and calculate maximum drawdown
+        # Build trade equity curve and calculate maximum drawdown
         equity = self._initial_capital
         curve = [equity]
         peak = equity
@@ -263,14 +312,47 @@ class PatternRankingTester:
         self.equity_curve = curve
         self.trades = trades
 
-        # Calculate Sharpe ratio scaled by timeframe frequency
+        # Trade-level Sharpe ratio
         pnls = [t["pnl"] for t in trades]
         std_pnl = float(np.std(pnls))
-        sharpe = (
+        trade_sharpe = (
             (float(np.mean(pnls)) / std_pnl) * float(np.sqrt(self._periods_per_year))
             if len(pnls) > 1 and std_pnl > 0
             else 0.0
         )
+
+        # Bar-level periodic returns & Periodic Sharpe (accounting for 0% return during idle holding periods)
+        n_bars = len(self._data)
+        bar_pnl = np.zeros(n_bars, dtype=float)
+        for t in trades:
+            idx = t.get("exit_idx")
+            if idx is not None and 0 <= idx < n_bars:
+                bar_pnl[idx] += t["pnl"]
+
+        bar_equity = np.full(n_bars, self._initial_capital, dtype=float)
+        curr_eq = self._initial_capital
+        for b in range(n_bars):
+            curr_eq += bar_pnl[b]
+            bar_equity[b] = curr_eq
+
+        bar_returns = np.zeros(max(n_bars - 1, 1), dtype=float)
+        if n_bars > 1:
+            prev_eq = bar_equity[:-1]
+            non_zero = prev_eq > 0
+            bar_returns[non_zero] = (bar_equity[1:][non_zero] - prev_eq[non_zero]) / prev_eq[non_zero]
+
+        std_bar_ret = float(np.std(bar_returns))
+        periodic_sharpe = (
+            (float(np.mean(bar_returns)) / std_bar_ret) * float(np.sqrt(self._periods_per_year))
+            if std_bar_ret > 0
+            else 0.0
+        )
+
+        primary_sharpe = periodic_sharpe if self._sharpe_mode == "periodic" else trade_sharpe
+
+        # Pattern strength tracking
+        active_strengths = [s for s in strengths if s > 0]
+        avg_strength = float(np.mean(active_strengths)) if active_strengths else 100.0
 
         return PatternResult(
             pattern_name=pattern_name.replace("CDL", ""),
@@ -282,13 +364,16 @@ class PatternRankingTester:
             avg_pnl=avg_pnl,
             max_profit=max_profit,
             max_loss=max_loss,
-            sharpe_ratio=sharpe,
+            sharpe_ratio=primary_sharpe,
             max_drawdown=max_drawdown,
             equity_curve=curve,
+            periodic_sharpe=periodic_sharpe,
+            trade_sharpe=trade_sharpe,
+            avg_strength=avg_strength,
         )
 
     def _calculate_trades(self, signals: np.ndarray) -> list[dict[str, Any]]:
-        """Calculate trades from signals with next_open execution and symmetric Short trading."""
+        """Calculate trades from signals with short support, slippage, and commissions."""
         trades: list[dict[str, Any]] = []
         position: float = 0.0
         entry_idx: int | None = None
@@ -313,12 +398,14 @@ class PatternRankingTester:
             if signal == 1:
                 # Close Short if currently short
                 if position < 0.0 and entry_idx is not None:
-                    raw_pnl = (-position) * (entry_price - exec_price)
+                    eff_exit = exec_price + self._slippage
+                    raw_pnl = (-position) * (entry_price - eff_exit) - self._commission
                     pnl = self._convert_pnl_to_account_currency(raw_pnl, exec_price)
                     trades.append(
                         {
                             "entry_time": times[entry_idx],
                             "exit_time": times[exec_idx],
+                            "exit_idx": exec_idx,
                             "direction": "SHORT",
                             "entry_price": entry_price,
                             "exit_price": exec_price,
@@ -330,18 +417,20 @@ class PatternRankingTester:
                 # Open Long if flat
                 elif position == 0.0:
                     entry_idx = exec_idx
-                    entry_price = exec_price
+                    entry_price = exec_price + self._slippage
                     position = self._position_size / exec_price
 
             elif signal == -1:
                 # Close Long if currently long
                 if position > 0.0 and entry_idx is not None:
-                    raw_pnl = position * (exec_price - entry_price)
+                    eff_exit = exec_price - self._slippage
+                    raw_pnl = position * (eff_exit - entry_price) - self._commission
                     pnl = self._convert_pnl_to_account_currency(raw_pnl, exec_price)
                     trades.append(
                         {
                             "entry_time": times[entry_idx],
                             "exit_time": times[exec_idx],
+                            "exit_idx": exec_idx,
                             "direction": "LONG",
                             "entry_price": entry_price,
                             "exit_price": exec_price,
@@ -353,24 +442,26 @@ class PatternRankingTester:
                 # Open Short if flat and shorts are allowed
                 elif position == 0.0 and self._allow_short:
                     entry_idx = exec_idx
-                    entry_price = exec_price
+                    entry_price = exec_price - self._slippage
                     position = -self._position_size / exec_price
-
 
         # Force-close position on the last bar if still open
         if self._force_exit_on_last_bar and position != 0.0 and entry_idx is not None:
             last_exit_price = closes[-1]
             if position > 0.0:
-                raw_pnl = position * (last_exit_price - entry_price)
+                eff_exit = last_exit_price - self._slippage
+                raw_pnl = position * (eff_exit - entry_price) - self._commission
                 direction = "LONG"
             else:
-                raw_pnl = (-position) * (entry_price - last_exit_price)
+                eff_exit = last_exit_price + self._slippage
+                raw_pnl = (-position) * (entry_price - eff_exit) - self._commission
                 direction = "SHORT"
             pnl = self._convert_pnl_to_account_currency(raw_pnl, last_exit_price)
             trades.append(
                 {
                     "entry_time": times[entry_idx],
                     "exit_time": times[-1],
+                    "exit_idx": n - 1,
                     "direction": direction,
                     "entry_price": entry_price,
                     "exit_price": last_exit_price,

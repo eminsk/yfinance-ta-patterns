@@ -124,6 +124,36 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
         help="Minimum AI confidence score threshold (0.0 to 1.0, e.g. 0.65).",
     )
     parser.add_argument(
+        "--auto-adjust",
+        action="store_true",
+        default=False,
+        help="Enable split and dividend price adjustments (useful for long historical equity backtests).",
+    )
+    parser.add_argument(
+        "--execution",
+        choices=["next_open", "close"],
+        default="next_open",
+        help="Trade execution timing: 'next_open' (unbiased, enters on bar i+1) or 'close' (legacy).",
+    )
+    parser.add_argument(
+        "--min-signals",
+        type=int,
+        default=1,
+        help="Minimum total signals required to include a pattern in ranking (reduces overfitting).",
+    )
+    parser.add_argument(
+        "--commission",
+        type=float,
+        default=0.0,
+        help="Transaction fee deducted per completed trade in backtester.",
+    )
+    parser.add_argument(
+        "--slippage",
+        type=float,
+        default=0.0,
+        help="Slippage in price units applied adversely to entries and exits in backtester.",
+    )
+    parser.add_argument(
         "--ai-analyst",
         action="store_true",
         help="Generate an executive AI market intelligence brief.",
@@ -164,6 +194,7 @@ def run_cli(args: argparse.Namespace) -> int:
         interval=interval,
         start=start_arg,
         end=end_arg,
+        auto_adjust=args.auto_adjust,
     )
     data = loader.get_data()
     period = loader.period
