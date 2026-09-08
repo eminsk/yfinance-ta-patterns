@@ -32,4 +32,5 @@ jobs:
         if: success()
         uses: pypa/gh-action-pypi-publish@v1.12.2
         with:
+          skip-existing: true
           password: ${{ secrets.PYPI_API_TOKEN }}
