@@ -998,7 +998,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "pytz" },
-    { name = "ta-lib" },
+    { name = "ta-lib", marker = "python_full_version < '3.14'" },
     { name = "yfinance" },
 ]
 
@@ -1022,7 +1022,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pytz", specifier = ">=2024.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
-    { name = "ta-lib", specifier = ">=0.6.8" },
+    { name = "ta-lib", marker = "python_full_version < '3.14'", specifier = ">=0.6.8" },
     { name = "types-pytz", marker = "extra == 'dev'", specifier = ">=2024.1" },
     { name = "yfinance", specifier = ">=0.2.66" },
 ]

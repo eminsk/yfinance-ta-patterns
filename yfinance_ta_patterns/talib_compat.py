@@ -7,9 +7,11 @@ even if native C ta-lib binaries are not installed.
 
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
+from typing import Any
 
+import numpy as np
+
+_talib: Any = None
 try:
     import talib as _talib
     HAS_NATIVE_TALIB = True
@@ -42,17 +44,17 @@ ALL_CDL_PATTERNS = [
 def _to_arrays(open_, high, low, close):
     o = np.asarray(open_, dtype=np.float64)
     h = np.asarray(high, dtype=np.float64)
-    l = np.asarray(low, dtype=np.float64)
+    lo = np.asarray(low, dtype=np.float64)
     c = np.asarray(close, dtype=np.float64)
-    return o, h, l, c
+    return o, h, lo, c
 
 
 # --- Vectorized Pattern Implementations ---
 
 def cdl_doji(open_, high, low, close):
-    o, h, l, c = _to_arrays(open_, high, low, close)
+    o, h, lo, c = _to_arrays(open_, high, low, close)
     body = np.abs(c - o)
-    hl = h - l
+    hl = h - lo
     res = np.zeros(len(o), dtype=np.int32)
     mask = (hl > 0) & (body <= 0.1 * hl)
     res[mask] = 100
@@ -60,10 +62,10 @@ def cdl_doji(open_, high, low, close):
 
 
 def cdl_hammer(open_, high, low, close):
-    o, h, l, c = _to_arrays(open_, high, low, close)
+    o, h, lo, c = _to_arrays(open_, high, low, close)
     body = np.abs(c - o)
-    hl = h - l
-    lower_shadow = np.minimum(o, c) - l
+    hl = h - lo
+    lower_shadow = np.minimum(o, c) - lo
     upper_shadow = h - np.maximum(o, c)
     res = np.zeros(len(o), dtype=np.int32)
     mask = (hl > 0) & (lower_shadow >= 2.0 * body) & (upper_shadow <= 0.25 * hl) & (body > 0)
@@ -72,10 +74,10 @@ def cdl_hammer(open_, high, low, close):
 
 
 def cdl_invertedhammer(open_, high, low, close):
-    o, h, l, c = _to_arrays(open_, high, low, close)
+    o, h, lo, c = _to_arrays(open_, high, low, close)
     body = np.abs(c - o)
-    hl = h - l
-    lower_shadow = np.minimum(o, c) - l
+    hl = h - lo
+    lower_shadow = np.minimum(o, c) - lo
     upper_shadow = h - np.maximum(o, c)
     res = np.zeros(len(o), dtype=np.int32)
     mask = (hl > 0) & (upper_shadow >= 2.0 * body) & (lower_shadow <= 0.25 * hl) & (body > 0)
@@ -84,10 +86,10 @@ def cdl_invertedhammer(open_, high, low, close):
 
 
 def cdl_shootingstar(open_, high, low, close):
-    o, h, l, c = _to_arrays(open_, high, low, close)
+    o, h, lo, c = _to_arrays(open_, high, low, close)
     body = np.abs(c - o)
-    hl = h - l
-    lower_shadow = np.minimum(o, c) - l
+    hl = h - lo
+    lower_shadow = np.minimum(o, c) - lo
     upper_shadow = h - np.maximum(o, c)
     res = np.zeros(len(o), dtype=np.int32)
     mask = (hl > 0) & (upper_shadow >= 2.0 * body) & (lower_shadow <= 0.25 * hl) & (body > 0)
@@ -96,10 +98,10 @@ def cdl_shootingstar(open_, high, low, close):
 
 
 def cdl_hangingman(open_, high, low, close):
-    o, h, l, c = _to_arrays(open_, high, low, close)
+    o, h, lo, c = _to_arrays(open_, high, low, close)
     body = np.abs(c - o)
-    hl = h - l
-    lower_shadow = np.minimum(o, c) - l
+    hl = h - lo
+    lower_shadow = np.minimum(o, c) - lo
     upper_shadow = h - np.maximum(o, c)
     res = np.zeros(len(o), dtype=np.int32)
     mask = (hl > 0) & (lower_shadow >= 2.0 * body) & (upper_shadow <= 0.25 * hl) & (body > 0)
@@ -108,7 +110,7 @@ def cdl_hangingman(open_, high, low, close):
 
 
 def cdl_engulfing(open_, high, low, close):
-    o, h, l, c = _to_arrays(open_, high, low, close)
+    o, _, _, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 2:
         return res
@@ -124,7 +126,7 @@ def cdl_engulfing(open_, high, low, close):
 
 
 def cdl_harami(open_, high, low, close):
-    o, h, l, c = _to_arrays(open_, high, low, close)
+    o, _, _, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 2:
         return res
@@ -146,9 +148,9 @@ def cdl_harami(open_, high, low, close):
 
 
 def cdl_marubozu(open_, high, low, close):
-    o, h, l, c = _to_arrays(open_, high, low, close)
+    o, h, lo, c = _to_arrays(open_, high, low, close)
     body = np.abs(c - o)
-    hl = h - l
+    hl = h - lo
     res = np.zeros(len(o), dtype=np.int32)
     mask = (hl > 0) & (body >= 0.9 * hl)
     bullish = mask & (c > o)
@@ -159,10 +161,10 @@ def cdl_marubozu(open_, high, low, close):
 
 
 def cdl_spinningtop(open_, high, low, close):
-    o, h, l, c = _to_arrays(open_, high, low, close)
+    o, h, lo, c = _to_arrays(open_, high, low, close)
     body = np.abs(c - o)
-    hl = h - l
-    lower_shadow = np.minimum(o, c) - l
+    hl = h - lo
+    lower_shadow = np.minimum(o, c) - lo
     upper_shadow = h - np.maximum(o, c)
     res = np.zeros(len(o), dtype=np.int32)
     mask = (hl > 0) & (body <= 0.3 * hl) & (upper_shadow >= body) & (lower_shadow >= body)
@@ -174,7 +176,7 @@ def cdl_spinningtop(open_, high, low, close):
 
 
 def cdl_3whitesoldiers(open_, high, low, close):
-    o, h, l, c = _to_arrays(open_, high, low, close)
+    o, _, _, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 3:
         return res
@@ -187,7 +189,7 @@ def cdl_3whitesoldiers(open_, high, low, close):
 
 
 def cdl_3blackcrows(open_, high, low, close):
-    o, h, l, c = _to_arrays(open_, high, low, close)
+    o, _, _, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 3:
         return res
@@ -242,7 +244,7 @@ class TALibWrapper:
     def __dir__(self):
         if self._has_native:
             return dir(_talib)
-        return ALL_CDL_PATTERNS + ["HAS_NATIVE_TALIB"]
+        return [*ALL_CDL_PATTERNS, "HAS_NATIVE_TALIB"]
 
 
-talib = _talib if HAS_NATIVE_TALIB else TALibWrapper()
+talib: Any = _talib if HAS_NATIVE_TALIB else TALibWrapper()

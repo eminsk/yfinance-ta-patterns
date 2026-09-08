@@ -108,10 +108,7 @@ class MarketDataLoader:
         self.ticker: str = normalize_ticker(symbol, asset_type=asset_type)
         # Yahoo Finance restricts 1m/2m data to the last 7-8 days.
         # Auto-adjust period to '7d' if default '60d' is passed with 1m/2m.
-        if norm_interval in ("1m", "2m") and period == "60d":
-            self.period: str = "7d"
-        else:
-            self.period: str = period
+        self.period: str = "7d" if (norm_interval in ("1m", "2m") and period == "60d") else period
         self.interval: str = norm_interval
         self.timezone: str = timezone
         self._download_interval: str = self._resolve_download_interval(norm_interval)

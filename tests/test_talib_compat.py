@@ -1,12 +1,13 @@
 """Tests for TA-Lib compatibility fallback engine and No-GIL multithreading."""
 
 import concurrent.futures
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from yfinance_ta_patterns.pattern_analyzer import PatternAnalyzer
-from yfinance_ta_patterns.talib_compat import TALibWrapper, ALL_CDL_PATTERNS
+from yfinance_ta_patterns.talib_compat import ALL_CDL_PATTERNS, TALibWrapper
 
 
 @pytest.fixture
