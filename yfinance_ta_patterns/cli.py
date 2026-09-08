@@ -213,7 +213,11 @@ def run_cli(args: argparse.Namespace) -> int:
     analyst_data = data
     if args.date and not data.empty:
         target_cutoff = pd.to_datetime(args.date) + pd.Timedelta(days=1)
-        if data.index.tz is not None and target_cutoff.tz is None:
+        if (
+            isinstance(data.index, pd.DatetimeIndex)
+            and data.index.tz is not None
+            and target_cutoff.tz is None
+        ):
             target_cutoff = target_cutoff.tz_localize(data.index.tz)
         sliced = data[data.index < target_cutoff]
         if not sliced.empty:
