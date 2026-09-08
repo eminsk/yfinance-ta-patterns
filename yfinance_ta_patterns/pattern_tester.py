@@ -507,6 +507,32 @@ class PatternRankingTester:
             score=score,
         )
 
+    def _calc_position_units(self, exec_price: float) -> float:
+        """Calculate position units in base asset for given account currency position size."""
+        if not self._symbol or exec_price <= 0:
+            return self._position_size / exec_price
+
+        sym = self._symbol.upper().replace("=X", "").replace("-USD", "").replace("/", "")
+        if len(sym) == 6 and sym.isalpha():
+            base, quote = sym[:3], sym[3:6]
+            # 1. Base currency is account currency (e.g. USDJPY with USD account) -> units in base is position_size
+            if base == self._account_currency:
+                return self._position_size
+            # 2. Quote currency is account currency (e.g. EURUSD with USD account) -> units = position_size / price
+            if quote == self._account_currency:
+                return self._position_size / exec_price
+
+            # 3. Cross currency (e.g. EURGBP with USD account): base is EUR
+            rates = {**DEFAULT_FX_USD_RATES, **self._fx_rates}
+            base_usd = f"{base}USD"
+            usd_base = f"USD{base}"
+            if base_usd in rates and rates[base_usd] > 0:
+                return self._position_size / rates[base_usd]
+            elif usd_base in rates and rates[usd_base] > 0:
+                return self._position_size * rates[usd_base]
+
+        return self._position_size / exec_price
+
     def _calculate_trades(self, signals: np.ndarray) -> list[dict[str, Any]]:
         """Calculate trades from signals with short support, slippage, and commissions."""
         trades: list[dict[str, Any]] = []
@@ -535,13 +561,13 @@ class PatternRankingTester:
             ):
                 if position > 0.0:
                     eff_exit = exec_price - self._slippage
-                    raw_pnl = position * (eff_exit - entry_price) - self._commission
+                    raw_pnl = position * (eff_exit - entry_price)
                     direction = "LONG"
                 else:
                     eff_exit = exec_price + self._slippage
-                    raw_pnl = (-position) * (entry_price - eff_exit) - self._commission
+                    raw_pnl = (-position) * (entry_price - eff_exit)
                     direction = "SHORT"
-                pnl = self._convert_pnl_to_account_currency(raw_pnl, exec_price)
+                pnl = self._convert_pnl_to_account_currency(raw_pnl, exec_price) - self._commission
                 trades.append(
                     {
                         "entry_time": times[entry_idx],
@@ -565,8 +591,11 @@ class PatternRankingTester:
                 # Close Short if currently short
                 if position < 0.0 and entry_idx is not None:
                     eff_exit = exec_price + self._slippage
-                    raw_pnl = (-position) * (entry_price - eff_exit) - self._commission
-                    pnl = self._convert_pnl_to_account_currency(raw_pnl, exec_price)
+                    raw_pnl = (-position) * (entry_price - eff_exit)
+                    pnl = (
+                        self._convert_pnl_to_account_currency(raw_pnl, exec_price)
+                        - self._commission
+                    )
                     trades.append(
                         {
                             "entry_time": times[entry_idx],
@@ -584,14 +613,17 @@ class PatternRankingTester:
                 elif position == 0.0:
                     entry_idx = exec_idx
                     entry_price = exec_price + self._slippage
-                    position = self._position_size / exec_price
+                    position = self._calc_position_units(entry_price)
 
             elif signal == -1:
                 # Close Long if currently long
                 if position > 0.0 and entry_idx is not None:
                     eff_exit = exec_price - self._slippage
-                    raw_pnl = position * (eff_exit - entry_price) - self._commission
-                    pnl = self._convert_pnl_to_account_currency(raw_pnl, exec_price)
+                    raw_pnl = position * (eff_exit - entry_price)
+                    pnl = (
+                        self._convert_pnl_to_account_currency(raw_pnl, exec_price)
+                        - self._commission
+                    )
                     trades.append(
                         {
                             "entry_time": times[entry_idx],
@@ -609,20 +641,20 @@ class PatternRankingTester:
                 elif position == 0.0 and self._allow_short:
                     entry_idx = exec_idx
                     entry_price = exec_price - self._slippage
-                    position = -self._position_size / exec_price
+                    position = -self._calc_position_units(entry_price)
 
         # Force-close position on the last bar if still open
         if self._force_exit_on_last_bar and position != 0.0 and entry_idx is not None:
             last_exit_price = closes[-1]
             if position > 0.0:
                 eff_exit = last_exit_price - self._slippage
-                raw_pnl = position * (eff_exit - entry_price) - self._commission
+                raw_pnl = position * (eff_exit - entry_price)
                 direction = "LONG"
             else:
                 eff_exit = last_exit_price + self._slippage
-                raw_pnl = (-position) * (entry_price - eff_exit) - self._commission
+                raw_pnl = (-position) * (entry_price - eff_exit)
                 direction = "SHORT"
-            pnl = self._convert_pnl_to_account_currency(raw_pnl, last_exit_price)
+            pnl = self._convert_pnl_to_account_currency(raw_pnl, last_exit_price) - self._commission
             trades.append(
                 {
                     "entry_time": times[entry_idx],

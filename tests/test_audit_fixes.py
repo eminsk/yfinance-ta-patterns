@@ -577,3 +577,35 @@ def test_pattern_ranking_profit_factor_and_score(synthetic_ohlcv_data: pd.DataFr
         assert hasattr(res, "score")
         assert res.profit_factor >= 0.0
         assert res.score >= 0.0
+
+
+def test_forex_position_sizing_and_commission() -> None:
+    """Issue: USDJPY position sizing should not divide USD by JPY price, and commission must be in USD."""
+    df = pd.DataFrame(
+        {
+            "Open": [150.0, 150.0, 150.0, 150.0],
+            "High": [151.0, 151.0, 151.0, 151.0],
+            "Low": [149.0, 149.0, 149.0, 149.0],
+            "Close": [150.0, 150.0, 151.0, 151.0],
+        },
+        index=pd.date_range("2025-01-01", periods=4, freq="1h", tz="UTC"),
+    )
+    tester = PatternRankingTester(
+        df,
+        symbol="USDJPY=X",
+        account_currency="USD",
+        position_size=1000.0,
+        commission=1.0,
+        slippage=0.0,
+    )
+    assert tester._calc_position_units(150.0) == 1000.0
+
+    tester_eur = PatternRankingTester(
+        df,
+        symbol="EURUSD=X",
+        account_currency="USD",
+        position_size=1000.0,
+        commission=1.0,
+        slippage=0.0,
+    )
+    assert np.isclose(tester_eur._calc_position_units(1.08), 1000.0 / 1.08)
