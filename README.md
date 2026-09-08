@@ -31,50 +31,124 @@ Compatible with **Python 3.12, 3.13, 3.14, and Python 3.15 (Release Candidate & 
 
 ### 1. Installation
 
+`yfinance-ta-patterns` installs in seconds with **zero C build requirements** by default, using an internal vectorized pure-Python/NumPy engine for candlestick pattern recognition.
+
+#### Option A: Using `uv` (Fastest & Recommended)
+
 ```bash
-# Recommended with uv:
+# 1. Standard Python (with GIL: 3.12, 3.13, 3.14):
 uv add yfinance-ta-patterns
 
-# Or standard pip:
-pip install yfinance-ta-patterns
+# 2. Free-Threaded (No-GIL / PEP 703: 3.14t, 3.15t):
+uv python pin 3.14t
+uv add yfinance-ta-patterns
 
-# Or run instantly via uvx without installing:
+# 3. Instant execution without installing into environment:
 uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h --ai
 ```
 
-#### ⚡ Python 3.15 Ready (Early Adopters)
-`yfinance-ta-patterns` is tested and **100% verified (68/68 tests passing)** on upcoming **Python 3.15** (`cpython-3.15.0rc2`), **Python 3.14**, **Python 3.13**, and **Python 3.12**.
+#### Option B: Using Standard `pip`
 
-While upstream wheels for C-dependencies (`ta-lib` and `pandas`) are pending official PyPI release for 3.15 and Free-Threaded No-GIL, pre-compiled native Windows x64 binary wheels are provided in our [Release Assets](https://github.com/eminsk/yfinance-ta-patterns/releases/tag/v0.2.0):
-* `ta_lib-0.7.1-cp313-cp313t-win_amd64.whl` (Python 3.13 Free-Threaded No-GIL)
-* `ta_lib-0.7.1-cp314-cp314t-win_amd64.whl` (Python 3.14 Free-Threaded No-GIL)
-* `ta_lib-0.7.1-cp315-cp315t-win_amd64.whl` (Python 3.15 Free-Threaded No-GIL)
-* `ta_lib-0.7.1-cp315-cp315-win_amd64.whl` (Python 3.15 Standard)
-* `pandas-3.0.5-cp315-cp315-win_amd64.whl` (MSVC x64 binary)
-
-To install cleanly on a Python 3.15 / Free-Threaded project:
 ```bash
-uv add yfinance-ta-patterns --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.2.0
+# Standard install (pure-Python fallback by default):
+pip install yfinance-ta-patterns
+
+# Optional: With native C TA-Lib acceleration (requires ta-lib C headers):
+pip install "yfinance-ta-patterns[talib]"
 ```
 
-#### 🧵 Free-Threaded (No-GIL / PEP 703) & Zero-Dependency Execution
-`yfinance-ta-patterns` is **100% verified on Python 3.13t, 3.14t, and 3.15t Free-Threaded without GIL** (`-X gil=0`). 
-Includes dual-mode execution:
-1. **Native C Acceleration**: Verified with pre-compiled No-GIL wheels (`ta_lib-0.7.1-cp313t`, `cp314t`, and `cp315t`) for full 60+ pattern detection.
-2. **Zero-Dependency Fallback Engine (`talib_compat`)**: Built-in vectorized pure-NumPy engine providing thread-safe detection for the 11 primary candlestick patterns without C compilers or system TA-Lib binaries:
+#### 🐍 Python Version Compatibility Matrix
 
-| Supported Fallback Patterns (`SUPPORTED_FALLBACK_PATTERNS`) |
-|------------------------------------------------------------|
-| `CDLDOJI`, `CDLHAMMER`, `CDLINVERTEDHAMMER`, `CDLENGULFING`, `CDLSHOOTINGSTAR`, `CDLHANGINGMAN`, `CDLMORNINGSTAR`, `CDLEVENINGSTAR`, `CDLMARUBOZU`, `CDLBELTHOLD`, `CDLKICKING` |
+| Python Version | Execution Mode | Installation Status | Recommendation |
+|:---:|:---:|:---:|---|
+| **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | **Recommended No-GIL release**. All dependencies (`numpy`, `pandas`, `cffi`) provide official wheels on PyPI. |
+| **Python 3.15t** | **Free-Threaded (No-GIL)** | ✅ **Supported** | Next-generation No-GIL preview. Fully functional with cached/built wheels. |
+| **Python 3.13** | **Standard (GIL)** | ✅ **100% Supported** | Current stable Python release. Full support for native TA-Lib and pre-built wheels. |
+| **Python 3.12** | **Standard (GIL)** | ✅ **100% Supported** | Long-Term Support release with instant sub-second wheel installation. |
+| **Python 3.13t** | **Experimental No-GIL** | ❌ *Blocked Upstream* | Blocked by upstream `cffi` (`RuntimeError: CFFI does not support 3.13t`). **Use 3.14t for No-GIL instead.** |
 
-> [!NOTE]
-> For patterns outside the core 11 (e.g. `CDLPIERCING`, `CDLHARAMI`), the fallback raises `NotImplementedError` with clear instructions to install native TA-Lib.
+---
 
-Or configure your project's `pyproject.toml`:
-```toml
-[tool.uv]
-find-links = ["https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.2.0"]
+## 🚀 Ready-to-Use Examples (`examples/`)
+
+The repository includes production-ready backtesting and real-time scanning scripts in the [`examples/`](examples/) directory:
+
+### 1. Multi-Pair Historical Backtesting (`examples/multi_pair_backtest.py`)
+
+A rigorous multi-pair portfolio backtest across 6 major and cross Forex pairs (`EURUSD`, `GBPUSD`, `USDJPY`, `AUDUSD`, `EURGBP`, `EURJPY`) over 2 years on hourly (`1h`) candles.
+
+**Key capabilities demonstrated:**
+- **Unbiased Execution**: Fills trades at `Open[i+1]` (next candle open) to eliminate lookahead bias.
+- **Fixed Holding Period (`holding_period=5`)**: Automatically closes trades after 5 bars. Essential for single-direction candlestick patterns (Hammer, Inverted Hammer, 3 White Soldiers) which otherwise hold positions indefinitely without reverse exit signals.
+- **Universal Forex PnL & Position Sizing**: Automatic base-currency normalization for USD-base pairs (`USDJPY`) and cross-rates (`EURGBP`), applying commissions in account currency ($0.05 ECN micro-lot).
+- **Composite Scoring**: Ranks combinations by combining Win Rate, Profit Factor, Sharpe Ratio, and logarithmic trade volume.
+
+```bash
+# Run with Python:
+python examples/multi_pair_backtest.py
+
+# Or run with uv:
+uv run examples/multi_pair_backtest.py
 ```
+
+**Sample Output:**
+```text
+==================================================================================================
+ TOP-10 BEST COMBINATIONS (PAIR + PATTERN) OVER 2y:
+==================================================================================================
+  Pair        Pattern  Signals WinRate TotalPnL  ProfitFactor  Sharpe  MaxDD MaxDD_%
+EURJPY INVERTEDHAMMER       82   63.0%  $+55.34          2.55    0.38  $7.11   0.07%
+EURJPY    MORNINGSTAR       46   63.0%  $+21.49          2.66    0.34  $2.87   0.03%
+EURUSD         INNECK       12   75.0%   $+6.31          3.81    0.25  $1.14   0.01%
+EURUSD STALLEDPATTERN       26   65.4%  $+23.44          3.09    0.29  $5.17   0.05%
+EURUSD  STICKSANDWICH        8   62.5%   $+8.13          5.01    0.22  $1.00   0.01%
+EURUSD         ONNECK       11   63.6%  $+11.53          4.44    0.17  $1.97   0.02%
+USDJPY    MATCHINGLOW      195   55.6%  $+50.36          1.40    0.24 $15.09   0.15%
+EURJPY GRAVESTONEDOJI      226   52.4%  $+58.74          1.44    0.24 $20.81   0.21%
+EURJPY        HIKKAKE     1604   52.7%  $+50.97          1.06    0.09 $75.80   0.76%
+USDJPY       BELTHOLD     1596   47.7%  $+78.87          1.09    0.13 $83.89   0.84%
+
+Full ranked report saved to: all_pairs_ranked.csv
+```
+
+### 2. Live Multi-Asset Signal Scanner (`examples/live_signals_scanner.py`)
+
+Scans a 12-asset watchlist across Forex and Cryptocurrencies (`BTC-USD`, `ETH-USD`) for active candlestick patterns over recent candles, scoring each opportunity with the AI Confluence Engine.
+
+**Key capabilities demonstrated:**
+- **AI Confluence Scoring**: Quantifies trend alignment (EMA 20/50/200), volume expansion, and Wilder RSI (14) momentum into a 0–100% confidence score.
+- **Automated Trade Setups**: Calculates exact Entry Price, ATR-based Stop Loss, and Take Profit targets (1:1.5 Risk/Reward ratio).
+- **Automated Opportunity Ranking**: Sorts all live setups and highlights the **TOP-1 Highest Confidence Trade Setup**.
+
+```bash
+# Run with Python:
+python examples/live_signals_scanner.py
+
+# Or run with uv:
+uv run examples/live_signals_scanner.py
+```
+
+**Sample Output:**
+```text
+=========================================================================================================
+ SIGNALS FOUND: 26 (Ranked by AI Confidence)
+=========================================================================================================
+       Time  Symbol Direction        Pattern Confidence     Grade        Entry     StopLoss  TakeProfit_1 Risk_Reward          Trend
+08.09 19:00 ETH-USD       BUY 3WHITESOLDIERS      80.0% EXCELLENT  2499.389893  2483.227621   2523.633300       1:1.5        BULLISH
+08.09 17:00  EURUSD       BUY 3WHITESOLDIERS      70.0%    STRONG     1.163332     1.162101      1.165178       1:1.5 STRONG_BULLISH
+08.09 17:00  USDCAD      SELL     HANGINGMAN      70.0%    STRONG     1.377840     1.378940      1.376190       1:1.5 STRONG_BEARISH
+
+**********************************************************
+ TOP-1 SIGNAL: ETH-USD — BUY (3WHITESOLDIERS)
+ Candle Time: 08.09 19:00 | Confidence: 80.0% [EXCELLENT]
+ Market Trend: BULLISH | RSI: 56.3
+ Entry Price: 2499.39
+ Stop Loss:   2483.23
+ Take Profit: 2523.63 (R:R 1:1.5)
+**********************************************************
+```
+
+---
 
 ### 2. Run CLI
 
@@ -93,6 +167,7 @@ yftp --all-patterns --symbol EURUSD --timeframe 1h --period 60d --prompt
 ```
 
 ---
+
 
 ## CLI Reference
 

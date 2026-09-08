@@ -22,6 +22,8 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-# Local documents
+# Local documents & data
 *.docx
 *.pdf
+*.csv
+
