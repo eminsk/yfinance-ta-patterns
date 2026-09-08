@@ -14,16 +14,16 @@ Compatible with **Python 3.12, 3.13, 3.14, and Python 3.15 (Release Candidate & 
 
 ## Key Features
 
-- **Multi-Asset Data Loader**: Universal fetching and candle normalization for stocks (`AAPL`, `NVDA`), crypto (`BTC-USD`), commodities (`GC=F`), indices (`^GSPC`), and forex pairs (`EURUSD`).
-- **TA-Lib Pattern Detection**: Full recognition engine across 60+ classic candlestick patterns with date-filtering and timeframe resampling.
+- **Multi-Asset Data Loader**: Universal fetching and candle normalization for stocks (`AAPL`, `NVDA`), crypto (`BTC-USD`), commodities (`GC=F`), indices (`^GSPC`), and forex pairs (`EURUSD`). Supports custom date ranges (`start`, `end`), timezone conversion, UTC-anchored 4h resampling, and raw OHLC integrity validation.
+- **TA-Lib Pattern Detection**: Full recognition engine across 60+ classic candlestick patterns (via native TA-Lib) with built-in zero-dependency pure-NumPy fallback engine for 11 core patterns.
 - **AI Pattern Confidence Scorer**: Probabilistic score ($0.0 - 1.0$) evaluating multi-factor confluence:
-  - Multi-EMA trend alignment (20, 50, 200 EMA)
-  - Relative Volume surge (RVOL)
-  - RSI momentum exhaustion & divergence
-  - Volatility expansion (ATR 14) & candle body dominance
+  - Multi-EMA trend alignment (20, 50, 200 EMA) with safe warm-up handling
+  - Zero-lookahead Relative Volume surge (RVOL)
+  - Canonical Wilder's RSI (14) momentum exhaustion & divergence
+  - Canonical Wilder's ATR (14) volatility expansion & candle body dominance
 - **Automated Trade Setups**: Computes entry price, ATR-based invalidation stop-loss, and multi-tier take-profit targets (1.5x / 3.0x risk/reward).
 - **AI Market Analyst & LLM Integration**: Generates executive markdown briefs, JSON payloads, and engineered prompts tailored for external AI agents (GPT-4o, Claude 3.5, Gemini, Ollama).
-- **Quantitative Pattern Ranking**: Built-in vectorized backtester ranking patterns by win rate, Sharpe ratio, and total profit/loss.
+- **Quantitative Pattern Ranking & Backtesting**: Unbiased next-open execution (`Open[i+1]`), symmetric Long/Short trading, universal FX quote-currency conversion, transaction cost modeling (commissions & slippage), overfitting filters (`min_signals`), and periodic Sharpe ratio accounting for non-trading hold periods.
 
 ---
 
@@ -43,7 +43,7 @@ uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h
 ```
 
 #### ⚡ Python 3.15 Ready (Early Adopters)
-`yfinance-ta-patterns` is tested and **100% verified (37/37 tests passing)** on upcoming **Python 3.15** (`cpython-3.15.0rc2`).
+`yfinance-ta-patterns` is tested and **100% verified (68/68 tests passing)** on upcoming **Python 3.15** (`cpython-3.15.0rc2`), **Python 3.14**, **Python 3.13**, and **Python 3.12**.
 
 While upstream wheels for C-dependencies (`ta-lib` and `pandas`) are pending official PyPI release for 3.15 and Free-Threaded No-GIL, pre-compiled native Windows x64 binary wheels are provided in our [Release Assets](https://github.com/eminsk/yfinance-ta-patterns/releases/tag/v0.2.0):
 * `ta_lib-0.7.1-cp313-cp313t-win_amd64.whl` (Python 3.13 Free-Threaded No-GIL)
@@ -211,17 +211,31 @@ from yfinance_ta_patterns import MarketDataLoader, PatternRankingTester
 
 data = MarketDataLoader("EURUSD", period="60d", interval="1h").get_data()
 
-tester = PatternRankingTester(data, initial_capital=10000.0, position_size=100.0)
-results = tester.test_all_patterns()
+tester = PatternRankingTester(
+    data,
+    symbol="EURUSD",
+    initial_capital=10000.0,
+    position_size=1000.0,
+    execution="next_open",      # Unbiased: enters on Open of bar i+1
+    allow_short=True,           # Full symmetric short trades on bearish signals
+    commission=1.50,            # Transaction fee per trade
+    slippage=0.0001,            # Execution slippage in price units
+    min_signals=5,              # Exclude patterns with < 5 signals (reduces overfitting)
+    sharpe_mode="periodic",     # Accounts for 0% returns during idle hold periods
+)
+results = tester.test_all_patterns(min_signals=5)
 
 top_patterns = tester.get_top_patterns(5)
 for r in top_patterns:
     print(
-        f"{r.pattern_name}: Win Rate={r.win_rate:.1f}%, PnL={r.total_pnl:.2f}, Sharpe={r.sharpe_ratio:.2f}"
+        f"{r.pattern_name}: Win Rate={r.win_rate:.1f}%, PnL=${r.total_pnl:.2f}, "
+        f"Periodic Sharpe={r.periodic_sharpe:.2f}, MaxDD=${r.max_drawdown:.2f}, "
+        f"Strength={r.avg_strength:.0f}"
     )
 
-# Export to CSV
-tester.export_results("pattern_ranking.csv")
+# Export comparison report across news filters
+report_df = tester.get_comparison_report()
+print(report_df)
 ```
 
 ---
