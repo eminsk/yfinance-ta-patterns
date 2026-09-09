@@ -115,6 +115,75 @@ _KNOWN_CRYPTO_SYMBOLS: set[str] = {
 }
 
 
+_KNOWN_CRYPTO_QUOTES: tuple[str, ...] = (
+    "USDT",
+    "USDC",
+    "USD",
+    "EUR",
+    "GBP",
+    "JPY",
+    "CAD",
+    "AUD",
+    "BTC",
+    "ETH",
+)
+
+_EXCHANGE_SUFFIX_MAP: dict[str, str] = {
+    # Germany / Eurozone
+    ".DE": "EUR",
+    ".F": "EUR",
+    ".PA": "EUR",
+    ".AS": "EUR",
+    ".BR": "EUR",
+    ".LS": "EUR",
+    ".MI": "EUR",
+    ".MC": "EUR",
+    ".VI": "EUR",
+    ".IR": "EUR",
+    ".HE": "EUR",
+    ".AT": "EUR",
+    # UK
+    ".L": "GBp",
+    ".IL": "USD",
+    # Canada
+    ".TO": "CAD",
+    ".V": "CAD",
+    ".CN": "CAD",
+    # Australia & New Zealand
+    ".AX": "AUD",
+    ".NZ": "NZD",
+    # Japan
+    ".T": "JPY",
+    # Hong Kong & China
+    ".HK": "HKD",
+    ".SS": "CNY",
+    ".SZ": "CNY",
+    # Switzerland
+    ".SW": "CHF",
+    # Nordic
+    ".ST": "SEK",
+    ".OL": "NOK",
+    ".CO": "DKK",
+    # Global
+    ".KS": "KRW",
+    ".KQ": "KRW",
+    ".TW": "TWD",
+    ".TWO": "TWD",
+    ".SA": "BRL",
+    ".MX": "MXN",
+    ".TA": "ILS",
+    ".SI": "SGD",
+    ".SG": "SGD",
+    ".JK": "IDR",
+    ".BK": "THB",
+    ".KL": "MYR",
+    ".NS": "INR",
+    ".BO": "INR",
+    ".IS": "TRY",
+    ".JO": "ZAR",
+}
+
+
 def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
     """Intelligently normalize symbol for Yahoo Finance API.
 
@@ -135,7 +204,7 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
             return f"{parts[0]}-{parts[1]}"
         if "-" in clean:
             return clean
-        for quote in ("USD", "EUR", "USDT", "USDC", "BTC"):
+        for quote in _KNOWN_CRYPTO_QUOTES:
             if clean.endswith(quote) and len(clean) > len(quote):
                 return f"{clean[: -len(quote)]}-{quote}"
         return clean
@@ -160,6 +229,13 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
         if clean.endswith("=X") or clean.endswith("=F") or clean.startswith("^") or "-" in clean:
             return clean
 
+        # Check unseparated crypto ticker first (e.g. BTCUSDT, DOGEUSD, BTCUSDC, SHIBUSDT, BTCGBP)
+        for quote in _KNOWN_CRYPTO_QUOTES:
+            if clean.endswith(quote) and len(clean) > len(quote):
+                base = clean[: -len(quote)]
+                if base in _KNOWN_CRYPTO_SYMBOLS:
+                    return f"{base}-{quote}"
+
         # If it matches known currency pair or valid 6-letter currency code pair
         if clean in _COMMON_FOREX_PAIRS:
             return f"{clean}=X"
@@ -179,12 +255,14 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
 def classify_asset(symbol: str, asset_type: str = "auto") -> str:
     """Classify an asset into 'crypto', 'forex', 'commodity', 'index', or 'stock'.
 
-    Works seamlessly whether symbol is raw ('BTC/EUR', 'ETH-BTC', 'EURUSD=X') or normalized.
+    Works seamlessly whether symbol is raw ('BTC/EUR', 'ETH-BTC', 'EURUSD=X', 'BTCUSDT') or normalized.
     """
     if asset_type and asset_type.lower() != "auto":
         return asset_type.lower()
 
-    clean = symbol.strip().upper()
+    # Normalize first to detect unseparated cryptos like BTCUSDT, DOGEUSD, SHIBUSDT
+    norm = normalize_ticker(symbol, asset_type="auto")
+    clean = norm.strip().upper()
     if clean.endswith("=F"):
         return "commodity"
     if clean.startswith("^"):
@@ -219,9 +297,6 @@ def classify_asset(symbol: str, asset_type: str = "auto") -> str:
         if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
             return "forex"
 
-    if clean in _KNOWN_CRYPTO_SYMBOLS:
-        return "crypto"
-
     return "stock"
 
 
@@ -235,6 +310,8 @@ def resolve_asset_currencies(symbol: str, asset_type: str = "auto") -> tuple[str
       'EURUSD=X' -> ('EUR', 'USD')
       'EUR/GBP' -> ('EUR', 'GBP')
       'USDJPY' -> ('USD', 'JPY')
+      'SAP.DE' -> ('SAP.DE', 'EUR')
+      'VOD.L' -> ('VOD.L', 'GBp')
       'AAPL' -> ('AAPL', 'USD')
     """
     clean = symbol.strip().upper()
@@ -243,11 +320,23 @@ def resolve_asset_currencies(symbol: str, asset_type: str = "auto") -> tuple[str
         if len(clean_fx) == 6:
             return clean_fx[:3], clean_fx[3:]
 
+    # Check exchange suffix for stocks (e.g. .DE -> EUR, .L -> GBp, .TO -> CAD)
+    for suffix, quote_curr in _EXCHANGE_SUFFIX_MAP.items():
+        if clean.endswith(suffix):
+            return clean, quote_curr
+
     sep = "-" if "-" in clean else ("/" if "/" in clean else None)
     if sep:
         parts = clean.split(sep)
         if len(parts) == 2:
             return parts[0], parts[1]
+
+    # Check unseparated crypto (e.g. BTCUSDT, DOGEUSD)
+    for quote in _KNOWN_CRYPTO_QUOTES:
+        if clean.endswith(quote) and len(clean) > len(quote):
+            base = clean[: -len(quote)]
+            if base in _KNOWN_CRYPTO_SYMBOLS:
+                return base, quote
 
     if len(clean) == 6 and clean.isalpha():
         base, quote = clean[:3], clean[3:]
@@ -460,8 +549,6 @@ class MarketDataLoader:
 
         # Anchor resampling in UTC (origin='epoch') to preserve institutional 4h candle bounds
         resampled = data.resample(self._resample_rule, origin="epoch").agg(agg).dropna()
-        if "Volume" in resampled.columns and (resampled["Volume"] > 0).any():
-            resampled = resampled[resampled["Volume"] > 0]
 
         # Check input bar completeness per bucket (Issue 3: YF-003, Screenshot 2 & Screenshot 5)
         bar_counts = data.resample(self._resample_rule, origin="epoch")["Close"].count()
@@ -553,21 +640,80 @@ class MarketDataLoader:
         if isinstance(data.index, pd.DatetimeIndex):
             data.index = data.index.tz_convert(self.timezone)
 
-        # Universal closed-only filtering for all intervals (Issue 1: YF-001, Screenshot 1)
+        # Universal closed-only filtering for all intervals (Issue 1: YF-001, Screenshot 1 & 4)
         if self.closed_only and not data.empty and isinstance(data.index, pd.DatetimeIndex):
+            now = now_utc if now_utc is not None else pd.Timestamp.now(tz=pytz.UTC)
+            if now.tz is None:
+                now = now.tz_localize(pytz.UTC)
+
             if self.interval == "1mo":
                 candle_ends = data.index + pd.DateOffset(months=1)
+            elif self.interval in ("1d", "1D"):
+                # Session-aware daily candle close
+                asset_class = classify_asset(self.ticker, self.asset_type)
+                clean_sym = self.ticker.strip().upper()
+
+                candle_end_list = []
+                for ts in data.index:
+                    d = ts.date()
+                    if asset_class == "crypto":
+                        # 24/7 calendar: closes at next day 00:00 UTC
+                        close_ts = pd.Timestamp(d, tz=pytz.UTC) + pd.Timedelta(days=1)
+                    elif asset_class == "forex":
+                        # Forex daily rollover: 17:00 America/New_York
+                        close_ts = pd.Timestamp(
+                            year=d.year, month=d.month, day=d.day, hour=17, minute=0, tz="America/New_York"
+                        ).tz_convert(pytz.UTC)
+                    else:
+                        # Stock / Commodity / Index
+                        if clean_sym.endswith(".L"):
+                            close_ts = pd.Timestamp(
+                                year=d.year, month=d.month, day=d.day, hour=16, minute=30, tz="Europe/London"
+                            ).tz_convert(pytz.UTC)
+                        elif any(clean_sym.endswith(sfx) for sfx in (".DE", ".PA", ".AS", ".BR", ".MI", ".MC", ".VI", ".HE")):
+                            close_ts = pd.Timestamp(
+                                year=d.year, month=d.month, day=d.day, hour=17, minute=30, tz="Europe/Berlin"
+                            ).tz_convert(pytz.UTC)
+                        elif clean_sym.endswith(".T"):
+                            close_ts = pd.Timestamp(
+                                year=d.year, month=d.month, day=d.day, hour=15, minute=0, tz="Asia/Tokyo"
+                            ).tz_convert(pytz.UTC)
+                        elif clean_sym.endswith(".HK"):
+                            close_ts = pd.Timestamp(
+                                year=d.year, month=d.month, day=d.day, hour=16, minute=0, tz="Asia/Hong_Kong"
+                            ).tz_convert(pytz.UTC)
+                        else:
+                            # US Equities (NYSE / NASDAQ)
+                            # Early close check (13:00 America/New_York)
+                            is_early_close = False
+                            if d.month == 11 and d.weekday() == 4 and 23 <= d.day <= 29:
+                                is_early_close = True  # Fourth Friday of November (Black Friday)
+                            elif d.month == 12 and d.day == 24 and d.weekday() < 5:
+                                is_early_close = True  # Christmas Eve on weekday
+                            elif d.month == 7 and d.day == 3 and d.weekday() < 4:
+                                is_early_close = True  # Day before July 4th if July 4th is weekday
+
+                            close_hour = 13 if is_early_close else 16
+                            close_ts = pd.Timestamp(
+                                year=d.year, month=d.month, day=d.day, hour=close_hour, minute=0, tz="America/New_York"
+                            ).tz_convert(pytz.UTC)
+
+                    candle_end_list.append(close_ts)
+
+                candle_ends = pd.DatetimeIndex(candle_end_list)
             else:
                 delta = INTERVAL_DELTAS.get(self.interval, pd.Timedelta("1D"))
                 candle_ends = data.index + delta
-            now = now_utc if now_utc is not None else pd.Timestamp.now(tz=pytz.UTC)
+
             if candle_ends.tz is not None and now.tz is not None:
-                now = now.tz_convert(candle_ends.tz)
+                now_cmp = now.tz_convert(candle_ends.tz)
             elif candle_ends.tz is not None and now.tz is None:
-                now = now.tz_localize(pytz.UTC).tz_convert(candle_ends.tz)
+                now_cmp = now.tz_localize(pytz.UTC).tz_convert(candle_ends.tz)
             elif candle_ends.tz is None and now.tz is not None:
-                now = now.tz_localize(None)
-            data = data.loc[candle_ends <= now]
+                now_cmp = now.tz_localize(None)
+            else:
+                now_cmp = now
+            data = data.loc[candle_ends <= now_cmp]
 
         return data
 

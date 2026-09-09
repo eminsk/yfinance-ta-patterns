@@ -127,6 +127,9 @@ def calc_wilder_rsi(close: pd.Series, period: int = 14) -> pd.Series:
     if n <= 1:
         return pd.Series(np.nan, index=close.index)
 
+    if not np.all(np.isfinite(close.to_numpy())):
+        raise ValueError("Input series contains NaN or infinite values")
+
     delta = close.diff().to_numpy()
     gain = np.where(delta > 0, delta, 0.0)
     loss = np.where(delta < 0, -delta, 0.0)
@@ -184,6 +187,9 @@ def calc_wilder_atr(
     lo = low.to_numpy()
     c = close.to_numpy()
 
+    if not (np.all(np.isfinite(h)) and np.all(np.isfinite(lo)) and np.all(np.isfinite(c))):
+        raise ValueError("Input series contains NaN or infinite values")
+
     tr = np.zeros(n, dtype=np.float64)
     tr[0] = h[0] - lo[0]
     for i in range(1, n):
@@ -217,6 +223,20 @@ class AIPatternScorer:
         """Initialize scorer with OHLCV market data."""
         if data.empty or len(data) < 5:
             raise ValueError("Data must contain at least 5 candles for technical context.")
+
+        for col in ("Open", "High", "Low", "Close"):
+            if col not in data.columns:
+                raise ValueError(f"DataFrame must contain required column: {col}")
+
+        if hasattr(data.index, "has_duplicates") and data.index.has_duplicates:
+            raise ValueError("DataFrame index contains duplicate timestamps")
+
+        if not data.index.is_monotonic_increasing:
+            raise ValueError("DataFrame index must be monotonically increasing")
+
+        ohlc_values = data[["Open", "High", "Low", "Close"]].to_numpy()
+        if not np.all(np.isfinite(ohlc_values)):
+            raise ValueError("DataFrame contains NaN or infinite values in OHLC")
 
         self.df = data.copy()
         self._calculate_technical_indicators()

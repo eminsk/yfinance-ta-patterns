@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from yfinance_ta_patterns.data import (
-    _CURRENCY_CODES,
+    classify_asset,
     normalize_interval,
     resolve_asset_currencies,
 )
@@ -76,28 +76,20 @@ def is_crypto_symbol(symbol: str) -> bool:
     """Identify if a symbol is a 24/7 cryptocurrency."""
     if not symbol:
         return False
-    s = symbol.upper()
-    return "-USD" in s or "-EUR" in s or "-USDT" in s or s.endswith(("-BTC", "-ETH", "-USDT"))
+    return classify_asset(symbol) == "crypto"
 
 
 def is_forex_symbol(symbol: str) -> bool:
     """Identify if a symbol is a 24/5 Forex pair."""
     if not symbol:
         return False
-    s = symbol.upper()
-    if s.endswith("=X"):
-        return True
-    clean = s.replace("/", "").replace("-USD", "")
-    if len(clean) == 6 and clean.isalpha() and not is_crypto_symbol(s):
-        base, quote = clean[:3], clean[3:]
-        return base in _CURRENCY_CODES and quote in _CURRENCY_CODES
-    return False
+    return classify_asset(symbol) == "forex"
 
 
 def resolve_periods_per_year(timeframe: str, symbol: str = "", asset_type: str = "auto") -> float:
     """Resolve asset-aware annualization factor for Sharpe Ratio calculation."""
     tf = normalize_interval(timeframe) if timeframe else "1d"
-    a_type = asset_type.lower()
+    a_type = asset_type.lower() if asset_type else "auto"
     if a_type == "crypto":
         return CRYPTO_PERIODS_PER_YEAR.get(tf, 365.0)
     elif a_type == "forex":
@@ -106,10 +98,12 @@ def resolve_periods_per_year(timeframe: str, symbol: str = "", asset_type: str =
         return TIMEFRAME_PERIODS_PER_YEAR.get(tf, 252.0)
 
     # auto mode
-    if symbol and is_crypto_symbol(symbol):
-        return CRYPTO_PERIODS_PER_YEAR.get(tf, 365.0)
-    elif symbol and is_forex_symbol(symbol):
-        return FOREX_PERIODS_PER_YEAR.get(tf, 260.0)
+    if symbol:
+        detected = classify_asset(symbol, asset_type=asset_type)
+        if detected == "crypto":
+            return CRYPTO_PERIODS_PER_YEAR.get(tf, 365.0)
+        elif detected == "forex":
+            return FOREX_PERIODS_PER_YEAR.get(tf, 260.0)
     return TIMEFRAME_PERIODS_PER_YEAR.get(tf, 252.0)
 
 
@@ -259,7 +253,13 @@ class PatternRankingTester:
         self._execution: str = execution
         self._timeframe: str = normalize_interval(timeframe) if timeframe else "1d"
         self._symbol: str = symbol
-        self._account_currency: str = account_currency.upper()
+        def _norm_c(c: str) -> str:
+            c_str = c.strip()
+            if c_str in ("GBp", "GBX", "GBx"):
+                return "GBp"
+            return c_str.upper()
+
+        self._account_currency: str = _norm_c(account_currency)
         self._force_exit_on_last_bar: bool = force_exit_on_last_bar
         self._allow_short: bool = allow_short
         self._commission: float = max(commission, 0.0)
@@ -274,15 +274,15 @@ class PatternRankingTester:
         self._holding_period: int | None = holding_period
 
         if base_currency and quote_currency:
-            self._base_currency: str = base_currency.upper()
-            self._quote_currency: str = quote_currency.upper()
+            self._base_currency: str = _norm_c(base_currency)
+            self._quote_currency: str = _norm_c(quote_currency)
         elif self._symbol:
             b, q = resolve_asset_currencies(self._symbol, asset_type=self._asset_type)
-            self._base_currency = (base_currency or b).upper()
-            self._quote_currency = (quote_currency or q).upper()
+            self._base_currency = _norm_c(base_currency or b)
+            self._quote_currency = _norm_c(quote_currency or q)
         else:
-            self._base_currency = (base_currency or "ASSET").upper()
-            self._quote_currency = (quote_currency or "USD").upper()
+            self._base_currency = _norm_c(base_currency or "ASSET")
+            self._quote_currency = _norm_c(quote_currency or "USD")
 
         if periods_per_year is not None:
             self._periods_per_year: float = periods_per_year
@@ -319,9 +319,9 @@ class PatternRankingTester:
                         return self._fx_history[c]
             return None
 
-        s_direct = get_series(direct_pair)
-        if s_direct is not None:
-            val = s_direct.asof(timestamp)
+        s_dir = get_series(direct_pair)
+        if s_dir is not None:
+            val = s_dir.asof(timestamp)
             if pd.notna(val) and float(cast(Any, val)) > 0:
                 return float(cast(Any, val))
 
@@ -337,6 +337,16 @@ class PatternRankingTester:
         self, from_curr: str, to_curr: str, timestamp: pd.Timestamp | None = None
     ) -> float:
         """Get exchange rate converting 1 unit of from_curr to to_curr at timestamp."""
+        # 0. Handle pence sterling (GBp / GBX) scaling
+        is_from_pence = from_curr in ("GBp", "GBX", "GBx")
+        is_to_pence = to_curr in ("GBp", "GBX", "GBx")
+        if is_from_pence and is_to_pence:
+            return 1.0
+        if is_from_pence:
+            return 0.01 * self._get_fx_rate("GBP", to_curr, timestamp)
+        if is_to_pence:
+            return self._get_fx_rate(from_curr, "GBP", timestamp) * 100.0
+
         from_curr = from_curr.upper()
         to_curr = to_curr.upper()
         if from_curr == to_curr:
@@ -346,7 +356,15 @@ class PatternRankingTester:
         inv_pair = f"{to_curr}{from_curr}"
 
         # 1. Historical rate lookup
-        if self._fx_history is not None and timestamp is not None:
+        if self._strict_fx:
+            if self._fx_history is None:
+                raise ValueError(
+                    f"strict_fx=True requires fx_history for currency conversion from {from_curr} to {to_curr}"
+                )
+            if timestamp is None:
+                raise ValueError(
+                    f"strict_fx=True requires timestamp for historical currency conversion from {from_curr} to {to_curr}"
+                )
             hist_rate = self._lookup_hist_rate(direct_pair, inv_pair, timestamp)
             if hist_rate is not None:
                 return hist_rate
@@ -358,10 +376,21 @@ class PatternRankingTester:
                 if from_usd is not None and to_usd is not None and to_usd > 0:
                     return from_usd / to_usd
 
-            if self._strict_fx:
-                raise ValueError(
-                    f"Missing historical FX rate for {direct_pair} at {timestamp}"
-                )
+            raise ValueError(
+                f"Missing historical FX rate for {direct_pair} at {timestamp}"
+            )
+
+        if self._fx_history is not None and timestamp is not None:
+            hist_rate = self._lookup_hist_rate(direct_pair, inv_pair, timestamp)
+            if hist_rate is not None:
+                return hist_rate
+
+            # USD bridge via historical rates
+            if from_curr != "USD" and to_curr != "USD":
+                from_usd = self._lookup_hist_rate(f"{from_curr}USD", f"USD{from_curr}", timestamp)
+                to_usd = self._lookup_hist_rate(f"{to_curr}USD", f"USD{to_curr}", timestamp)
+                if from_usd is not None and to_usd is not None and to_usd > 0:
+                    return from_usd / to_usd
 
         # 2. Static rates table
         rates = {**DEFAULT_FX_USD_RATES, **self._fx_rates}
@@ -387,9 +416,6 @@ class PatternRankingTester:
 
         if from_usd_rate is not None and to_usd_rate is not None and to_usd_rate > 0:
             return from_usd_rate / to_usd_rate
-
-        if self._strict_fx:
-            raise ValueError(f"Unable to convert currency from {from_curr} to {to_curr}")
 
         return 1.0
 
