@@ -6,7 +6,12 @@ from collections.abc import Iterable
 
 import pandas as pd
 
-from yfinance_ta_patterns.talib_compat import talib
+from yfinance_ta_patterns.talib_compat import (
+    HAS_NATIVE_TALIB,
+    SUPPORTED_FALLBACK_PATTERNS,
+    UNSUPPORTED_FALLBACK_PATTERNS,
+    talib,
+)
 
 
 class PatternAnalyzer:
@@ -14,7 +19,12 @@ class PatternAnalyzer:
 
     def __init__(self, data: pd.DataFrame) -> None:
         self.data = data
-        self.pattern_functions: list[str] = [f for f in dir(talib) if f.startswith("CDL")]
+        funcs: list[str] = (
+            [f for f in dir(talib) if f.startswith("CDL")]
+            if HAS_NATIVE_TALIB
+            else sorted(SUPPORTED_FALLBACK_PATTERNS)
+        )
+        self.pattern_functions: list[str] = funcs
 
     def _normalize_pattern(self, pattern: str) -> str:
         pattern_upper = pattern.upper()
@@ -51,6 +61,12 @@ class PatternAnalyzer:
         """Return non-zero signals for a single candlestick pattern with optional date filters."""
         normalized = self._normalize_pattern(pattern)
         if normalized not in self.pattern_functions:
+            if not HAS_NATIVE_TALIB and normalized in UNSUPPORTED_FALLBACK_PATTERNS:
+                raise NotImplementedError(
+                    f"Candlestick pattern '{pattern}' requires native TA-Lib binary. "
+                    f"Pure-Python fallback is currently implemented for {len(SUPPORTED_FALLBACK_PATTERNS)} patterns: "
+                    f"{', '.join(sorted(p.replace('CDL', '') for p in SUPPORTED_FALLBACK_PATTERNS))}."
+                )
             available = ", ".join(p.replace("CDL", "") for p in sorted(self.pattern_functions))
             raise ValueError(f"Unknown pattern '{pattern}'. Available: {available}")
 

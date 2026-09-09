@@ -81,22 +81,76 @@ _CURRENCY_CODES = {
     "RON",
 }
 
+_KNOWN_CRYPTO_SYMBOLS: set[str] = {
+    "BTC",
+    "ETH",
+    "SOL",
+    "XRP",
+    "DOGE",
+    "ADA",
+    "BNB",
+    "AVAX",
+    "DOT",
+    "MATIC",
+    "LINK",
+    "LTC",
+    "BCH",
+    "UNI",
+    "NEAR",
+    "SHIB",
+    "TRX",
+    "TON",
+    "XLM",
+    "ATOM",
+    "XMR",
+    "ETC",
+    "ALGO",
+    "FIL",
+    "ICP",
+    "APT",
+    "SUI",
+    "RENDER",
+    "PEPE",
+    "HBAR",
+}
+
 
 def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
     """Intelligently normalize symbol for Yahoo Finance API.
 
     Rules:
-    - Normalizes slashes: e.g. "EUR/USD" -> "EURUSD=X"
+    - Normalizes slashes:
+      - Crypto: "BTC/USD" -> "BTC-USD", "ETH/USD" -> "ETH-USD"
+      - Forex: "EUR/USD" -> "EURUSD=X"
+    - If asset_type is 'crypto' or auto-detected as crypto pair, format with hyphen (e.g. "BTC-USD").
     - If asset_type is 'forex' or auto-detected as valid currency pair, append '=X'.
     - If already formatted with suffix (=X, =F, -USD, ^) or standard stock ticker, preserve.
     """
     clean = symbol.strip().upper()
 
-    # Normalize slash notation for currency pairs e.g. "EUR/USD" -> "EURUSD"
+    # Explicit crypto handling: converts slashes to hyphen, preserves existing hyphens
+    if asset_type.lower() == "crypto":
+        if "/" in clean:
+            parts = clean.split("/")
+            return f"{parts[0]}-{parts[1]}"
+        if "-" in clean:
+            return clean
+        for quote in ("USD", "EUR", "USDT", "USDC", "BTC"):
+            if clean.endswith(quote) and len(clean) > len(quote):
+                return f"{clean[: -len(quote)]}-{quote}"
+        return clean
+
+    # Slashes in auto or forex mode
     if "/" in clean:
         parts = clean.split("/")
-        if len(parts) == 2 and len(parts[0]) == 3 and len(parts[1]) == 3:
-            clean = f"{parts[0]}{parts[1]}"
+        if len(parts) == 2:
+            base, quote = parts[0], parts[1]
+            if asset_type.lower() == "auto" and base in _KNOWN_CRYPTO_SYMBOLS:
+                return f"{base}-{quote}"
+            if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
+                return f"{base}{quote}=X"
+            if len(base) == 3 and len(quote) == 3:
+                clean = f"{base}{quote}"
 
     if asset_type.lower() == "forex":
         return clean if clean.endswith("=X") else f"{clean}=X"
@@ -112,6 +166,10 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
 
         if len(clean) == 6 and clean.isalpha():
             base, quote = clean[:3], clean[3:]
+            if base in _KNOWN_CRYPTO_SYMBOLS and (
+                quote in _CURRENCY_CODES or quote in ("USDT", "USDC")
+            ):
+                return f"{base}-{quote}"
             if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
                 return f"{clean}=X"
 
@@ -140,9 +198,8 @@ INTERVAL_DELTAS: dict[str, pd.Timedelta] = {
     "60m": pd.Timedelta(hours=1),
     "1h": pd.Timedelta(hours=1),
     "4h": pd.Timedelta(hours=4),
-    "1d": pd.Timedelta(days=1),
-    "1wk": pd.Timedelta(days=7),
-    "1mo": pd.Timedelta(days=30),
+    "1d": pd.Timedelta("1D"),
+    "1wk": pd.Timedelta("7D"),
 }
 
 
@@ -207,19 +264,17 @@ def validate_ohlc(data: pd.DataFrame, strict: bool = False) -> pd.DataFrame:
 
     # Check bar geometry invariants if High and Low are present
     if "High" in cleaned.columns and "Low" in cleaned.columns:
+        broken_bars = cleaned["High"] < cleaned["Low"]
         compare_cols = [c for c in ["Open", "Close"] if c in cleaned.columns]
         if compare_cols:
             top = cleaned[compare_cols].max(axis=1)
             bot = cleaned[compare_cols].min(axis=1)
-            broken_bars = (
-                (cleaned["High"] < top)
-                | (cleaned["Low"] > bot)
-                | (cleaned["High"] < cleaned["Low"])
-            )
-            if broken_bars.any():
-                if strict:
-                    raise ValueError("Inconsistent OHLC bar geometry detected.")
-                cleaned = cleaned[~broken_bars]
+            broken_bars = broken_bars | (cleaned["High"] < top) | (cleaned["Low"] > bot)
+
+        if broken_bars.any():
+            if strict:
+                raise ValueError("Inconsistent OHLC bar geometry detected.")
+            cleaned = cleaned[~broken_bars]
 
     return cast(pd.DataFrame, cleaned)
 
@@ -324,13 +379,33 @@ class MarketDataLoader:
         if "Volume" in resampled.columns and (resampled["Volume"] > 0).any():
             resampled = resampled[resampled["Volume"] > 0]
 
-        # Check input bar completeness per bucket (Issue 3: YF-003)
+        # Check input bar completeness per bucket (Issue 3: YF-003, Screenshot 2)
         bar_counts = data.resample(self._resample_rule, origin="epoch")["Close"].count()
         is_crypto = (
             "-USD" in self.ticker or "-EUR" in self.ticker or self.asset_type.lower() == "crypto"
         )
-        min_bars = 4 if is_crypto else 1
-        resampled = resampled.loc[bar_counts >= min_bars]
+        is_forex = self.asset_type.lower() == "forex" or self.ticker.endswith("=X")
+
+        def _is_bucket_complete(ts: pd.Timestamp, count: int) -> bool:
+            if is_crypto:
+                return count >= 4
+            if is_forex:
+                day = ts.dayofweek
+                hour = ts.hour
+                # Boundary sessions (Sunday open or Friday close) allow partial
+                is_boundary = (day == 6 and hour >= 20) or (day == 4 and hour >= 20)
+                if is_boundary:
+                    return count >= 1
+                return count >= 4
+            # Stocks and other assets: partial session blocks allowed
+            return count >= 1
+
+        valid_buckets = [
+            ts
+            for ts, count in bar_counts.items()
+            if _is_bucket_complete(cast(pd.Timestamp, ts), int(count))
+        ]
+        resampled = resampled.loc[resampled.index.isin(valid_buckets)]
 
         if (
             self.closed_only
@@ -395,10 +470,13 @@ class MarketDataLoader:
         if isinstance(data.index, pd.DatetimeIndex):
             data.index = data.index.tz_convert(self.timezone)
 
-        # Universal closed-only filtering for all intervals (Issue 1: YF-001)
+        # Universal closed-only filtering for all intervals (Issue 1: YF-001, Screenshot 1)
         if self.closed_only and not data.empty and isinstance(data.index, pd.DatetimeIndex):
-            delta = INTERVAL_DELTAS.get(self.interval, pd.Timedelta("1d"))
-            candle_ends = data.index + delta
+            if self.interval == "1mo":
+                candle_ends = data.index + pd.DateOffset(months=1)
+            else:
+                delta = INTERVAL_DELTAS.get(self.interval, pd.Timedelta("1D"))
+                candle_ends = data.index + delta
             now = now_utc if now_utc is not None else pd.Timestamp.now(tz=pytz.UTC)
             if candle_ends.tz is not None and now.tz is not None:
                 now = now.tz_convert(candle_ends.tz)

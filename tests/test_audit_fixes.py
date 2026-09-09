@@ -952,3 +952,187 @@ def test_issue6_validate_ohlc_strict_raises_on_nan() -> None:
 
     cleaned = validate_ohlc(df_nan, strict=False)
     assert len(cleaned) == 2
+
+
+def test_screenshot1_monthly_calendar_boundaries() -> None:
+    """Screenshot 1: Monthly candles close at next calendar month via DateOffset, not fixed 30 days."""
+    loader = MarketDataLoader("AAPL", interval="1mo", timezone="UTC", closed_only=True)
+
+    # 1. Test January (31 days): starts 2025-01-01
+    idx = pd.to_datetime(["2025-01-01"]).tz_localize("UTC")
+    df = pd.DataFrame(
+        {"Open": [100.0], "High": [105.0], "Low": [95.0], "Close": [102.0], "Volume": [1000.0]},
+        index=idx,
+    )
+    # At 2025-01-31 12:00:00 (day 30.5), January is NOT closed yet
+    now_jan31 = pd.Timestamp("2025-01-31 12:00:00", tz="UTC")
+    res_open = loader.process(df, now_utc=now_jan31)
+    assert len(res_open) == 0
+
+    # At 2025-02-01 00:00:00, January IS closed
+    now_feb1 = pd.Timestamp("2025-02-01 00:00:00", tz="UTC")
+    res_closed = loader.process(df, now_utc=now_feb1)
+    assert len(res_closed) == 1
+
+    # 2. Test February in leap year (2024, 29 days)
+    idx_leap = pd.to_datetime(["2024-02-01"]).tz_localize("UTC")
+    df_leap = pd.DataFrame(
+        {"Open": [100.0], "High": [105.0], "Low": [95.0], "Close": [102.0], "Volume": [1000.0]},
+        index=idx_leap,
+    )
+    # At 2024-02-29 23:59:00, February is NOT closed yet
+    now_feb29 = pd.Timestamp("2024-02-29 23:59:00", tz="UTC")
+    assert len(loader.process(df_leap, now_utc=now_feb29)) == 0
+
+    # At 2024-03-01 00:00:00, February IS closed
+    now_mar1 = pd.Timestamp("2024-03-01 00:00:00", tz="UTC")
+    assert len(loader.process(df_leap, now_utc=now_mar1)) == 1
+
+
+def test_screenshot2_forex_4h_completeness() -> None:
+    """Screenshot 2: Forex 4h blocks require all 4 hourly bars in standard trading sessions."""
+    loader_forex = MarketDataLoader("EURUSD=X", interval="4h", timezone="UTC", closed_only=False)
+
+    # Standard trading session: Wednesday 2025-01-15 08:00 to 12:00 UTC
+    # Incomplete bucket: missing 10:00 bar (3 bars only)
+    incomplete_hours = [
+        pd.Timestamp("2025-01-15 08:00:00", tz="UTC"),
+        pd.Timestamp("2025-01-15 09:00:00", tz="UTC"),
+        pd.Timestamp("2025-01-15 11:00:00", tz="UTC"),
+    ]
+    df_incomplete = pd.DataFrame(
+        {
+            "Open": [1.05] * 3,
+            "High": [1.06] * 3,
+            "Low": [1.04] * 3,
+            "Close": [1.055] * 3,
+            "Volume": [100.0] * 3,
+        },
+        index=pd.DatetimeIndex(incomplete_hours),
+    )
+    res_incomplete = loader_forex.process(df_incomplete)
+    # Missing hour in standard Forex block -> excluded!
+    assert len(res_incomplete) == 0
+
+    # Complete bucket: 4 bars (08, 09, 10, 11)
+    complete_hours = [
+        pd.Timestamp("2025-01-15 08:00:00", tz="UTC"),
+        pd.Timestamp("2025-01-15 09:00:00", tz="UTC"),
+        pd.Timestamp("2025-01-15 10:00:00", tz="UTC"),
+        pd.Timestamp("2025-01-15 11:00:00", tz="UTC"),
+    ]
+    df_complete = pd.DataFrame(
+        {
+            "Open": [1.05] * 4,
+            "High": [1.06] * 4,
+            "Low": [1.04] * 4,
+            "Close": [1.055] * 4,
+            "Volume": [100.0] * 4,
+        },
+        index=pd.DatetimeIndex(complete_hours),
+    )
+    res_complete = loader_forex.process(df_complete)
+    assert len(res_complete) == 1
+
+    # Equities / stocks (e.g. AAPL) allow partial session boundary bars
+    loader_stock = MarketDataLoader("AAPL", interval="4h", timezone="UTC", closed_only=False)
+    res_stock = loader_stock.process(df_incomplete)
+    assert len(res_stock) == 1
+
+
+def test_screenshot3_crypto_ticker_slashes() -> None:
+    """Screenshot 3: BTC/USD and crypto pairs normalize with hyphens for Yahoo Finance."""
+    assert normalize_ticker("BTC/USD", asset_type="crypto") == "BTC-USD"
+    assert normalize_ticker("ETH/USD", asset_type="crypto") == "ETH-USD"
+    assert normalize_ticker("BTC-USD", asset_type="crypto") == "BTC-USD"
+    assert normalize_ticker("BTC/USD", asset_type="auto") == "BTC-USD"
+    assert normalize_ticker("ETH/USDT", asset_type="auto") == "ETH-USDT"
+    assert normalize_ticker("SOL/USD", asset_type="auto") == "SOL-USD"
+    assert normalize_ticker("EUR/USD", asset_type="auto") == "EURUSD=X"
+
+
+def test_screenshot4_insufficient_history_atr() -> None:
+    """Screenshot 4: Short history (< 14 bars) flags insufficient_history and omits trade setup."""
+    dates = pd.date_range("2025-01-01", periods=10, freq="1D", tz="UTC")
+    df_short = pd.DataFrame(
+        {
+            "Open": [100.0] * 10,
+            "High": [102.0] * 10,
+            "Low": [98.0] * 10,
+            "Close": [101.0] * 10,
+            "Volume": [1000.0] * 10,
+        },
+        index=dates,
+    )
+    scorer = AIPatternScorer(df_short)
+    result = scorer.score_signal("DOJI", dates[-1], 100)
+
+    assert result.insufficient_history is True
+    assert result.trade_setup is None
+    assert np.isnan(result.atr)
+    d = result.to_dict()
+    assert d["insufficient_history"] is True
+    assert d["trade_setup"] is None
+    assert d["metrics"]["atr"] is None
+    assert any("Insufficient History" in rf for rf in result.risk_factors)
+
+
+@pytest.mark.parametrize("invalid_period", [0, -1, 1.5, True, False])
+def test_screenshot5_strict_period_validation(invalid_period: object) -> None:
+    """Screenshot 5: RSI and ATR reject non-positive or non-int period values with ValueError."""
+    s = pd.Series([10.0, 11.0, 12.0, 13.0, 14.0])
+    with pytest.raises(ValueError, match="positive integer"):
+        calc_wilder_rsi(s, period=invalid_period)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="positive integer"):
+        calc_wilder_atr(s, s, s, period=invalid_period)  # type: ignore[arg-type]
+
+
+def test_screenshot5_atr_series_alignment() -> None:
+    """Screenshot 5: ATR validates identical lengths and index alignment for High, Low, Close."""
+    s1 = pd.Series([10.0, 11.0], index=[0, 1])
+    s2 = pd.Series([9.0, 10.0, 11.0], index=[0, 1, 2])
+    with pytest.raises(ValueError, match="identical lengths"):
+        calc_wilder_atr(s1, s1, s2)
+
+    s3 = pd.Series([10.0, 11.0], index=[1, 2])
+    with pytest.raises(ValueError, match="aligned indices"):
+        calc_wilder_atr(s1, s1, s3)
+
+
+def test_screenshot6_high_low_geometry_without_open_close() -> None:
+    """Screenshot 6: High < Low geometry is checked even when Open and Close are absent."""
+    # Test exactly as requested in audit: High=1 and Low=2 without Open/Close at strict=False
+    df_inverted = pd.DataFrame({"High": [1.0, 10.0], "Low": [2.0, 5.0]})
+    cleaned = validate_ohlc(df_inverted, strict=False)
+    assert len(cleaned) == 1
+    assert cleaned.iloc[0]["High"] == 10.0
+
+    # With full OHLC, strict=True raises geometry ValueError
+    df_inverted_ohlc = pd.DataFrame({"Open": [1.5], "High": [1.0], "Low": [2.0], "Close": [1.5]})
+    with pytest.raises(ValueError, match="geometry"):
+        validate_ohlc(df_inverted_ohlc, strict=True)
+
+
+def test_cli_all_patterns_pure_python_fallback() -> None:
+    """Pure-Python fallback scans 11 supported patterns without crashing on CDL2CROWS."""
+    from yfinance_ta_patterns.pattern_analyzer import PatternAnalyzer
+    from yfinance_ta_patterns.talib_compat import HAS_NATIVE_TALIB, SUPPORTED_FALLBACK_PATTERNS
+
+    dates = pd.date_range("2025-01-01", periods=20, freq="1D", tz="UTC")
+    df = pd.DataFrame(
+        {
+            "Open": [100.0] * 20,
+            "High": [105.0] * 20,
+            "Low": [95.0] * 20,
+            "Close": [102.0] * 20,
+            "Volume": [1000.0] * 20,
+        },
+        index=dates,
+    )
+    analyzer = PatternAnalyzer(df)
+    if not HAS_NATIVE_TALIB:
+        assert len(analyzer.pattern_functions) == len(SUPPORTED_FALLBACK_PATTERNS)
+        assert "CDL2CROWS" not in analyzer.pattern_functions
+        with pytest.raises(NotImplementedError, match="requires native TA-Lib"):
+            analyzer.get_signals("2CROWS")

@@ -14,6 +14,7 @@ from .ai.analyst import AIMarketAnalyst
 from .ai.scorer import AIPatternScorer, PatternConfidenceResult
 from .data import MarketDataLoader, normalize_interval
 from .pattern_analyzer import PatternAnalyzer
+from .talib_compat import HAS_NATIVE_TALIB
 
 TIMEFRAME_MAP: dict[str, str] = {
     "M1": "1m",
@@ -225,6 +226,11 @@ def run_cli(args: argparse.Namespace) -> int:
         range_info = f" from {args.start_date or 'beginning'} to {args.end_date or 'end'}"
 
     patterns_to_scan = [args.pattern] if args.pattern else sorted(analyzer.pattern_functions)
+    if not HAS_NATIVE_TALIB and args.all_patterns:
+        print(
+            f"Notice: Native TA-Lib binary not found. Scanning {len(analyzer.pattern_functions)} pure-Python fallback patterns.",
+            file=sys.stderr,
+        )
     use_ai = args.ai or args.ai_analyst or args.prompt
 
     all_scored_results: list[PatternConfidenceResult] = []

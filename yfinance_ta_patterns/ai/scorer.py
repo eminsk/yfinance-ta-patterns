@@ -65,6 +65,7 @@ class PatternConfidenceResult:
     confluence_factors: list[str]
     risk_factors: list[str]
     trade_setup: TradeSetup | None
+    insufficient_history: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert result to a structured dictionary for JSON / LLM consumption."""
@@ -75,10 +76,11 @@ class PatternConfidenceResult:
             "confidence_score": round(self.confidence_score, 4),
             "grade": self.grade.value,
             "trend_regime": self.trend_regime,
+            "insufficient_history": self.insufficient_history,
             "metrics": {
                 "rvol": round(self.rvol, 2),
-                "rsi": round(self.rsi, 2),
-                "atr": round(self.atr, 5),
+                "rsi": round(self.rsi, 2) if not np.isnan(self.rsi) else None,
+                "atr": round(self.atr, 5) if not np.isnan(self.atr) else None,
             },
             "confluence_factors": self.confluence_factors,
             "risk_factors": self.risk_factors,
@@ -118,6 +120,9 @@ def calc_wilder_rsi(close: pd.Series, period: int = 14) -> pd.Series:
 
     Initial bars before period remain NaN in accordance with TA-Lib lookback invariants.
     """
+    if type(period) is not int or period <= 0:
+        raise ValueError(f"Period must be a positive integer, got {period!r}")
+
     n = len(close)
     if n <= 1:
         return pd.Series(np.nan, index=close.index)
@@ -162,6 +167,15 @@ def calc_wilder_atr(
 
     Initial bars before index period remain NaN in accordance with TA-Lib lookback invariants.
     """
+    if type(period) is not int or period <= 0:
+        raise ValueError(f"Period must be a positive integer, got {period!r}")
+    if len(high) != len(low) or len(high) != len(close):
+        raise ValueError(
+            f"Input Series must have identical lengths: high={len(high)}, low={len(low)}, close={len(close)}"
+        )
+    if not (high.index.equals(low.index) and high.index.equals(close.index)):
+        raise ValueError("Input Series high, low, close must have aligned indices.")
+
     n = len(close)
     if n == 0:
         return pd.Series(dtype=np.float64)
@@ -298,8 +312,9 @@ class AIPatternScorer:
         ema200 = float(cast(Any, row["_EMA200"]))
 
         raw_atr = float(cast(Any, row["_ATR14"]))
+        insufficient_history = bool(np.isnan(raw_atr))
         min_atr = close * 1e-4
-        atr = max(raw_atr, min_atr) if not np.isnan(raw_atr) else (close * 0.01)
+        atr = np.nan if insufficient_history else max(raw_atr, min_atr)
 
         raw_rsi = float(cast(Any, row["_RSI14"]))
         rsi = raw_rsi if not np.isnan(raw_rsi) else 50.0
@@ -309,6 +324,11 @@ class AIPatternScorer:
         trend = self._determine_trend_regime(close, ema20, ema50, ema200)
         confluence_factors: list[str] = []
         risk_factors: list[str] = []
+
+        if insufficient_history:
+            risk_factors.append(
+                "Insufficient History: Indicators not warmed up (< 14 bars); estimated values used."
+            )
 
         # Baseline prior probability
         confidence = 0.50
@@ -395,14 +415,15 @@ class AIPatternScorer:
         # Factor 4: Candle Geometry & Range Significance
         candle_range = high - low
         body_size = abs(close - open_val)
-        if candle_range > 1.2 * atr:
-            confidence += 0.05
-            confluence_factors.append(
-                f"High Volatility Expansion: Candle range ({candle_range:.4f}) exceeds 1.2x ATR"
-            )
-        elif candle_range < 0.4 * atr:
-            confidence -= 0.05
-            risk_factors.append("Low Range Anomaly: Candle range compressed below 0.4x ATR")
+        if not np.isnan(atr):
+            if candle_range > 1.2 * atr:
+                confidence += 0.05
+                confluence_factors.append(
+                    f"High Volatility Expansion: Candle range ({candle_range:.4f}) exceeds 1.2x ATR"
+                )
+            elif candle_range < 0.4 * atr:
+                confidence -= 0.05
+                risk_factors.append("Low Range Anomaly: Candle range compressed below 0.4x ATR")
 
         if candle_range > 0 and (body_size / candle_range) >= 0.60:
             confidence += 0.03
@@ -425,8 +446,12 @@ class AIPatternScorer:
         else:
             grade = SignalGrade.FALSE_SIGNAL
 
-        # Calculate Actionable Trade Setup
-        trade_setup = self._build_trade_setup(is_bullish, close, high, low, atr)
+        # Calculate Actionable Trade Setup (omitted if indicators not warmed up)
+        trade_setup = (
+            None
+            if insufficient_history
+            else self._build_trade_setup(is_bullish, close, high, low, atr)
+        )
 
         return PatternConfidenceResult(
             pattern_name=pattern_name.replace("CDL", ""),
@@ -441,6 +466,7 @@ class AIPatternScorer:
             confluence_factors=confluence_factors,
             risk_factors=risk_factors,
             trade_setup=trade_setup,
+            insufficient_history=insufficient_history,
         )
 
     def _build_trade_setup(
