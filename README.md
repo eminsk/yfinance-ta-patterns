@@ -57,6 +57,19 @@ pip install yfinance-ta-patterns
 pip install "yfinance-ta-patterns[talib]"
 ```
 
+#### Option C: Native TA-Lib on Windows (Pre-built Wheels)
+
+For full 61-pattern scanning without compiling C code manually, install our pre-built Windows x64 wheels:
+
+```bash
+# Python 3.14 (Windows x64):
+uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp314-cp314-win_amd64.whl
+
+# Python 3.12 (Windows x64):
+uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp312-cp312-win_amd64.whl
+```
+
+
 #### 🐍 Python Version Compatibility Matrix
 
 | Python Version | Execution Mode | Installation Status | Recommendation |
