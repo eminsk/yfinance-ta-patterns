@@ -8,7 +8,7 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
-from yfinance_ta_patterns.data import normalize_interval
+from yfinance_ta_patterns.data import _CURRENCY_CODES, normalize_interval
 from yfinance_ta_patterns.talib_compat import talib
 
 # Standard annual periods for timeframe-aware Sharpe Ratio calculation (Equities: 252 days, 6.5h session)
@@ -73,12 +73,7 @@ def is_crypto_symbol(symbol: str) -> bool:
     if not symbol:
         return False
     s = symbol.upper()
-    return (
-        "-USD" in s
-        or "-EUR" in s
-        or "-USDT" in s
-        or s.endswith(("-BTC", "-ETH", "-USDT"))
-    )
+    return "-USD" in s or "-EUR" in s or "-USDT" in s or s.endswith(("-BTC", "-ETH", "-USDT"))
 
 
 def is_forex_symbol(symbol: str) -> bool:
@@ -88,13 +83,14 @@ def is_forex_symbol(symbol: str) -> bool:
     s = symbol.upper()
     if s.endswith("=X"):
         return True
-    clean = s.replace("/", "")
-    return len(clean) == 6 and clean.isalpha() and not is_crypto_symbol(s)
+    clean = s.replace("/", "").replace("-USD", "")
+    if len(clean) == 6 and clean.isalpha() and not is_crypto_symbol(s):
+        base, quote = clean[:3], clean[3:]
+        return base in _CURRENCY_CODES and quote in _CURRENCY_CODES
+    return False
 
 
-def resolve_periods_per_year(
-    timeframe: str, symbol: str = "", asset_type: str = "auto"
-) -> float:
+def resolve_periods_per_year(timeframe: str, symbol: str = "", asset_type: str = "auto") -> float:
     """Resolve asset-aware annualization factor for Sharpe Ratio calculation."""
     tf = normalize_interval(timeframe) if timeframe else "1d"
     a_type = asset_type.lower()
@@ -724,9 +720,7 @@ class PatternRankingTester:
                 raw_pnl = (-position) * (entry_price - eff_exit)
                 direction = "SHORT"
             pnl = (
-                self._convert_pnl_to_account_currency(
-                    raw_pnl, last_exit_price, exit_time=times[-1]
-                )
+                self._convert_pnl_to_account_currency(raw_pnl, last_exit_price, exit_time=times[-1])
                 - self._commission
             )
             trades.append(

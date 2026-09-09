@@ -42,14 +42,61 @@ _COMMON_FOREX_PAIRS = {
 }
 
 
+# Standard ISO 4217 fiat and crypto currency 3-letter codes for Forex validation
+_CURRENCY_CODES = {
+    "USD",
+    "EUR",
+    "GBP",
+    "JPY",
+    "CHF",
+    "CAD",
+    "AUD",
+    "NZD",
+    "RUB",
+    "CNH",
+    "CNY",
+    "SEK",
+    "NOK",
+    "SGD",
+    "HKD",
+    "TRY",
+    "ZAR",
+    "MXN",
+    "PLN",
+    "INR",
+    "BRL",
+    "KRW",
+    "DKK",
+    "THB",
+    "IDR",
+    "HUF",
+    "CZK",
+    "ILS",
+    "CLP",
+    "PHP",
+    "AED",
+    "COP",
+    "SAR",
+    "MYR",
+    "RON",
+}
+
+
 def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
     """Intelligently normalize symbol for Yahoo Finance API.
 
     Rules:
-    - If asset_type is 'forex' or auto-detected as a 6-letter currency pair, append '=X'.
+    - Normalizes slashes: e.g. "EUR/USD" -> "EURUSD=X"
+    - If asset_type is 'forex' or auto-detected as valid currency pair, append '=X'.
     - If already formatted with suffix (=X, =F, -USD, ^) or standard stock ticker, preserve.
     """
     clean = symbol.strip().upper()
+
+    # Normalize slash notation for currency pairs e.g. "EUR/USD" -> "EURUSD"
+    if "/" in clean:
+        parts = clean.split("/")
+        if len(parts) == 2 and len(parts[0]) == 3 and len(parts[1]) == 3:
+            clean = f"{parts[0]}{parts[1]}"
 
     if asset_type.lower() == "forex":
         return clean if clean.endswith("=X") else f"{clean}=X"
@@ -59,11 +106,14 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
         if clean.endswith("=X") or clean.endswith("=F") or clean.startswith("^") or "-" in clean:
             return clean
 
-        # If it matches known currency pair or 6-letter alphabetic forex code
-        if clean in _COMMON_FOREX_PAIRS or (
-            len(clean) == 6 and clean.isalpha() and not clean.startswith(("AAPL", "GOOG"))
-        ):
+        # If it matches known currency pair or valid 6-letter currency code pair
+        if clean in _COMMON_FOREX_PAIRS:
             return f"{clean}=X"
+
+        if len(clean) == 6 and clean.isalpha():
+            base, quote = clean[:3], clean[3:]
+            if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
+                return f"{clean}=X"
 
     return clean
 
@@ -79,6 +129,20 @@ TIMEFRAME_MAP: dict[str, str] = {
     "D1": "1d",
     "W1": "1wk",
     "MN1": "1mo",
+}
+
+INTERVAL_DELTAS: dict[str, pd.Timedelta] = {
+    "1m": pd.Timedelta(minutes=1),
+    "2m": pd.Timedelta(minutes=2),
+    "5m": pd.Timedelta(minutes=5),
+    "15m": pd.Timedelta(minutes=15),
+    "30m": pd.Timedelta(minutes=30),
+    "60m": pd.Timedelta(hours=1),
+    "1h": pd.Timedelta(hours=1),
+    "4h": pd.Timedelta(hours=4),
+    "1d": pd.Timedelta(days=1),
+    "1wk": pd.Timedelta(days=7),
+    "1mo": pd.Timedelta(days=30),
 }
 
 
@@ -127,12 +191,11 @@ def validate_ohlc(data: pd.DataFrame, strict: bool = False) -> pd.DataFrame:
     if not req_cols:
         return data
 
-    # Check for non-finite values (np.inf, -np.inf)
-    has_inf = np.isinf(data[req_cols]).any().any()
-    if strict and has_inf:
-        raise ValueError("Corrupted OHLC data: non-finite (inf/-inf) values found.")
-
+    # Check for non-finite values (np.inf, -np.inf, nan)
     finite_mask = np.isfinite(data[req_cols]).all(axis=1)
+    if strict and not finite_mask.all():
+        raise ValueError("Corrupted OHLC data: non-finite values (NaN or inf/-inf) found.")
+
     cleaned = data.loc[cast(Any, finite_mask)].copy()
 
     # Check for non-positive prices
@@ -261,7 +324,19 @@ class MarketDataLoader:
         if "Volume" in resampled.columns and (resampled["Volume"] > 0).any():
             resampled = resampled[resampled["Volume"] > 0]
 
-        if self.closed_only and not resampled.empty and isinstance(resampled.index, pd.DatetimeIndex):
+        # Check input bar completeness per bucket (Issue 3: YF-003)
+        bar_counts = data.resample(self._resample_rule, origin="epoch")["Close"].count()
+        is_crypto = (
+            "-USD" in self.ticker or "-EUR" in self.ticker or self.asset_type.lower() == "crypto"
+        )
+        min_bars = 4 if is_crypto else 1
+        resampled = resampled.loc[bar_counts >= min_bars]
+
+        if (
+            self.closed_only
+            and not resampled.empty
+            and isinstance(resampled.index, pd.DatetimeIndex)
+        ):
             ends = resampled.index + pd.Timedelta(self._resample_rule)
             now = now_utc if now_utc is not None else pd.Timestamp.now(tz=pytz.UTC)
             ends_tz = getattr(ends, "tz", None)
@@ -283,9 +358,7 @@ class MarketDataLoader:
 
         return cast(pd.DataFrame, resampled)
 
-    def process(
-        self, data: pd.DataFrame, now_utc: pd.Timestamp | None = None
-    ) -> pd.DataFrame:
+    def process(self, data: pd.DataFrame, now_utc: pd.Timestamp | None = None) -> pd.DataFrame:
         """Normalize column indexing, validate OHLC, resample in UTC, and convert timezone."""
         if data.empty:
             return data
@@ -296,7 +369,9 @@ class MarketDataLoader:
 
         # Check for duplicate timestamps in index
         if hasattr(data.index, "has_duplicates") and data.index.has_duplicates:
-            raise ValueError("Corrupted market data: duplicate candle timestamps detected in index.")
+            raise ValueError(
+                "Corrupted market data: duplicate candle timestamps detected in index."
+            )
 
         if not data.index.is_monotonic_increasing:
             data = data.sort_index()
@@ -319,6 +394,19 @@ class MarketDataLoader:
         # Convert to target user timezone
         if isinstance(data.index, pd.DatetimeIndex):
             data.index = data.index.tz_convert(self.timezone)
+
+        # Universal closed-only filtering for all intervals (Issue 1: YF-001)
+        if self.closed_only and not data.empty and isinstance(data.index, pd.DatetimeIndex):
+            delta = INTERVAL_DELTAS.get(self.interval, pd.Timedelta("1d"))
+            candle_ends = data.index + delta
+            now = now_utc if now_utc is not None else pd.Timestamp.now(tz=pytz.UTC)
+            if candle_ends.tz is not None and now.tz is not None:
+                now = now.tz_convert(candle_ends.tz)
+            elif candle_ends.tz is not None and now.tz is None:
+                now = now.tz_localize(pytz.UTC).tz_convert(candle_ends.tz)
+            elif candle_ends.tz is None and now.tz is not None:
+                now = now.tz_localize(None)
+            data = data.loc[candle_ends <= now]
 
         return data
 

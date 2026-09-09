@@ -160,7 +160,7 @@ def calc_wilder_atr(
 ) -> pd.Series:
     """Calculate Average True Range (ATR) using canonical Wilder's exponential smoothing.
 
-    Initial bars before period - 1 remain NaN in accordance with TA-Lib lookback invariants.
+    Initial bars before index period remain NaN in accordance with TA-Lib lookback invariants.
     """
     n = len(close)
     if n == 0:
@@ -171,20 +171,20 @@ def calc_wilder_atr(
     c = close.to_numpy()
 
     tr = np.zeros(n, dtype=np.float64)
-    tr[0] = max(h[0] - lo[0], 1e-6)
+    tr[0] = h[0] - lo[0]
     for i in range(1, n):
         tr[i] = max(h[i] - lo[i], abs(h[i] - c[i - 1]), abs(lo[i] - c[i - 1]))
 
     atr = np.full(n, np.nan, dtype=np.float64)
-    if n < period:
+    if n <= period:
         return pd.Series(atr, index=close.index)
 
-    eff_period = period
-    atr[eff_period - 1] = float(np.mean(tr[:eff_period]))
-    for i in range(eff_period, n):
+    # First value at index period using mean of TR[1 : period + 1] matching TA-Lib
+    atr[period] = float(np.mean(tr[1 : period + 1]))
+    for i in range(period + 1, n):
         atr[i] = (atr[i - 1] * (period - 1) + tr[i]) / period
 
-    # Initial bars before eff_period - 1 remain NaN (zero future lookahead)
+    # Initial bars before index period remain NaN (zero future lookahead)
     return pd.Series(atr, index=close.index)
 
 
@@ -281,7 +281,9 @@ class AIPatternScorer:
     ) -> PatternConfidenceResult:
         """Compute multi-factor AI confidence score and trade setup for a specific signal."""
         if raw_signal == 0:
-            raise ValueError("Cannot score an inactive signal: raw_signal must be non-zero (+100/-100 or +1/-1).")
+            raise ValueError(
+                "Cannot score an inactive signal: raw_signal must be non-zero (+100/-100 or +1/-1)."
+            )
 
         if timestamp not in self.df.index:
             raise KeyError(f"Timestamp {timestamp} not found in market data.")
@@ -296,7 +298,8 @@ class AIPatternScorer:
         ema200 = float(cast(Any, row["_EMA200"]))
 
         raw_atr = float(cast(Any, row["_ATR14"]))
-        atr = max(raw_atr if not np.isnan(raw_atr) else (close * 0.01), 0.00001)
+        min_atr = close * 1e-4
+        atr = max(raw_atr, min_atr) if not np.isnan(raw_atr) else (close * 0.01)
 
         raw_rsi = float(cast(Any, row["_RSI14"]))
         rsi = raw_rsi if not np.isnan(raw_rsi) else 50.0
@@ -457,9 +460,9 @@ class AIPatternScorer:
         if is_bullish:
             direction = "BUY"
             entry = close
-            # Stop below the low minus ATR buffer
-            stop_loss = low - buffer
-            risk = entry - stop_loss
+            # Stop below the low minus ATR buffer, strictly positive
+            stop_loss = max(low - buffer, close * 0.001)
+            risk = max(entry - stop_loss, close * 1e-5)
             tp1 = entry + (rr_tp1 * risk)
             tp2 = entry + (rr_tp2 * risk)
         else:
@@ -467,9 +470,10 @@ class AIPatternScorer:
             entry = close
             # Stop above the high plus ATR buffer
             stop_loss = high + buffer
-            risk = stop_loss - entry
-            tp1 = entry - (rr_tp1 * risk)
-            tp2 = entry - (rr_tp2 * risk)
+            risk = max(stop_loss - entry, close * 1e-5)
+            # Ensure profit targets remain strictly positive
+            tp1 = max(entry - (rr_tp1 * risk), close * 0.001)
+            tp2 = max(entry - (rr_tp2 * risk), close * 0.0005)
 
         return TradeSetup(
             direction=direction,
@@ -521,9 +525,7 @@ class AIPatternScorer:
         from ..pattern_analyzer import PatternAnalyzer
 
         analyzer = PatternAnalyzer(self.df)
-        patterns_to_scan = (
-            patterns if patterns is not None else sorted(analyzer.pattern_functions)
-        )
+        patterns_to_scan = patterns if patterns is not None else sorted(analyzer.pattern_functions)
 
         all_scored: list[PatternConfidenceResult] = []
         for pat in patterns_to_scan:
@@ -534,9 +536,7 @@ class AIPatternScorer:
             if signals.empty:
                 continue
             clean_name = pat.replace("CDL", "")
-            scored = self.score_all_signals(
-                signals, clean_name, min_confidence=min_confidence
-            )
+            scored = self.score_all_signals(signals, clean_name, min_confidence=min_confidence)
             all_scored.extend(scored)
 
         all_scored.sort(key=lambda r: r.confidence_score, reverse=True)

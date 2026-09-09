@@ -60,7 +60,7 @@ def test_scorer_indicator_initialization(sample_market_data: pd.DataFrame) -> No
     assert (scorer.df["_RVOL"] > 0).all()
     # Confirm initial lookback period is NaN as per TA-Lib invariants
     assert np.isnan(scorer.df["_RSI14"].iloc[:14]).all()
-    assert np.isnan(scorer.df["_ATR14"].iloc[:13]).all()
+    assert np.isnan(scorer.df["_ATR14"].iloc[:14]).all()
 
 
 def test_bullish_signal_with_strong_confluence(sample_market_data: pd.DataFrame) -> None:

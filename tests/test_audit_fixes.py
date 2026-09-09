@@ -13,11 +13,12 @@ from yfinance_ta_patterns.ai.scorer import (
     calc_wilder_atr,
     calc_wilder_rsi,
 )
-from yfinance_ta_patterns.data import MarketDataLoader, validate_ohlc
+from yfinance_ta_patterns.data import MarketDataLoader, normalize_ticker, validate_ohlc
 from yfinance_ta_patterns.pattern_tester import (
     DEFAULT_FX_USD_RATES,
     TIMEFRAME_PERIODS_PER_YEAR,
     PatternRankingTester,
+    is_forex_symbol,
     resolve_periods_per_year,
 )
 from yfinance_ta_patterns.talib_compat import (
@@ -271,7 +272,7 @@ def test_rvol_excludes_current_candle(synthetic_ohlcv_data: pd.DataFrame) -> Non
     data = synthetic_ohlcv_data.copy()
     data["Volume"] = 1000.0
     # Massive volume spike on the very last candle
-    data.iloc[-1, data.columns.get_loc("Volume")] = 10000.0
+    data.loc[data.index[-1], "Volume"] = 10000.0
 
     scorer = AIPatternScorer(data)
     last_rvol = float(scorer.df["_RVOL"].iloc[-1])
@@ -478,10 +479,10 @@ def test_calc_wilder_atr_initial_nan_lookback() -> None:
 
     atr = calc_wilder_atr(high, low, close, period=14)
 
-    # First 13 values (0 to 12) must strictly be NaN
-    assert np.isnan(atr.iloc[:13]).all()
-    # 14th value (index 13) is the first computed ATR
-    assert not np.isnan(atr.iloc[13])
+    # First 14 values (0 to 13) must strictly be NaN matching TA-Lib
+    assert np.isnan(atr.iloc[:14]).all()
+    # 15th value (index 14) is the first computed ATR
+    assert not np.isnan(atr.iloc[14])
     # All valid ATR values are strictly positive
     valid_atr = atr.dropna()
     assert (valid_atr > 0.0).all()
@@ -763,3 +764,191 @@ def test_tradesetup_microcap_precision() -> None:
     assert d["entry_price"] != 0.0
     assert d["stop_loss"] != d["entry_price"]
 
+
+def test_issue1_closed_only_native_intervals() -> None:
+    """Issue 1 (YF-001): Universal closed-only filtering for all native intervals (1h, 15m, 1d)."""
+    # Test 1: Hourly interval with unclosed candle
+    now_utc = pd.Timestamp("2025-01-01 11:30:00", tz="UTC")
+    idx_1h = pd.date_range("2025-01-01 10:00:00", periods=2, freq="1h", tz="UTC")
+    # Candle 0: 10:00 to 11:00 (closed before 11:30)
+    # Candle 1: 11:00 to 12:00 (not closed at 11:30)
+    df_1h = pd.DataFrame(
+        {
+            "Open": [100.0, 101.0],
+            "High": [102.0, 103.0],
+            "Low": [99.0, 100.0],
+            "Close": [101.0, 102.0],
+            "Volume": [1000.0, 1000.0],
+        },
+        index=idx_1h,
+    )
+    loader_closed = MarketDataLoader("AAPL", interval="1h", timezone="UTC", closed_only=True)
+    res_closed = loader_closed.process(df_1h, now_utc=now_utc)
+    assert len(res_closed) == 1
+    assert res_closed.index[-1] == pd.Timestamp("2025-01-01 10:00:00", tz="UTC")
+
+    loader_open = MarketDataLoader("AAPL", interval="1h", timezone="UTC", closed_only=False)
+    res_open = loader_open.process(df_1h, now_utc=now_utc)
+    assert len(res_open) == 2
+
+    # Test 2: 15m interval
+    now_utc_15m = pd.Timestamp("2025-01-01 10:20:00", tz="UTC")
+    idx_15m = pd.date_range("2025-01-01 10:00:00", periods=2, freq="15min", tz="UTC")
+    # Candle 0: 10:00 to 10:15 (closed before 10:20)
+    # Candle 1: 10:15 to 10:30 (not closed at 10:20)
+    df_15m = pd.DataFrame(
+        {
+            "Open": [100.0, 101.0],
+            "High": [102.0, 103.0],
+            "Low": [99.0, 100.0],
+            "Close": [101.0, 102.0],
+            "Volume": [1000.0, 1000.0],
+        },
+        index=idx_15m,
+    )
+    loader_15m = MarketDataLoader("AAPL", interval="15m", timezone="UTC", closed_only=True)
+    res_15m = loader_15m.process(df_15m, now_utc=now_utc_15m)
+    assert len(res_15m) == 1
+
+
+def test_issue2_microcap_atr_and_positive_stop_loss() -> None:
+    """Issue 2 (YF-002): Micro-cap ATR scaling and guaranteed positive stop-loss."""
+    # Test relative ATR floor does not distort microcap price (e.g. price ~ 0.000001)
+    base_price = 0.000001
+    high = pd.Series([base_price * 1.01] * 20)
+    low = pd.Series([base_price * 0.99] * 20)
+    close = pd.Series([base_price] * 20)
+
+    atr = calc_wilder_atr(high, low, close, period=14)
+    # Valid ATR values should be around 2e-8, definitely << 1e-5
+    valid_atr = atr.dropna().iloc[-1]
+    assert valid_atr < 1e-6
+    assert valid_atr > 0
+
+    df_micro = pd.DataFrame(
+        {
+            "Open": [base_price] * 20,
+            "High": high,
+            "Low": low,
+            "Close": close,
+            "Volume": [1000.0] * 20,
+        }
+    )
+    scorer = AIPatternScorer(df_micro)
+    # Test BUY trade setup for microcap: positive stop-loss and targets
+    buy_setup = scorer._build_trade_setup(
+        True, base_price, base_price * 1.01, base_price * 0.99, valid_atr
+    )
+    assert buy_setup.stop_loss > 0
+    assert buy_setup.stop_loss < base_price
+    assert buy_setup.take_profit_1 > base_price
+    assert buy_setup.take_profit_2 > buy_setup.take_profit_1
+
+    # Test SELL trade setup with high volatility: stop-loss and targets remain strictly positive
+    huge_atr = base_price * 2.0  # ATR larger than price
+    sell_setup = scorer._build_trade_setup(
+        False, base_price, base_price * 1.01, base_price * 0.99, huge_atr
+    )
+    assert sell_setup.stop_loss > base_price
+    assert sell_setup.take_profit_1 > 0
+    assert sell_setup.take_profit_2 > 0
+
+
+def test_issue3_resample_missing_bars_validation() -> None:
+    """Issue 3 (YF-003): Incomplete 4h candle buckets are dropped for crypto."""
+    # 4h candle requires 4 1h bars for crypto 24/7
+    loader = MarketDataLoader("BTC-USD", interval="4h", timezone="UTC", closed_only=False)
+
+    # Incomplete bucket: only 3 bars in 00:00-04:00 (missing 02:00)
+    incomplete_times = [
+        pd.Timestamp("2025-01-01 00:00:00", tz="UTC"),
+        pd.Timestamp("2025-01-01 01:00:00", tz="UTC"),
+        pd.Timestamp("2025-01-01 03:00:00", tz="UTC"),
+    ]
+    df_incomplete = pd.DataFrame(
+        {
+            "Open": [50000.0] * 3,
+            "High": [51000.0] * 3,
+            "Low": [49000.0] * 3,
+            "Close": [50500.0] * 3,
+            "Volume": [10.0] * 3,
+        },
+        index=pd.DatetimeIndex(incomplete_times),
+    )
+    res_incomplete = loader.process(df_incomplete)
+    assert len(res_incomplete) == 0
+
+    # Complete bucket: 4 bars in 00:00-04:00
+    complete_times = [
+        pd.Timestamp("2025-01-01 00:00:00", tz="UTC"),
+        pd.Timestamp("2025-01-01 01:00:00", tz="UTC"),
+        pd.Timestamp("2025-01-01 02:00:00", tz="UTC"),
+        pd.Timestamp("2025-01-01 03:00:00", tz="UTC"),
+    ]
+    df_complete = pd.DataFrame(
+        {
+            "Open": [50000.0] * 4,
+            "High": [51000.0] * 4,
+            "Low": [49000.0] * 4,
+            "Close": [50500.0] * 4,
+            "Volume": [10.0] * 4,
+        },
+        index=pd.DatetimeIndex(complete_times),
+    )
+    res_complete = loader.process(df_complete)
+    assert len(res_complete) == 1
+    assert res_complete.index[0] == pd.Timestamp("2025-01-01 00:00:00", tz="UTC")
+
+
+def test_issue4_ticker_normalization_slashes_and_stocks() -> None:
+    """Issue 4 (YF-004): Slash normalization for FX and currency code validation."""
+    assert normalize_ticker("EUR/USD") == "EURUSD=X"
+    assert normalize_ticker("eur/gbp") == "EURGBP=X"
+    assert normalize_ticker("USD/JPY") == "USDJPY=X"
+    assert normalize_ticker("EURUSD") == "EURUSD=X"
+    assert normalize_ticker("EURUSD=X") == "EURUSD=X"
+
+    # 6-letter stock tickers should NOT be falsely normalized to Forex
+    assert normalize_ticker("AMAZON") == "AMAZON"
+    assert normalize_ticker("GOOGLE") == "GOOGLE"
+
+    assert is_forex_symbol("EUR/USD") is True
+    assert is_forex_symbol("EURUSD=X") is True
+    assert is_forex_symbol("EURUSD") is True
+    assert is_forex_symbol("AMAZON") is False
+    assert is_forex_symbol("GOOGLE") is False
+
+
+def test_issue5_talib_atr_exact_index_alignment() -> None:
+    """Issue 5 (YF-005): Wilder ATR initial lookback index matches TA-Lib (first valid at period)."""
+    n = 25
+    high = pd.Series([10.0 + i for i in range(n)])
+    low = pd.Series([8.0 + i for i in range(n)])
+    close = pd.Series([9.0 + i for i in range(n)])
+
+    atr = calc_wilder_atr(high, low, close, period=14)
+    assert len(atr) == n
+    # The first 14 elements (indices 0..13) must be NaN
+    assert atr.iloc[:14].isna().all()
+    # The 15th element (index 14) is the first valid ATR value
+    assert not pd.isna(atr.iloc[14])
+    assert (atr.iloc[14:] > 0).all()
+
+
+def test_issue6_validate_ohlc_strict_raises_on_nan() -> None:
+    """Issue 6 (YF-006): Strict OHLC validation raises ValueError on NaN, non-strict cleans rows."""
+    df_nan = pd.DataFrame(
+        {
+            "Open": [10.0, np.nan, 12.0],
+            "High": [15.0, 16.0, 14.0],
+            "Low": [9.0, 8.0, 11.0],
+            "Close": [11.0, 14.0, 13.0],
+            "Volume": [100.0, 200.0, 300.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="NaN"):
+        validate_ohlc(df_nan, strict=True)
+
+    cleaned = validate_ohlc(df_nan, strict=False)
+    assert len(cleaned) == 2
