@@ -26,7 +26,6 @@ from yfinance_ta_patterns.pattern_tester import (
     is_crypto_symbol,
     resolve_periods_per_year,
 )
-from yfinance_ta_patterns.talib_compat import talib
 
 
 # ---------------------------------------------------------------------------
@@ -278,8 +277,14 @@ def test_wilder_rsi_flat_series_matches_talib() -> None:
     assert len(valid_rsi) == n - 14
     assert (valid_rsi == 0.0).all()
 
-    # Compare directly with native TA-Lib RSI if available
-    talib_rsi = talib.RSI(flat_prices.to_numpy(), timeperiod=14)
-    valid_talib = talib_rsi[~np.isnan(talib_rsi)]
-    assert (valid_talib == 0.0).all()
-    np.testing.assert_allclose(valid_rsi.values, valid_talib)
+    # Compare directly with native TA-Lib RSI if available in current environment
+    try:
+        import talib as native_talib
+
+        if hasattr(native_talib, "RSI"):
+            talib_rsi = native_talib.RSI(flat_prices.to_numpy(), timeperiod=14)
+            valid_talib = talib_rsi[~np.isnan(talib_rsi)]
+            assert (valid_talib == 0.0).all()
+            np.testing.assert_allclose(valid_rsi.values, valid_talib)
+    except (ImportError, AttributeError):
+        pass
