@@ -176,6 +176,90 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
     return clean
 
 
+def classify_asset(symbol: str, asset_type: str = "auto") -> str:
+    """Classify an asset into 'crypto', 'forex', 'commodity', 'index', or 'stock'.
+
+    Works seamlessly whether symbol is raw ('BTC/EUR', 'ETH-BTC', 'EURUSD=X') or normalized.
+    """
+    if asset_type and asset_type.lower() != "auto":
+        return asset_type.lower()
+
+    clean = symbol.strip().upper()
+    if clean.endswith("=F"):
+        return "commodity"
+    if clean.startswith("^"):
+        return "index"
+    if clean.endswith("=X"):
+        return "forex"
+
+    # Check separators: '-' or '/'
+    sep = "-" if "-" in clean else ("/" if "/" in clean else None)
+    if sep:
+        parts = clean.split(sep)
+        if len(parts) == 2:
+            base, quote = parts[0], parts[1]
+            if (
+                base in _KNOWN_CRYPTO_SYMBOLS
+                or quote in _KNOWN_CRYPTO_SYMBOLS
+                or quote in {"USDT", "USDC"}
+            ):
+                return "crypto"
+            if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
+                return "forex"
+
+    # Check 6-letter FX e.g. EURUSD
+    if clean in _COMMON_FOREX_PAIRS:
+        return "forex"
+    if len(clean) == 6 and clean.isalpha():
+        base, quote = clean[:3], clean[3:]
+        if base in _KNOWN_CRYPTO_SYMBOLS and (
+            quote in _CURRENCY_CODES or quote in {"USDT", "USDC", "BTC", "ETH"}
+        ):
+            return "crypto"
+        if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
+            return "forex"
+
+    if clean in _KNOWN_CRYPTO_SYMBOLS:
+        return "crypto"
+
+    return "stock"
+
+
+def resolve_asset_currencies(symbol: str, asset_type: str = "auto") -> tuple[str, str]:
+    """Resolve base and quote currency for any asset symbol.
+
+    Returns (base_currency, quote_currency).
+    Examples:
+      'BTC-EUR' -> ('BTC', 'EUR')
+      'ETH-BTC' -> ('ETH', 'BTC')
+      'EURUSD=X' -> ('EUR', 'USD')
+      'EUR/GBP' -> ('EUR', 'GBP')
+      'USDJPY' -> ('USD', 'JPY')
+      'AAPL' -> ('AAPL', 'USD')
+    """
+    clean = symbol.strip().upper()
+    if clean.endswith("=X"):
+        clean_fx = clean[:-2]
+        if len(clean_fx) == 6:
+            return clean_fx[:3], clean_fx[3:]
+
+    sep = "-" if "-" in clean else ("/" if "/" in clean else None)
+    if sep:
+        parts = clean.split(sep)
+        if len(parts) == 2:
+            return parts[0], parts[1]
+
+    if len(clean) == 6 and clean.isalpha():
+        base, quote = clean[:3], clean[3:]
+        if (base in _CURRENCY_CODES and quote in _CURRENCY_CODES) or (
+            base in _KNOWN_CRYPTO_SYMBOLS and quote in _KNOWN_CRYPTO_SYMBOLS
+        ):
+            return base, quote
+
+    # Default to USD quote for standard equities, commodities, etc.
+    return clean, "USD"
+
+
 TIMEFRAME_MAP: dict[str, str] = {
     "M1": "1m",
     "M2": "2m",
@@ -379,12 +463,11 @@ class MarketDataLoader:
         if "Volume" in resampled.columns and (resampled["Volume"] > 0).any():
             resampled = resampled[resampled["Volume"] > 0]
 
-        # Check input bar completeness per bucket (Issue 3: YF-003, Screenshot 2)
+        # Check input bar completeness per bucket (Issue 3: YF-003, Screenshot 2 & Screenshot 5)
         bar_counts = data.resample(self._resample_rule, origin="epoch")["Close"].count()
-        is_crypto = (
-            "-USD" in self.ticker or "-EUR" in self.ticker or self.asset_type.lower() == "crypto"
-        )
-        is_forex = self.asset_type.lower() == "forex" or self.ticker.endswith("=X")
+        resolved_type = classify_asset(self.ticker, self.asset_type)
+        is_crypto = resolved_type == "crypto"
+        is_forex = resolved_type == "forex"
 
         def _is_bucket_complete(ts: pd.Timestamp, count: int) -> bool:
             if is_crypto:

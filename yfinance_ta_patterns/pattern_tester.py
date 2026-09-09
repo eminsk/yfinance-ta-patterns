@@ -8,7 +8,11 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
-from yfinance_ta_patterns.data import _CURRENCY_CODES, normalize_interval
+from yfinance_ta_patterns.data import (
+    _CURRENCY_CODES,
+    normalize_interval,
+    resolve_asset_currencies,
+)
 from yfinance_ta_patterns.talib_compat import talib
 
 # Standard annual periods for timeframe-aware Sharpe Ratio calculation (Equities: 252 days, 6.5h session)
@@ -130,6 +134,7 @@ class PatternResult:
     avg_strength: float = 100.0
     profit_factor: float = 0.0
     score: float = 0.0
+    total_trades: int = 0
 
 
 class PatternRankingTester:
@@ -142,6 +147,7 @@ class PatternRankingTester:
         "_account_currency",
         "_allow_short",
         "_asset_type",
+        "_base_currency",
         "_commission",
         "_data",
         "_execution",
@@ -150,10 +156,13 @@ class PatternRankingTester:
         "_fx_rates",
         "_holding_period",
         "_initial_capital",
+        "_last_open_trade",
         "_min_signals",
+        "_min_trades",
         "_news_dates",
         "_periods_per_year",
         "_position_size",
+        "_quote_currency",
         "_results",
         "_sharpe_mode",
         "_slippage",
@@ -186,6 +195,9 @@ class PatternRankingTester:
         asset_type: str = "auto",
         sharpe_mode: str = "periodic",
         holding_period: int | None = None,
+        base_currency: str | None = None,
+        quote_currency: str | None = None,
+        min_trades: int | None = None,
     ) -> None:
         """Initialize pattern tester.
 
@@ -232,6 +244,12 @@ class PatternRankingTester:
             Sharpe mode: 'periodic' (returns per bar, with 0% on idle bars) or 'trades'
         holding_period : int, optional
             Number of bars to hold a trade before exiting (useful for single-direction patterns like Hammer)
+        base_currency : str, optional
+            Base currency of the instrument (auto-resolved from symbol if omitted)
+        quote_currency : str, optional
+            Quote currency of the instrument (auto-resolved from symbol if omitted)
+        min_trades : int, optional
+            Minimum completed trades required for ranking
         """
         self._data: pd.DataFrame = data
         self._initial_capital: float = initial_capital
@@ -241,18 +259,30 @@ class PatternRankingTester:
         self._execution: str = execution
         self._timeframe: str = normalize_interval(timeframe) if timeframe else "1d"
         self._symbol: str = symbol
-        self._account_currency: str = account_currency
+        self._account_currency: str = account_currency.upper()
         self._force_exit_on_last_bar: bool = force_exit_on_last_bar
         self._allow_short: bool = allow_short
         self._commission: float = max(commission, 0.0)
         self._slippage: float = max(slippage, 0.0)
         self._min_signals: int = max(min_signals, 1)
+        self._min_trades: int | None = min_trades
         self._fx_rates: dict[str, float] = fx_rates or {}
         self._fx_history: dict[str, pd.Series] | pd.DataFrame | None = fx_history
         self._strict_fx: bool = strict_fx
         self._asset_type: str = asset_type
         self._sharpe_mode: str = sharpe_mode
         self._holding_period: int | None = holding_period
+
+        if base_currency and quote_currency:
+            self._base_currency: str = base_currency.upper()
+            self._quote_currency: str = quote_currency.upper()
+        elif self._symbol:
+            b, q = resolve_asset_currencies(self._symbol, asset_type=self._asset_type)
+            self._base_currency = (base_currency or b).upper()
+            self._quote_currency = (quote_currency or q).upper()
+        else:
+            self._base_currency = (base_currency or "ASSET").upper()
+            self._quote_currency = (quote_currency or "USD").upper()
 
         if periods_per_year is not None:
             self._periods_per_year: float = periods_per_year
@@ -263,98 +293,131 @@ class PatternRankingTester:
 
         self.equity_curve: list[float] = [initial_capital]
         self.trades: list[dict[str, Any]] = []
+        self._last_open_trade: dict[str, Any] | None = None
 
     @staticmethod
     def get_all_patterns() -> list[str]:
         """Get all TA-Lib candlestick pattern function names."""
         return [f for f in dir(talib) if f.startswith("CDL")]
 
+    def _lookup_hist_rate(
+        self, direct_pair: str, inv_pair: str, timestamp: pd.Timestamp
+    ) -> float | None:
+        """Helper to look up exchange rate in self._fx_history."""
+        if self._fx_history is None:
+            return None
+
+        def get_series(p: str) -> pd.Series | None:
+            candidates = [p, f"{p}=X", p.replace("=X", "")]
+            if isinstance(self._fx_history, dict):
+                for c in candidates:
+                    if c in self._fx_history:
+                        return self._fx_history[c]
+            elif isinstance(self._fx_history, pd.DataFrame):
+                for c in candidates:
+                    if c in self._fx_history.columns:
+                        return self._fx_history[c]
+            return None
+
+        s_direct = get_series(direct_pair)
+        if s_direct is not None:
+            val = s_direct.asof(timestamp)
+            if pd.notna(val) and float(cast(Any, val)) > 0:
+                return float(cast(Any, val))
+
+        s_inv = get_series(inv_pair)
+        if s_inv is not None:
+            val = s_inv.asof(timestamp)
+            if pd.notna(val) and float(cast(Any, val)) > 0:
+                return 1.0 / float(cast(Any, val))
+
+        return None
+
+    def _get_fx_rate(
+        self, from_curr: str, to_curr: str, timestamp: pd.Timestamp | None = None
+    ) -> float:
+        """Get exchange rate converting 1 unit of from_curr to to_curr at timestamp."""
+        from_curr = from_curr.upper()
+        to_curr = to_curr.upper()
+        if from_curr == to_curr:
+            return 1.0
+
+        direct_pair = f"{from_curr}{to_curr}"
+        inv_pair = f"{to_curr}{from_curr}"
+
+        # 1. Historical rate lookup
+        if self._fx_history is not None and timestamp is not None:
+            hist_rate = self._lookup_hist_rate(direct_pair, inv_pair, timestamp)
+            if hist_rate is not None:
+                return hist_rate
+
+            # USD bridge via historical rates
+            if from_curr != "USD" and to_curr != "USD":
+                from_usd = self._lookup_hist_rate(f"{from_curr}USD", f"USD{from_curr}", timestamp)
+                to_usd = self._lookup_hist_rate(f"{to_curr}USD", f"USD{to_curr}", timestamp)
+                if from_usd is not None and to_usd is not None and to_usd > 0:
+                    return from_usd / to_usd
+
+            if self._strict_fx:
+                raise ValueError(
+                    f"Missing historical FX rate for {direct_pair} at {timestamp}"
+                )
+
+        # 2. Static rates table
+        rates = {**DEFAULT_FX_USD_RATES, **self._fx_rates}
+        if direct_pair in rates and rates[direct_pair] > 0:
+            return rates[direct_pair]
+        if inv_pair in rates and rates[inv_pair] > 0:
+            return 1.0 / rates[inv_pair]
+
+        # USD bridge via static rates
+        from_usd_rate: float | None = 1.0 if from_curr == "USD" else None
+        if from_usd_rate is None:
+            if f"{from_curr}USD" in rates and rates[f"{from_curr}USD"] > 0:
+                from_usd_rate = rates[f"{from_curr}USD"]
+            elif f"USD{from_curr}" in rates and rates[f"USD{from_curr}"] > 0:
+                from_usd_rate = 1.0 / rates[f"USD{from_curr}"]
+
+        to_usd_rate: float | None = 1.0 if to_curr == "USD" else None
+        if to_usd_rate is None:
+            if f"{to_curr}USD" in rates and rates[f"{to_curr}USD"] > 0:
+                to_usd_rate = rates[f"{to_curr}USD"]
+            elif f"USD{to_curr}" in rates and rates[f"USD{to_curr}"] > 0:
+                to_usd_rate = 1.0 / rates[f"USD{to_curr}"]
+
+        if from_usd_rate is not None and to_usd_rate is not None and to_usd_rate > 0:
+            return from_usd_rate / to_usd_rate
+
+        if self._strict_fx:
+            raise ValueError(f"Unable to convert currency from {from_curr} to {to_curr}")
+
+        return 1.0
+
     def _convert_pnl_to_account_currency(
         self, raw_pnl: float, exit_price: float, exit_time: pd.Timestamp | None = None
     ) -> float:
-        """Universal FX conversion: normalize Forex / CFD PnL into account base currency."""
-        if not self._symbol or exit_price <= 0:
+        """Universal conversion: normalize raw PnL (in quote currency) into account base currency."""
+        if raw_pnl == 0.0:
+            return 0.0
+
+        # 1. Quote currency matches account currency -> raw_pnl is already in account currency
+        if self._quote_currency == self._account_currency:
             return raw_pnl
-        sym = self._symbol.upper().replace("=X", "").replace("-USD", "").replace("/", "")
-        # Common 6-letter FX pair e.g. USDJPY, EURUSD, EURJPY, EURGBP
-        if len(sym) == 6 and sym.isalpha():
-            base, quote = sym[:3], sym[3:6]
-            # 1. Quote matches account currency (e.g. EURUSD with USD account) -> raw_pnl is already in account currency
-            if quote == self._account_currency:
-                return raw_pnl
-            # 2. Base matches account currency (e.g. USDJPY with USD account) -> raw_pnl is in quote, divide by exit_price
-            if base == self._account_currency:
-                return raw_pnl / exit_price
 
-            # 3. Arbitrary cross pair (e.g. EURJPY, EURGBP, AUDJPY) -> raw_pnl is in quote currency
-            direct_pair = f"{quote}{self._account_currency}"
-            inv_pair = f"{self._account_currency}{quote}"
+        # 2. Base currency is account currency and instrument price is exit_price
+        # (e.g. USDJPY with USD account: raw_pnl is in JPY, exit_price is JPY per USD)
+        if self._base_currency == self._account_currency and exit_price > 0:
+            return raw_pnl / exit_price
 
-            # Dynamic historical FX conversion via fx_history if provided
-            hist_rate: float | None = None
-            if self._fx_history is not None and exit_time is not None:
-                if isinstance(self._fx_history, dict):
-                    if direct_pair in self._fx_history:
-                        s = self._fx_history[direct_pair]
-                        val = s.asof(exit_time)
-                        if pd.notna(val) and float(cast(Any, val)) > 0:
-                            hist_rate = float(cast(Any, val))
-                    elif inv_pair in self._fx_history:
-                        s = self._fx_history[inv_pair]
-                        val = s.asof(exit_time)
-                        if pd.notna(val) and float(cast(Any, val)) > 0:
-                            hist_rate = 1.0 / float(cast(Any, val))
-                elif isinstance(self._fx_history, pd.DataFrame):
-                    if direct_pair in self._fx_history.columns:
-                        val = self._fx_history[direct_pair].asof(exit_time)
-                        if pd.notna(val) and float(cast(Any, val)) > 0:
-                            hist_rate = float(cast(Any, val))
-                    elif inv_pair in self._fx_history.columns:
-                        val = self._fx_history[inv_pair].asof(exit_time)
-                        if pd.notna(val) and float(cast(Any, val)) > 0:
-                            hist_rate = 1.0 / float(cast(Any, val))
-
-                if hist_rate is not None:
-                    return raw_pnl * hist_rate
-                elif self._strict_fx:
-                    raise ValueError(f"Missing historical FX rate for {direct_pair} at {exit_time}")
-
-            rates = {**DEFAULT_FX_USD_RATES, **self._fx_rates}
-
-            if direct_pair in rates and rates[direct_pair] > 0:
-                return raw_pnl * rates[direct_pair]
-            elif inv_pair in rates and rates[inv_pair] > 0:
-                return raw_pnl / rates[inv_pair]
-
-            # Cross-currency via USD bridge if account currency is not USD
-            quote_in_usd: float | None = None
-            if quote == "USD":
-                quote_in_usd = 1.0
-            elif f"{quote}USD" in rates and rates[f"{quote}USD"] > 0:
-                quote_in_usd = rates[f"{quote}USD"]
-            elif f"USD{quote}" in rates and rates[f"USD{quote}"] > 0:
-                quote_in_usd = 1.0 / rates[f"USD{quote}"]
-
-            if quote_in_usd is not None:
-                pnl_usd = raw_pnl * quote_in_usd
-                if self._account_currency == "USD":
-                    return pnl_usd
-                acct_pair = f"{self._account_currency}USD"
-                inv_acct_pair = f"USD{self._account_currency}"
-                if acct_pair in rates and rates[acct_pair] > 0:
-                    return pnl_usd / rates[acct_pair]
-                elif inv_acct_pair in rates and rates[inv_acct_pair] > 0:
-                    return pnl_usd * rates[inv_acct_pair]
-
-            # Fallback for USD account when quote is JPY (e.g. EURJPY): raw_pnl in JPY
-            if self._account_currency == "USD" and quote == "JPY" and exit_price > 50:
-                return raw_pnl / (exit_price / 1.08 if base == "EUR" else exit_price)
-        return raw_pnl
+        # 3. Universal conversion from quote currency to account currency
+        rate = self._get_fx_rate(self._quote_currency, self._account_currency, exit_time)
+        return raw_pnl * rate
 
     def test_all_patterns(
         self,
         filter_news: bool = False,
         min_signals: int | None = None,
+        min_trades: int | None = None,
         sort_by: str = "win_rate",
     ) -> list[PatternResult]:
         """Test all patterns and return ranked results.
@@ -365,6 +428,8 @@ class PatternRankingTester:
             If True, exclude trades during news events
         min_signals : int, optional
             Minimum total signals required to include in ranked results (default from __init__)
+        min_trades : int, optional
+            Minimum completed trades required to include in ranked results (default from __init__)
         sort_by : str
             Ranking criteria: 'win_rate' (default, sorts by win_rate then total_pnl) or 'composite' (sorts by score)
 
@@ -374,12 +439,17 @@ class PatternRankingTester:
         """
         self._results = []
         all_patterns = self.get_all_patterns()
-        thresh = min_signals if min_signals is not None else self._min_signals
+        thresh_signals = min_signals if min_signals is not None else self._min_signals
+        thresh_trades = min_trades if min_trades is not None else self._min_trades
 
         for pattern_name in all_patterns:
             try:
                 result = self._test_single_pattern(pattern_name, filter_news)
-                if result and result.total_signals >= thresh:
+                if (
+                    result
+                    and result.total_signals >= thresh_signals
+                    and (thresh_trades is None or result.total_trades >= thresh_trades)
+                ):
                     self._results.append(result)
             except NotImplementedError:
                 # Silently skip patterns not implemented in pure-Python fallback
@@ -394,6 +464,14 @@ class PatternRankingTester:
         else:
             self._results.sort(key=lambda x: (x.win_rate, x.total_pnl), reverse=True)
         return self._results
+
+    def test_pattern(
+        self,
+        pattern_name: str,
+        filter_news: bool = False,
+    ) -> PatternResult | None:
+        """Test a single candlestick pattern by name."""
+        return self._test_single_pattern(pattern_name, filter_news=filter_news)
 
     def _test_single_pattern(
         self,
@@ -462,17 +540,60 @@ class PatternRankingTester:
         max_profit = max(t["pnl"] for t in trades) if trades else 0.0
         max_loss = min(t["pnl"] for t in trades) if trades else 0.0
 
-        # Build trade equity curve and calculate maximum drawdown
-        equity = self._initial_capital
-        curve = [equity]
-        peak = equity
-        max_drawdown = 0.0
+        # Build bar-by-bar MTM equity curve across all n_bars
+        n_bars = len(self._data)
+        closes = self._data["Close"].values
+        times = self._data.index
+
+        exits_by_bar: dict[int, list[dict[str, Any]]] = {}
+        active_by_bar: dict[int, dict[str, Any]] = {}
+
         for t in trades:
-            equity += t["pnl"]
-            curve.append(equity)
-            if equity > peak:
-                peak = equity
-            dd = peak - equity
+            e_idx = t.get("entry_idx")
+            x_idx = t.get("exit_idx")
+            if x_idx is not None:
+                exits_by_bar.setdefault(x_idx, []).append(t)
+            if e_idx is not None and x_idx is not None:
+                for bar in range(e_idx, x_idx):
+                    active_by_bar[bar] = t
+
+        if self._last_open_trade is not None:
+            e_idx = self._last_open_trade.get("entry_idx")
+            if e_idx is not None:
+                for bar in range(e_idx, n_bars):
+                    active_by_bar[bar] = self._last_open_trade
+
+        bar_equity = np.full(n_bars, self._initial_capital, dtype=float)
+        cash = self._initial_capital
+        for b in range(n_bars):
+            if b in exits_by_bar:
+                for t in exits_by_bar[b]:
+                    cash += t["pnl"]
+
+            active_t = active_by_bar.get(b)
+            if active_t is not None:
+                units = active_t.get("position", 0.0)
+                entry_p = active_t.get("entry_price", closes[b])
+                curr_p = closes[b]
+                if active_t.get("direction") == "LONG":
+                    raw_unrealized = units * (curr_p - entry_p)
+                else:
+                    raw_unrealized = units * (entry_p - curr_p)
+                unrealized = self._convert_pnl_to_account_currency(
+                    raw_unrealized, curr_p, exit_time=times[b]
+                )
+                bar_equity[b] = cash + unrealized
+            else:
+                bar_equity[b] = cash
+
+        curve = [self._initial_capital, *bar_equity.tolist()]
+
+        peak = self._initial_capital
+        max_drawdown = 0.0
+        for eq in curve:
+            if eq > peak:
+                peak = eq
+            dd = peak - eq
             if dd > max_drawdown:
                 max_drawdown = dd
 
@@ -489,19 +610,6 @@ class PatternRankingTester:
         )
 
         # Bar-level periodic returns & Periodic Sharpe (accounting for 0% return during idle holding periods)
-        n_bars = len(self._data)
-        bar_pnl = np.zeros(n_bars, dtype=float)
-        for t in trades:
-            idx = t.get("exit_idx")
-            if idx is not None and 0 <= idx < n_bars:
-                bar_pnl[idx] += t["pnl"]
-
-        bar_equity = np.full(n_bars, self._initial_capital, dtype=float)
-        curr_eq = self._initial_capital
-        for b in range(n_bars):
-            curr_eq += bar_pnl[b]
-            bar_equity[b] = curr_eq
-
         bar_returns = np.zeros(max(n_bars - 1, 1), dtype=float)
         if n_bars > 1:
             prev_eq = bar_equity[:-1]
@@ -561,33 +669,25 @@ class PatternRankingTester:
             avg_strength=avg_strength,
             profit_factor=profit_factor,
             score=score,
+            total_trades=len(trades),
         )
 
-    def _calc_position_units(self, exec_price: float) -> float:
+    def _calc_position_units(
+        self, exec_price: float, entry_time: pd.Timestamp | None = None
+    ) -> float:
         """Calculate position units in base asset for given account currency position size."""
-        if not self._symbol or exec_price <= 0:
+        if exec_price <= 0:
+            return 0.0
+
+        if self._base_currency == self._account_currency:
+            return self._position_size
+
+        if self._quote_currency == self._account_currency:
             return self._position_size / exec_price
 
-        sym = self._symbol.upper().replace("=X", "").replace("-USD", "").replace("/", "")
-        if len(sym) == 6 and sym.isalpha():
-            base, quote = sym[:3], sym[3:6]
-            # 1. Base currency is account currency (e.g. USDJPY with USD account) -> units in base is position_size
-            if base == self._account_currency:
-                return self._position_size
-            # 2. Quote currency is account currency (e.g. EURUSD with USD account) -> units = position_size / price
-            if quote == self._account_currency:
-                return self._position_size / exec_price
-
-            # 3. Cross currency (e.g. EURGBP with USD account): base is EUR
-            rates = {**DEFAULT_FX_USD_RATES, **self._fx_rates}
-            base_usd = f"{base}USD"
-            usd_base = f"USD{base}"
-            if base_usd in rates and rates[base_usd] > 0:
-                return self._position_size / rates[base_usd]
-            elif usd_base in rates and rates[usd_base] > 0:
-                return self._position_size * rates[usd_base]
-
-        return self._position_size / exec_price
+        # Cross currency: convert account_currency to quote_currency at entry_time
+        rate = self._get_fx_rate(self._account_currency, self._quote_currency, entry_time)
+        return (self._position_size * rate) / exec_price
 
     def _calculate_trades(self, signals: np.ndarray) -> list[dict[str, Any]]:
         """Calculate trades from signals with short support, slippage, and commissions."""
@@ -598,7 +698,7 @@ class PatternRankingTester:
 
         closes = self._data["Close"].values
         opens = self._data["Open"].values
-        times = self._data.index.to_numpy()
+        times = self._data.index
         n = len(signals)
 
         is_next_open = self._execution == "next_open"
@@ -607,6 +707,12 @@ class PatternRankingTester:
         for i in range(loop_limit):
             exec_price = opens[i + 1] if is_next_open else closes[i]
             exec_idx = (i + 1) if is_next_open else i
+            entry_time_curr = times[exec_idx]
+            if not isinstance(entry_time_curr, pd.Timestamp):
+                try:
+                    entry_time_curr = pd.to_datetime(entry_time_curr)
+                except Exception:
+                    entry_time_curr = None
 
             # Check time-based holding period exit
             if (
@@ -631,10 +737,12 @@ class PatternRankingTester:
                 )
                 trades.append(
                     {
+                        "entry_idx": entry_idx,
                         "entry_time": times[entry_idx],
                         "exit_time": times[exec_idx],
                         "exit_idx": exec_idx,
                         "direction": direction,
+                        "position": abs(position),
                         "entry_price": entry_price,
                         "exit_price": exec_price,
                         "pnl": pnl,
@@ -661,10 +769,12 @@ class PatternRankingTester:
                     )
                     trades.append(
                         {
+                            "entry_idx": entry_idx,
                             "entry_time": times[entry_idx],
                             "exit_time": times[exec_idx],
                             "exit_idx": exec_idx,
                             "direction": "SHORT",
+                            "position": abs(position),
                             "entry_price": entry_price,
                             "exit_price": exec_price,
                             "pnl": pnl,
@@ -676,7 +786,9 @@ class PatternRankingTester:
                 elif position == 0.0:
                     entry_idx = exec_idx
                     entry_price = exec_price + self._slippage
-                    position = self._calc_position_units(entry_price)
+                    position = self._calc_position_units(
+                        entry_price, entry_time=entry_time_curr
+                    )
 
             elif signal == -1:
                 # Close Long if currently long
@@ -691,10 +803,12 @@ class PatternRankingTester:
                     )
                     trades.append(
                         {
+                            "entry_idx": entry_idx,
                             "entry_time": times[entry_idx],
                             "exit_time": times[exec_idx],
                             "exit_idx": exec_idx,
                             "direction": "LONG",
+                            "position": abs(position),
                             "entry_price": entry_price,
                             "exit_price": exec_price,
                             "pnl": pnl,
@@ -706,7 +820,9 @@ class PatternRankingTester:
                 elif position == 0.0 and self._allow_short:
                     entry_idx = exec_idx
                     entry_price = exec_price - self._slippage
-                    position = -self._calc_position_units(entry_price)
+                    position = -self._calc_position_units(
+                        entry_price, entry_time=entry_time_curr
+                    )
 
         # Force-close position on the last bar if still open
         if self._force_exit_on_last_bar and position != 0.0 and entry_idx is not None:
@@ -725,16 +841,29 @@ class PatternRankingTester:
             )
             trades.append(
                 {
+                    "entry_idx": entry_idx,
                     "entry_time": times[entry_idx],
                     "exit_time": times[-1],
                     "exit_idx": n - 1,
                     "direction": direction,
+                    "position": abs(position),
                     "entry_price": entry_price,
                     "exit_price": last_exit_price,
                     "pnl": pnl,
                     "forced_exit": True,
                 }
             )
+            self._last_open_trade = None
+        elif position != 0.0 and entry_idx is not None:
+            self._last_open_trade = {
+                "entry_idx": entry_idx,
+                "entry_time": times[entry_idx],
+                "direction": "LONG" if position > 0 else "SHORT",
+                "position": abs(position),
+                "entry_price": entry_price,
+            }
+        else:
+            self._last_open_trade = None
 
         return trades
 
@@ -761,6 +890,8 @@ class PatternRankingTester:
                     "Total PnL (With Filter)": f"${r_yes.total_pnl:.2f}" if r_yes else "N/A",
                     "Signals (No Filter)": r_no.total_signals,
                     "Signals (With Filter)": r_yes.total_signals if r_yes else 0,
+                    "Trades (No Filter)": r_no.total_trades,
+                    "Trades (With Filter)": r_yes.total_trades if r_yes else 0,
                     "Sharpe (No Filter)": f"{r_no.sharpe_ratio:.2f}",
                     "Sharpe (With Filter)": f"{r_yes.sharpe_ratio:.2f}" if r_yes else "N/A",
                 }
@@ -777,6 +908,7 @@ class PatternRankingTester:
                     "Rank": len(data) + 1,
                     "Pattern": result.pattern_name,
                     "Total Signals": result.total_signals,
+                    "Total Trades": result.total_trades,
                     "Winning Trades": result.winning_trades,
                     "Losing Trades": result.losing_trades,
                     "Win Rate %": f"{result.win_rate:.2f}",

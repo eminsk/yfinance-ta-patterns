@@ -1,6 +1,6 @@
 [project]
 name = "yfinance-ta-patterns"
-version = "0.3.6"
+version = "0.3.7"
 description = "Institutional-grade market candlestick pattern scanner with multi-asset backtesting, AI confluence scoring, and LLM market intelligence."
 readme = "README.md"
 requires-python = ">=3.12"

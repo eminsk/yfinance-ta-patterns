@@ -992,7 +992,7 @@ wheels = [
 
 [[package]]
 name = "yfinance-ta-patterns"
-version = "0.3.5"
+version = "0.3.7"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
@@ -1002,6 +1002,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+all = [
+    { name = "ta-lib" },
+]
 dev = [
     { name = "mypy" },
     { name = "pandas-stubs" },
@@ -1024,8 +1027,9 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pytz", specifier = ">=2024.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
+    { name = "ta-lib", marker = "extra == 'all'", specifier = ">=0.6.8" },
     { name = "ta-lib", marker = "extra == 'talib'", specifier = ">=0.6.8" },
     { name = "types-pytz", marker = "extra == 'dev'", specifier = ">=2024.1" },
     { name = "yfinance", specifier = ">=0.2.66" },
 ]
-provides-extras = ["talib", "dev"]
+provides-extras = ["talib", "all", "dev"]
