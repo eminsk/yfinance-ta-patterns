@@ -160,6 +160,7 @@ class PatternRankingTester:
         "_holding_period",
         "_initial_capital",
         "_last_open_trade",
+        "_max_fx_staleness",
         "_min_signals",
         "_min_trades",
         "_news_dates",
@@ -201,6 +202,7 @@ class PatternRankingTester:
         base_currency: str | None = None,
         quote_currency: str | None = None,
         min_trades: int | None = None,
+        max_fx_staleness: pd.Timedelta | str | None = "7D",
     ) -> None:
         """Initialize pattern tester.
 
@@ -278,6 +280,9 @@ class PatternRankingTester:
         self._fx_rates: dict[str, float] = fx_rates or {}
         self._fx_history: dict[str, pd.Series] | pd.DataFrame | None = fx_history
         self._strict_fx: bool = strict_fx
+        self._max_fx_staleness: pd.Timedelta | None = (
+            pd.Timedelta(max_fx_staleness) if isinstance(max_fx_staleness, str) else max_fx_staleness
+        )
         self._asset_type: str = asset_type
         self._sharpe_mode: str = sharpe_mode
         self._holding_period: int | None = holding_period
@@ -328,17 +333,40 @@ class PatternRankingTester:
                         return self._fx_history[c]
             return None
 
+        def check_staleness_and_val(s: pd.Series) -> float | None:
+            ts = timestamp
+            s_tz = getattr(s.index, "tz", None)
+            if s_tz is not None and ts.tz is None:
+                ts = ts.tz_localize("UTC").tz_convert(s_tz)
+            elif s_tz is None and ts.tz is not None:
+                ts = ts.tz_localize(None)
+
+            sub = s.loc[:ts].dropna()
+            if sub.empty:
+                return None
+            last_ts = sub.index[-1]
+            val = float(cast(Any, sub.iloc[-1]))
+            if val <= 0:
+                return None
+
+            if self._max_fx_staleness is not None:
+                staleness = abs(ts - last_ts)
+                if staleness > self._max_fx_staleness:
+                    return None
+
+            return val
+
         s_dir = get_series(direct_pair)
         if s_dir is not None:
-            val = s_dir.asof(timestamp)
-            if pd.notna(val) and float(cast(Any, val)) > 0:
-                return float(cast(Any, val))
+            val = check_staleness_and_val(s_dir)
+            if val is not None:
+                return val
 
         s_inv = get_series(inv_pair)
         if s_inv is not None:
-            val = s_inv.asof(timestamp)
-            if pd.notna(val) and float(cast(Any, val)) > 0:
-                return 1.0 / float(cast(Any, val))
+            val = check_staleness_and_val(s_inv)
+            if val is not None:
+                return 1.0 / val
 
         return None
 
@@ -638,12 +666,14 @@ class PatternRankingTester:
         self.equity_curve = curve
         self.trades = trades
 
-        # Trade-level Sharpe ratio
+        # Trade-level Sharpe ratio (scaled by annual trade frequency)
         pnls = [t["pnl"] for t in trades]
         std_pnl = float(np.std(pnls))
+        duration_years = max(n_bars / self._periods_per_year, 1e-6)
+        trades_per_year = len(trades) / duration_years
         trade_sharpe = (
-            (float(np.mean(pnls)) / std_pnl) * float(np.sqrt(self._periods_per_year))
-            if len(pnls) > 1 and std_pnl > 0
+            (float(np.mean(pnls)) / std_pnl) * float(np.sqrt(trades_per_year))
+            if len(pnls) > 1 and std_pnl > 0 and trades_per_year > 0
             else 0.0
         )
 

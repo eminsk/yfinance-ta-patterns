@@ -1034,10 +1034,29 @@ def test_screenshot2_forex_4h_completeness() -> None:
     res_complete = loader_forex.process(df_complete)
     assert len(res_complete) == 1
 
-    # Equities / stocks (e.g. AAPL) allow partial session boundary bars
+    # Equities: intra-session dropped bar (missing 10:00) is rejected
     loader_stock = MarketDataLoader("AAPL", interval="4h", timezone="UTC", closed_only=False)
     res_stock = loader_stock.process(df_incomplete)
-    assert len(res_stock) == 1
+    assert len(res_stock) == 0
+
+    # Equities: genuine partial session boundary without intra-session gaps is allowed
+    boundary_hours = [
+        pd.Timestamp("2025-01-15 08:00:00", tz="UTC"),
+        pd.Timestamp("2025-01-15 09:00:00", tz="UTC"),
+        pd.Timestamp("2025-01-15 10:00:00", tz="UTC"),
+    ]
+    df_boundary = pd.DataFrame(
+        {
+            "Open": [1.05] * 3,
+            "High": [1.06] * 3,
+            "Low": [1.04] * 3,
+            "Close": [1.055] * 3,
+            "Volume": [100.0] * 3,
+        },
+        index=pd.DatetimeIndex(boundary_hours),
+    )
+    res_boundary = loader_stock.process(df_boundary)
+    assert len(res_boundary) == 1
 
 
 def test_screenshot3_crypto_ticker_slashes() -> None:

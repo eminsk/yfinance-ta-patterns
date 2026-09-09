@@ -7,7 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("yfinance-ta-patterns")
 except PackageNotFoundError:  # pragma: no cover - during editable installs
-    __version__ = "0.3.9"
+    __version__ = "0.3.10"
 
 
 from .ai import (

@@ -162,20 +162,20 @@ def calc_wilder_rsi(close: pd.Series, period: int = 14) -> pd.Series:
     avg_g = float(np.mean(gain[1 : eff_period + 1]))
     avg_l = float(np.mean(loss[1 : eff_period + 1]))
 
-    if avg_l == 0.0:
-        rsi[eff_period] = 100.0 if avg_g > 0 else 50.0
+    total = avg_g + avg_l
+    if total == 0.0:
+        rsi[eff_period] = 0.0
     else:
-        rs = avg_g / avg_l
-        rsi[eff_period] = 100.0 - (100.0 / (1.0 + rs))
+        rsi[eff_period] = 100.0 * (avg_g / total)
 
     for i in range(eff_period + 1, n):
         avg_g = (avg_g * (period - 1) + gain[i]) / period
         avg_l = (avg_l * (period - 1) + loss[i]) / period
-        if avg_l == 0.0:
-            rsi[i] = 100.0 if avg_g > 0 else 50.0
+        total = avg_g + avg_l
+        if total == 0.0:
+            rsi[i] = 0.0
         else:
-            rs = avg_g / avg_l
-            rsi[i] = 100.0 - (100.0 / (1.0 + rs))
+            rsi[i] = 100.0 * (avg_g / total)
 
     # Initial bars before eff_period remain NaN (zero future lookahead)
     return pd.Series(rsi, index=close.index)

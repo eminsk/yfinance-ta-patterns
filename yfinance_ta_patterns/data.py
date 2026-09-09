@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 from typing import Any, cast
 
 import numpy as np
@@ -112,6 +113,12 @@ _KNOWN_CRYPTO_SYMBOLS: set[str] = {
     "RENDER",
     "PEPE",
     "HBAR",
+    "FET",
+    "TAO",
+    "INJ",
+    "TIA",
+    "SEI",
+    "KAS",
 }
 
 
@@ -214,10 +221,16 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
         parts = clean.split("/")
         if len(parts) == 2:
             base, quote = parts[0], parts[1]
-            if asset_type.lower() == "auto" and base in _KNOWN_CRYPTO_SYMBOLS:
-                return f"{base}-{quote}"
             if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
                 return f"{base}{quote}=X"
+            if (
+                base in _KNOWN_CRYPTO_SYMBOLS
+                or quote in _KNOWN_CRYPTO_SYMBOLS
+                or quote in _KNOWN_CRYPTO_QUOTES
+                or quote in _CURRENCY_CODES
+                or quote in ("USDT", "USDC")
+            ):
+                return f"{base}-{quote}"
             if len(base) == 3 and len(quote) == 3:
                 clean = f"{base}{quote}"
 
@@ -276,14 +289,20 @@ def classify_asset(symbol: str, asset_type: str = "auto") -> str:
         parts = clean.split(sep)
         if len(parts) == 2:
             base, quote = parts[0], parts[1]
+            if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
+                return "forex"
             if (
                 base in _KNOWN_CRYPTO_SYMBOLS
                 or quote in _KNOWN_CRYPTO_SYMBOLS
                 or quote in {"USDT", "USDC"}
             ):
                 return "crypto"
-            if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
-                return "forex"
+            if (
+                (quote in _CURRENCY_CODES or quote in _KNOWN_CRYPTO_QUOTES)
+                and base not in _CURRENCY_CODES
+                and len(quote) >= 3
+            ):
+                return "crypto"
 
     # Check 6-letter FX e.g. EURUSD
     if clean in _COMMON_FOREX_PAIRS:
@@ -468,6 +487,32 @@ def validate_ohlc(data: pd.DataFrame, strict: bool = False) -> pd.DataFrame:
     return cast(pd.DataFrame, cleaned)
 
 
+def _get_market_session_hours(
+    symbol: str, d: datetime.date
+) -> tuple[str, datetime.time, datetime.time]:
+    """Get exchange timezone, open time, and close time for an equity symbol."""
+    clean_sym = symbol.strip().upper()
+    if clean_sym.endswith(".L"):
+        return "Europe/London", datetime.time(8, 0), datetime.time(16, 30)
+    if any(clean_sym.endswith(sfx) for sfx in (".DE", ".PA", ".AS", ".BR", ".MI", ".MC", ".VI", ".HE", ".F", ".AT")):
+        return "Europe/Berlin", datetime.time(9, 0), datetime.time(17, 30)
+    if clean_sym.endswith(".T"):
+        close_min = 30 if d >= datetime.date(2024, 11, 5) else 0
+        return "Asia/Tokyo", datetime.time(9, 0), datetime.time(15, close_min)
+    if clean_sym.endswith(".HK"):
+        return "Asia/Hong_Kong", datetime.time(9, 30), datetime.time(16, 0)
+    # Default US Equities
+    is_early_close = False
+    if d.month == 11 and d.weekday() == 4 and 23 <= d.day <= 29:
+        is_early_close = True  # Black Friday
+    elif d.month == 12 and d.day == 24 and d.weekday() < 5:
+        is_early_close = True  # Christmas Eve
+    elif d.month == 7 and d.day == 3 and d.weekday() < 4:
+        is_early_close = True  # Day before July 4th
+    close_hour = 13 if is_early_close else 16
+    return "America/New_York", datetime.time(9, 30), datetime.time(close_hour, 0)
+
+
 class MarketDataLoader:
     """Universal market data loader for Yahoo Finance tickers."""
 
@@ -575,16 +620,70 @@ class MarketDataLoader:
         def _is_bucket_complete(ts: pd.Timestamp, count: int) -> bool:
             if is_crypto:
                 return count >= 4
+
+            rule_str = str(self._resample_rule or "4h")
+            bucket_start = ts
+            bucket_end = ts + pd.Timedelta(rule_str)
+            dt_index = cast(pd.DatetimeIndex, data.index)
+            bucket_stamps = dt_index[(dt_index >= bucket_start) & (dt_index < bucket_end)]
+            if len(bucket_stamps) == 0:
+                return False
+
             if is_forex:
-                day = ts.dayofweek
-                hour = ts.hour
-                # Boundary sessions (Sunday open or Friday close) allow partial
-                is_boundary = (day == 6 and hour >= 20) or (day == 4 and hour >= 20)
-                if is_boundary:
-                    return count >= 1
-                return count >= 4
-            # Stocks and other assets: partial session blocks allowed
-            return count >= 1
+                open_slots = 0
+                for k in range(4):
+                    slot = ts + pd.Timedelta(hours=k)
+                    slot_ny = (
+                        slot.tz_convert("America/New_York")
+                        if slot.tz is not None
+                        else slot.tz_localize("UTC").tz_convert("America/New_York")
+                    )
+                    wd = slot_ny.weekday()
+                    hr = slot_ny.hour
+                    is_open = (
+                        (wd == 6 and hr >= 17)
+                        or (wd in (0, 1, 2, 3))
+                        or (wd == 4 and hr < 17)
+                    )
+                    if is_open:
+                        open_slots += 1
+                if open_slots == 0:
+                    return False
+                if count < open_slots:
+                    return False
+                if len(bucket_stamps) > 1:
+                    diffs = np.diff(bucket_stamps.values).astype("timedelta64[m]").astype(int)
+                    if np.any(diffs > 75):
+                        return False
+                return True
+
+            # Stocks and other assets:
+            if count >= 4:
+                return True
+
+            # Check intra-bucket gaps between existing bars
+            if len(bucket_stamps) > 1:
+                diffs = np.diff(bucket_stamps.values).astype("timedelta64[m]").astype(int)
+                if np.any(diffs > 75):
+                    return False
+
+            # Check that missing slots in the 4h window are outside exchange trading hours
+            tz_name, open_time, close_time = _get_market_session_hours(self.ticker, ts.date())
+            for k in range(4):
+                slot = ts + pd.Timedelta(hours=k)
+                has_bar = any(abs((b_ts - slot).total_seconds()) <= 1800 for b_ts in bucket_stamps)
+                if not has_bar:
+                    slot_local = (
+                        slot.tz_convert(tz_name)
+                        if slot.tz is not None
+                        else slot.tz_localize("UTC").tz_convert(tz_name)
+                    )
+                    if slot_local.weekday() < 5:
+                        t_val = slot_local.time()
+                        if open_time <= t_val < close_time:
+                            # Missing bar inside regular trading session!
+                            return False
+            return True
 
         valid_buckets = [
             ts
@@ -680,37 +779,15 @@ class MarketDataLoader:
                         ).tz_convert(pytz.UTC)
                     else:
                         # Stock / Commodity / Index
-                        if clean_sym.endswith(".L"):
-                            close_ts = pd.Timestamp(
-                                year=d.year, month=d.month, day=d.day, hour=16, minute=30, tz="Europe/London"
-                            ).tz_convert(pytz.UTC)
-                        elif any(clean_sym.endswith(sfx) for sfx in (".DE", ".PA", ".AS", ".BR", ".MI", ".MC", ".VI", ".HE")):
-                            close_ts = pd.Timestamp(
-                                year=d.year, month=d.month, day=d.day, hour=17, minute=30, tz="Europe/Berlin"
-                            ).tz_convert(pytz.UTC)
-                        elif clean_sym.endswith(".T"):
-                            close_ts = pd.Timestamp(
-                                year=d.year, month=d.month, day=d.day, hour=15, minute=0, tz="Asia/Tokyo"
-                            ).tz_convert(pytz.UTC)
-                        elif clean_sym.endswith(".HK"):
-                            close_ts = pd.Timestamp(
-                                year=d.year, month=d.month, day=d.day, hour=16, minute=0, tz="Asia/Hong_Kong"
-                            ).tz_convert(pytz.UTC)
-                        else:
-                            # US Equities (NYSE / NASDAQ)
-                            # Early close check (13:00 America/New_York)
-                            is_early_close = False
-                            if d.month == 11 and d.weekday() == 4 and 23 <= d.day <= 29:
-                                is_early_close = True  # Fourth Friday of November (Black Friday)
-                            elif d.month == 12 and d.day == 24 and d.weekday() < 5:
-                                is_early_close = True  # Christmas Eve on weekday
-                            elif d.month == 7 and d.day == 3 and d.weekday() < 4:
-                                is_early_close = True  # Day before July 4th if July 4th is weekday
-
-                            close_hour = 13 if is_early_close else 16
-                            close_ts = pd.Timestamp(
-                                year=d.year, month=d.month, day=d.day, hour=close_hour, minute=0, tz="America/New_York"
-                            ).tz_convert(pytz.UTC)
+                        tz_name, _open_t, close_t = _get_market_session_hours(clean_sym, d)
+                        close_ts = pd.Timestamp(
+                            year=d.year,
+                            month=d.month,
+                            day=d.day,
+                            hour=close_t.hour,
+                            minute=close_t.minute,
+                            tz=tz_name,
+                        ).tz_convert(pytz.UTC)
 
                     candle_end_list.append(close_ts)
 
