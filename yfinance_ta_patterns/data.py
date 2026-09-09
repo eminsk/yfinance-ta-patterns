@@ -325,11 +325,25 @@ def resolve_asset_currencies(symbol: str, asset_type: str = "auto") -> tuple[str
         if clean.endswith(suffix):
             return clean, quote_curr
 
+    # If explicitly or auto-classified as stock, treat entire ticker as base and USD as quote
+    a_type = asset_type.lower() if asset_type else "auto"
+    if a_type == "stock" or (a_type == "auto" and classify_asset(clean, "auto") == "stock"):
+        return clean, "USD"
+
     sep = "-" if "-" in clean else ("/" if "/" in clean else None)
     if sep:
         parts = clean.split(sep)
         if len(parts) == 2:
-            return parts[0], parts[1]
+            base, quote = parts[0], parts[1]
+            if (
+                base in _KNOWN_CRYPTO_SYMBOLS
+                or quote in _KNOWN_CRYPTO_SYMBOLS
+                or quote in _KNOWN_CRYPTO_QUOTES
+                or (base in _CURRENCY_CODES and quote in _CURRENCY_CODES)
+            ):
+                return base, quote
+            if a_type in ("crypto", "forex"):
+                return base, quote
 
     # Check unseparated crypto (e.g. BTCUSDT, DOGEUSD)
     for quote in _KNOWN_CRYPTO_QUOTES:
@@ -370,8 +384,10 @@ INTERVAL_DELTAS: dict[str, pd.Timedelta] = {
     "30m": pd.Timedelta(minutes=30),
     "60m": pd.Timedelta(hours=1),
     "1h": pd.Timedelta(hours=1),
+    "90m": pd.Timedelta(minutes=90),
     "4h": pd.Timedelta(hours=4),
     "1d": pd.Timedelta("1D"),
+    "5d": pd.Timedelta("5D"),
     "1wk": pd.Timedelta("7D"),
 }
 
@@ -636,11 +652,7 @@ class MarketDataLoader:
         if self._resample_rule:
             data = self._resample_if_needed(data, now_utc=now_utc)
 
-        # Convert to target user timezone
-        if isinstance(data.index, pd.DatetimeIndex):
-            data.index = data.index.tz_convert(self.timezone)
-
-        # Universal closed-only filtering for all intervals (Issue 1: YF-001, Screenshot 1 & 4)
+        # Universal closed-only filtering in UTC / market session time before user timezone conversion
         if self.closed_only and not data.empty and isinstance(data.index, pd.DatetimeIndex):
             now = now_utc if now_utc is not None else pd.Timestamp.now(tz=pytz.UTC)
             if now.tz is None:
@@ -648,6 +660,8 @@ class MarketDataLoader:
 
             if self.interval == "1mo":
                 candle_ends = data.index + pd.DateOffset(months=1)
+            elif self.interval == "3mo":
+                candle_ends = data.index + pd.DateOffset(months=3)
             elif self.interval in ("1d", "1D"):
                 # Session-aware daily candle close
                 asset_class = classify_asset(self.ticker, self.asset_type)
@@ -701,9 +715,11 @@ class MarketDataLoader:
                     candle_end_list.append(close_ts)
 
                 candle_ends = pd.DatetimeIndex(candle_end_list)
-            else:
-                delta = INTERVAL_DELTAS.get(self.interval, pd.Timedelta("1D"))
+            elif self.interval in INTERVAL_DELTAS:
+                delta = INTERVAL_DELTAS[self.interval]
                 candle_ends = data.index + delta
+            else:
+                raise ValueError(f"Unsupported interval for closed_only filtering: {self.interval}")
 
             if candle_ends.tz is not None and now.tz is not None:
                 now_cmp = now.tz_convert(candle_ends.tz)
@@ -714,6 +730,10 @@ class MarketDataLoader:
             else:
                 now_cmp = now
             data = data.loc[candle_ends <= now_cmp]
+
+        # Convert to target user timezone after closed-only filtering
+        if isinstance(data.index, pd.DatetimeIndex):
+            data.index = data.index.tz_convert(self.timezone)
 
         return data
 

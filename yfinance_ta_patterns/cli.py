@@ -301,7 +301,7 @@ def run_cli(args: argparse.Namespace) -> int:
         for res in all_scored_results:
             conf_pct = f"{res.confidence_score * 100:.1f}%"
             print(
-                f"\n[{res.grade.value}] {res.pattern_name} at {res.timestamp} | AI Confidence: {conf_pct}"
+                f"\n[{res.grade.value}] {res.pattern_name} at {res.timestamp} | AI Confluence: {conf_pct}"
             )
             print(
                 f"  Regime: {res.trend_regime} | RVOL: {res.rvol:.2f}x | RSI: {res.rsi:.1f} | ATR: {res.atr:.5f}"

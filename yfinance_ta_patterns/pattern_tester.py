@@ -24,10 +24,13 @@ TIMEFRAME_PERIODS_PER_YEAR: dict[str, float] = {
     "30m": 252.0 * 13.0,  # 3,276 periods/year
     "60m": 252.0 * 6.5,  # 1,638 periods/year
     "1h": 252.0 * 6.5,  # 1,638 periods/year
+    "90m": 252.0 * (390.0 / 90.0),  # 1,092 periods/year
     "4h": 252.0 * 2.0,  # 504 periods/year
     "1d": 252.0,  # 252 trading days/year
+    "5d": 252.0 / 5.0,  # 50.4 periods/year
     "1wk": 52.0,  # 52 weeks/year
     "1mo": 12.0,  # 12 months/year
+    "3mo": 4.0,  # 4 quarters/year
 }
 
 # 24/7 continuous markets (Cryptocurrency: 365 days, 24h = 8,760 hours/year)
@@ -39,10 +42,13 @@ CRYPTO_PERIODS_PER_YEAR: dict[str, float] = {
     "30m": 365.0 * 48.0,  # 17,520 periods/year
     "60m": 365.0 * 24.0,  # 8,760 periods/year
     "1h": 365.0 * 24.0,  # 8,760 periods/year
+    "90m": 365.0 * 16.0,  # 5,840 periods/year
     "4h": 365.0 * 6.0,  # 2,190 periods/year
     "1d": 365.0,  # 365 days/year
+    "5d": 365.0 / 5.0,  # 73 periods/year
     "1wk": 52.0,
     "1mo": 12.0,
+    "3mo": 4.0,
 }
 
 # 24/5 continuous markets (Forex: ~260 trading days, 24h = 6,240 hours/year)
@@ -54,10 +60,13 @@ FOREX_PERIODS_PER_YEAR: dict[str, float] = {
     "30m": 260.0 * 48.0,  # 12,480 periods/year
     "60m": 260.0 * 24.0,  # 6,240 periods/year
     "1h": 260.0 * 24.0,  # 6,240 periods/year
+    "90m": 260.0 * 16.0,  # 4,160 periods/year
     "4h": 260.0 * 6.0,  # 1,560 periods/year
     "1d": 260.0,  # 260 days/year
+    "5d": 260.0 / 5.0,  # 52 periods/year
     "1wk": 52.0,
     "1mo": 12.0,
+    "3mo": 4.0,
 }
 
 # Default baseline FX exchange rates to USD for major cross currencies
@@ -417,7 +426,10 @@ class PatternRankingTester:
         if from_usd_rate is not None and to_usd_rate is not None and to_usd_rate > 0:
             return from_usd_rate / to_usd_rate
 
-        return 1.0
+        raise ValueError(
+            f"Unable to convert currency from {from_curr} to {to_curr}: no exchange rate available. "
+            f"Please provide fx_history or fx_rates."
+        )
 
     def _convert_pnl_to_account_currency(
         self, raw_pnl: float, exit_price: float, exit_time: pd.Timestamp | None = None

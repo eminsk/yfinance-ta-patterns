@@ -150,7 +150,7 @@ class AIMarketAnalyst:
         for i, res in enumerate(results[:5], 1):
             grade_badge = f"[{res.grade.value}]"
             conf_pct = f"{res.confidence_score * 100:.1f}%"
-            lines.append(f"### {i}. {res.pattern_name} - {grade_badge} (Confidence: {conf_pct})")
+            lines.append(f"### {i}. {res.pattern_name} - {grade_badge} (Confluence: {conf_pct})")
             lines.append(f"- **Timestamp:** `{res.timestamp}` | **Regime:** `{res.trend_regime}`")
             lines.append(
                 f"- **Metrics:** RVOL: `{res.rvol:.2f}x` | RSI(14): `{res.rsi:.1f}` | ATR: `{res.atr:.5f}`"

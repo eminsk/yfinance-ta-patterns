@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, cast
 
@@ -51,21 +51,33 @@ class TradeSetup:
 
 @dataclass(slots=True, frozen=True)
 class PatternConfidenceResult:
-    """Comprehensive AI evaluation of a detected candlestick pattern."""
+    """Comprehensive AI evaluation of a detected candlestick pattern.
+
+    Note: The score (`confluence_score` / `confidence_score`) is an interpretable, deterministic
+    quantitative confluence heuristic (evaluating trend regime, volume expansion, RSI momentum,
+    and candle geometry), not an uncalibrated historical win-rate probability.
+    """
 
     pattern_name: str
     timestamp: pd.Timestamp
     raw_signal: int
-    confidence_score: float
-    grade: SignalGrade
-    trend_regime: str
-    rvol: float
-    rsi: float
-    atr: float
-    confluence_factors: list[str]
-    risk_factors: list[str]
-    trade_setup: TradeSetup | None
+    confidence_score: float = 0.0
+    grade: SignalGrade = SignalGrade.WEAK
+    trend_regime: str = "NEUTRAL"
+    rvol: float = 1.0
+    rsi: float = 50.0
+    atr: float = 0.0
+    confluence_factors: list[str] = field(default_factory=list)
+    risk_factors: list[str] = field(default_factory=list)
+    trade_setup: TradeSetup | None = None
     insufficient_history: bool = False
+    confluence_score: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.confluence_score == 0.0 and self.confidence_score != 0.0:
+            object.__setattr__(self, "confluence_score", self.confidence_score)
+        elif self.confidence_score == 0.0 and self.confluence_score != 0.0:
+            object.__setattr__(self, "confidence_score", self.confluence_score)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert result to a structured dictionary for JSON / LLM consumption."""
@@ -73,6 +85,7 @@ class PatternConfidenceResult:
             "pattern": self.pattern_name,
             "timestamp": str(self.timestamp),
             "raw_signal": self.raw_signal,
+            "confluence_score": round(self.confluence_score, 4),
             "confidence_score": round(self.confidence_score, 4),
             "grade": self.grade.value,
             "trend_regime": self.trend_regime,
@@ -89,8 +102,13 @@ class PatternConfidenceResult:
 
     @property
     def confidence(self) -> float:
-        """Convenience alias for confidence_score."""
-        return self.confidence_score
+        """Convenience alias for confidence_score / confluence_score."""
+        return self.confluence_score
+
+    @property
+    def confluence(self) -> float:
+        """Convenience alias for confluence_score."""
+        return self.confluence_score
 
     @property
     def setup(self) -> TradeSetup | None:
@@ -209,14 +227,14 @@ def calc_wilder_atr(
 
 
 class AIPatternScorer:
-    """Probabilistic multi-factor technical scoring engine for candlestick patterns.
+    """Interpretable multi-factor technical confluence scoring engine for candlestick patterns.
 
     Evaluates market context (Trend regime, RVOL volume expansion, Wilder RSI momentum,
     and ATR volatility) to transform discrete TA-Lib signals (+100/-100) into calibrated
-    confidence scores (0.0 to 1.0) and actionable risk-managed trade setups.
+    confluence scores (0.0 to 1.0) and actionable risk-managed trade setups.
 
-    Note: This is an interpretable, deterministic quantitative confluence scoring engine,
-    not a black-box deep learning model.
+    Note: This is an interpretable, deterministic quantitative confluence heuristic assessing
+    indicator alignment, not an uncalibrated historical win-rate probability model.
     """
 
     def __init__(self, data: pd.DataFrame) -> None:
