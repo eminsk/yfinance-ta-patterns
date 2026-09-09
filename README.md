@@ -59,15 +59,28 @@ pip install "yfinance-ta-patterns[talib]"
 
 #### Option C: Native TA-Lib on Windows (Pre-built Wheels)
 
-For full 61-pattern scanning without compiling C code manually, install our pre-built Windows x64 wheels:
+For full 61-pattern scanning without compiling C code manually, install our pre-built Windows x64 wheels directly:
 
 ```bash
-# Python 3.14 (Windows x64):
+# Python 3.14t (Free-Threaded No-GIL):
+uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp314-cp314t-win_amd64.whl
+
+# Python 3.14 (Standard GIL):
 uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp314-cp314-win_amd64.whl
 
-# Python 3.12 (Windows x64):
+# Python 3.15t (Free-Threaded No-GIL Preview):
+uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp315-cp315t-win_amd64.whl
+
+# Python 3.15 (Standard GIL Preview):
+uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp315-cp315-win_amd64.whl
+
+# Python 3.13 (Standard GIL):
+uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp313-cp313-win_amd64.whl
+
+# Python 3.12 (Standard GIL):
 uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp312-cp312-win_amd64.whl
 ```
+
 
 
 #### 🐍 Python Version Compatibility Matrix
