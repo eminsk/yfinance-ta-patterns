@@ -81,6 +81,28 @@ uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/
 uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp312-cp312-win_amd64.whl
 ```
 
+#### Option D: Native TA-Lib on Linux & macOS (Apple Silicon & Intel)
+
+- **macOS (Homebrew):**
+  ```bash
+  brew install ta-lib
+  export TA_INCLUDE_PATH="$(brew --prefix)/include"
+  export TA_LIBRARY_PATH="$(brew --prefix)/lib"
+  uv pip install ta-lib
+  ```
+
+- **Linux (Ubuntu / Debian / Arch):**
+  ```bash
+  # Ubuntu / Debian:
+  sudo apt-get update && sudo apt-get install -y libta-lib0 libta-lib-dev
+  # Arch Linux:
+  yay -S ta-lib
+
+  # Then install the python wrapper:
+  uv pip install ta-lib
+  ```
+
+
 
 
 #### 🐍 Python Version Compatibility Matrix
