@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -77,7 +77,7 @@ def is_crypto_symbol(symbol: str) -> bool:
         "-USD" in s
         or "-EUR" in s
         or "-USDT" in s
-        or s.startswith(("BTC", "ETH", "SOL", "DOGE", "XRP"))
+        or s.endswith(("-BTC", "-ETH", "-USDT"))
     )
 
 
@@ -92,9 +92,20 @@ def is_forex_symbol(symbol: str) -> bool:
     return len(clean) == 6 and clean.isalpha() and not is_crypto_symbol(s)
 
 
-def resolve_periods_per_year(timeframe: str, symbol: str = "") -> float:
+def resolve_periods_per_year(
+    timeframe: str, symbol: str = "", asset_type: str = "auto"
+) -> float:
     """Resolve asset-aware annualization factor for Sharpe Ratio calculation."""
     tf = normalize_interval(timeframe) if timeframe else "1d"
+    a_type = asset_type.lower()
+    if a_type == "crypto":
+        return CRYPTO_PERIODS_PER_YEAR.get(tf, 365.0)
+    elif a_type == "forex":
+        return FOREX_PERIODS_PER_YEAR.get(tf, 260.0)
+    elif a_type == "stock":
+        return TIMEFRAME_PERIODS_PER_YEAR.get(tf, 252.0)
+
+    # auto mode
     if symbol and is_crypto_symbol(symbol):
         return CRYPTO_PERIODS_PER_YEAR.get(tf, 365.0)
     elif symbol and is_forex_symbol(symbol):
@@ -134,10 +145,12 @@ class PatternRankingTester:
     __slots__ = (
         "_account_currency",
         "_allow_short",
+        "_asset_type",
         "_commission",
         "_data",
         "_execution",
         "_force_exit_on_last_bar",
+        "_fx_history",
         "_fx_rates",
         "_holding_period",
         "_initial_capital",
@@ -148,6 +161,7 @@ class PatternRankingTester:
         "_results",
         "_sharpe_mode",
         "_slippage",
+        "_strict_fx",
         "_symbol",
         "_timeframe",
         "equity_curve",
@@ -171,6 +185,9 @@ class PatternRankingTester:
         slippage: float = 0.0,
         min_signals: int = 1,
         fx_rates: dict[str, float] | None = None,
+        fx_history: dict[str, pd.Series] | pd.DataFrame | None = None,
+        strict_fx: bool = False,
+        asset_type: str = "auto",
         sharpe_mode: str = "periodic",
         holding_period: int | None = None,
     ) -> None:
@@ -209,6 +226,12 @@ class PatternRankingTester:
             Minimum signals required for ranking (default 1)
         fx_rates : dict[str, float], optional
             Dictionary of cross-currency exchange rates for Forex conversion
+        fx_history : dict[str, pd.Series] | pd.DataFrame, optional
+            Historical exchange rate time series for dynamic PnL conversion
+        strict_fx : bool
+            If True, raises ValueError on missing historical FX rates
+        asset_type : str
+            Asset classification: 'stock', 'forex', 'crypto', or 'auto'
         sharpe_mode : str
             Sharpe mode: 'periodic' (returns per bar, with 0% on idle bars) or 'trades'
         holding_period : int, optional
@@ -229,13 +252,18 @@ class PatternRankingTester:
         self._slippage: float = max(slippage, 0.0)
         self._min_signals: int = max(min_signals, 1)
         self._fx_rates: dict[str, float] = fx_rates or {}
+        self._fx_history: dict[str, pd.Series] | pd.DataFrame | None = fx_history
+        self._strict_fx: bool = strict_fx
+        self._asset_type: str = asset_type
         self._sharpe_mode: str = sharpe_mode
         self._holding_period: int | None = holding_period
 
         if periods_per_year is not None:
             self._periods_per_year: float = periods_per_year
         else:
-            self._periods_per_year = resolve_periods_per_year(self._timeframe, self._symbol)
+            self._periods_per_year = resolve_periods_per_year(
+                self._timeframe, self._symbol, asset_type=self._asset_type
+            )
 
         self.equity_curve: list[float] = [initial_capital]
         self.trades: list[dict[str, Any]] = []
@@ -245,7 +273,9 @@ class PatternRankingTester:
         """Get all TA-Lib candlestick pattern function names."""
         return [f for f in dir(talib) if f.startswith("CDL")]
 
-    def _convert_pnl_to_account_currency(self, raw_pnl: float, exit_price: float) -> float:
+    def _convert_pnl_to_account_currency(
+        self, raw_pnl: float, exit_price: float, exit_time: pd.Timestamp | None = None
+    ) -> float:
         """Universal FX conversion: normalize Forex / CFD PnL into account base currency."""
         if not self._symbol or exit_price <= 0:
             return raw_pnl
@@ -261,9 +291,39 @@ class PatternRankingTester:
                 return raw_pnl / exit_price
 
             # 3. Arbitrary cross pair (e.g. EURJPY, EURGBP, AUDJPY) -> raw_pnl is in quote currency
-            rates = {**DEFAULT_FX_USD_RATES, **self._fx_rates}
             direct_pair = f"{quote}{self._account_currency}"
             inv_pair = f"{self._account_currency}{quote}"
+
+            # Dynamic historical FX conversion via fx_history if provided
+            hist_rate: float | None = None
+            if self._fx_history is not None and exit_time is not None:
+                if isinstance(self._fx_history, dict):
+                    if direct_pair in self._fx_history:
+                        s = self._fx_history[direct_pair]
+                        val = s.asof(exit_time)
+                        if pd.notna(val) and float(cast(Any, val)) > 0:
+                            hist_rate = float(cast(Any, val))
+                    elif inv_pair in self._fx_history:
+                        s = self._fx_history[inv_pair]
+                        val = s.asof(exit_time)
+                        if pd.notna(val) and float(cast(Any, val)) > 0:
+                            hist_rate = 1.0 / float(cast(Any, val))
+                elif isinstance(self._fx_history, pd.DataFrame):
+                    if direct_pair in self._fx_history.columns:
+                        val = self._fx_history[direct_pair].asof(exit_time)
+                        if pd.notna(val) and float(cast(Any, val)) > 0:
+                            hist_rate = float(cast(Any, val))
+                    elif inv_pair in self._fx_history.columns:
+                        val = self._fx_history[inv_pair].asof(exit_time)
+                        if pd.notna(val) and float(cast(Any, val)) > 0:
+                            hist_rate = 1.0 / float(cast(Any, val))
+
+                if hist_rate is not None:
+                    return raw_pnl * hist_rate
+                elif self._strict_fx:
+                    raise ValueError(f"Missing historical FX rate for {direct_pair} at {exit_time}")
+
+            rates = {**DEFAULT_FX_USD_RATES, **self._fx_rates}
 
             if direct_pair in rates and rates[direct_pair] > 0:
                 return raw_pnl * rates[direct_pair]
@@ -567,7 +627,12 @@ class PatternRankingTester:
                     eff_exit = exec_price + self._slippage
                     raw_pnl = (-position) * (entry_price - eff_exit)
                     direction = "SHORT"
-                pnl = self._convert_pnl_to_account_currency(raw_pnl, exec_price) - self._commission
+                pnl = (
+                    self._convert_pnl_to_account_currency(
+                        raw_pnl, exec_price, exit_time=times[exec_idx]
+                    )
+                    - self._commission
+                )
                 trades.append(
                     {
                         "entry_time": times[entry_idx],
@@ -593,7 +658,9 @@ class PatternRankingTester:
                     eff_exit = exec_price + self._slippage
                     raw_pnl = (-position) * (entry_price - eff_exit)
                     pnl = (
-                        self._convert_pnl_to_account_currency(raw_pnl, exec_price)
+                        self._convert_pnl_to_account_currency(
+                            raw_pnl, exec_price, exit_time=times[exec_idx]
+                        )
                         - self._commission
                     )
                     trades.append(
@@ -621,7 +688,9 @@ class PatternRankingTester:
                     eff_exit = exec_price - self._slippage
                     raw_pnl = position * (eff_exit - entry_price)
                     pnl = (
-                        self._convert_pnl_to_account_currency(raw_pnl, exec_price)
+                        self._convert_pnl_to_account_currency(
+                            raw_pnl, exec_price, exit_time=times[exec_idx]
+                        )
                         - self._commission
                     )
                     trades.append(
@@ -654,7 +723,12 @@ class PatternRankingTester:
                 eff_exit = last_exit_price + self._slippage
                 raw_pnl = (-position) * (entry_price - eff_exit)
                 direction = "SHORT"
-            pnl = self._convert_pnl_to_account_currency(raw_pnl, last_exit_price) - self._commission
+            pnl = (
+                self._convert_pnl_to_account_currency(
+                    raw_pnl, last_exit_price, exit_time=times[-1]
+                )
+                - self._commission
+            )
             trades.append(
                 {
                     "entry_time": times[entry_idx],

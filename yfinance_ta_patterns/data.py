@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+import numpy as np
 import pandas as pd
 import pytz
 import yfinance as yf
@@ -114,15 +115,25 @@ def validate_ohlc(data: pd.DataFrame, strict: bool = False) -> pd.DataFrame:
     if data.empty:
         return data
 
+    if strict and hasattr(data.index, "has_duplicates") and data.index.has_duplicates:
+        raise ValueError("Corrupted OHLC data: duplicate candle timestamps detected in index.")
+
     req_cols = [c for c in ["Open", "High", "Low", "Close"] if c in data.columns]
-    if not req_cols:
-        return data
 
     if strict and len(req_cols) < 4:
         missing = [c for c in ["Open", "High", "Low", "Close"] if c not in data.columns]
         raise ValueError(f"Missing required OHLC columns: {missing}")
 
-    cleaned = data.dropna(subset=req_cols).copy()
+    if not req_cols:
+        return data
+
+    # Check for non-finite values (np.inf, -np.inf)
+    has_inf = np.isinf(data[req_cols]).any().any()
+    if strict and has_inf:
+        raise ValueError("Corrupted OHLC data: non-finite (inf/-inf) values found.")
+
+    finite_mask = np.isfinite(data[req_cols]).all(axis=1)
+    cleaned = data.loc[cast(Any, finite_mask)].copy()
 
     # Check for non-positive prices
     bad_prices = (cleaned[req_cols] <= 0).any(axis=1)
@@ -147,7 +158,7 @@ def validate_ohlc(data: pd.DataFrame, strict: bool = False) -> pd.DataFrame:
                     raise ValueError("Inconsistent OHLC bar geometry detected.")
                 cleaned = cleaned[~broken_bars]
 
-    return cleaned
+    return cast(pd.DataFrame, cleaned)
 
 
 class MarketDataLoader:
@@ -165,12 +176,14 @@ class MarketDataLoader:
         auto_adjust: bool = False,
         repair: bool = True,
         timeframe: str | None = None,
+        closed_only: bool = True,
     ) -> None:
         """Initialize data loader with symbol and timeframe parameters."""
         effective_interval = timeframe if timeframe is not None else interval
         norm_interval = normalize_interval(effective_interval)
         self.symbol: str = symbol
         self.asset_type: str = asset_type
+        self.closed_only: bool = closed_only
         self.ticker: str = normalize_ticker(symbol, asset_type=asset_type)
         # Yahoo Finance restricts 1m data to the last 7-8 days (2m is supported up to 60d).
         # Auto-adjust period to '7d' if default '60d' is passed with 1m.
@@ -220,7 +233,9 @@ class MarketDataLoader:
             )
         return cast(pd.DataFrame, data)
 
-    def _resample_if_needed(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _resample_if_needed(
+        self, data: pd.DataFrame, now_utc: pd.Timestamp | None = None
+    ) -> pd.DataFrame:
         """Resample OHLCV data when the requested interval is not natively supported."""
         if not self._resample_rule or data.empty:
             return data
@@ -245,9 +260,32 @@ class MarketDataLoader:
         resampled = data.resample(self._resample_rule, origin="epoch").agg(agg).dropna()
         if "Volume" in resampled.columns and (resampled["Volume"] > 0).any():
             resampled = resampled[resampled["Volume"] > 0]
+
+        if self.closed_only and not resampled.empty and isinstance(resampled.index, pd.DatetimeIndex):
+            ends = resampled.index + pd.Timedelta(self._resample_rule)
+            now = now_utc if now_utc is not None else pd.Timestamp.now(tz=pytz.UTC)
+            ends_tz = getattr(ends, "tz", None)
+            if ends_tz is not None and now.tz is None:
+                now = now.tz_localize(pytz.UTC)
+            elif ends_tz is None and now.tz is not None:
+                now = now.tz_localize(None)
+
+            input_td = pd.Timedelta(self._download_interval)
+            max_input_time = cast(pd.Timestamp, data.index.max())
+            max_input_end = max_input_time + input_td
+            if ends_tz is not None and max_input_end.tz is None:
+                max_input_end = max_input_end.tz_localize(pytz.UTC)
+            elif ends_tz is None and max_input_end.tz is not None:
+                max_input_end = max_input_end.tz_localize(None)
+
+            cutoff = min(now, max_input_end)
+            resampled = resampled.loc[ends <= cutoff]
+
         return cast(pd.DataFrame, resampled)
 
-    def process(self, data: pd.DataFrame) -> pd.DataFrame:
+    def process(
+        self, data: pd.DataFrame, now_utc: pd.Timestamp | None = None
+    ) -> pd.DataFrame:
         """Normalize column indexing, validate OHLC, resample in UTC, and convert timezone."""
         if data.empty:
             return data
@@ -255,6 +293,13 @@ class MarketDataLoader:
         # Drop extra MultiIndex level if present (yfinance >= 0.2.40)
         if isinstance(data.columns, pd.MultiIndex):
             data.columns = data.columns.droplevel(1)
+
+        # Check for duplicate timestamps in index
+        if hasattr(data.index, "has_duplicates") and data.index.has_duplicates:
+            raise ValueError("Corrupted market data: duplicate candle timestamps detected in index.")
+
+        if not data.index.is_monotonic_increasing:
+            data = data.sort_index()
 
         data = validate_ohlc(data)
         if data.empty:
@@ -269,7 +314,7 @@ class MarketDataLoader:
 
         # Resample in UTC before local timezone conversion (Issue 8)
         if self._resample_rule:
-            data = self._resample_if_needed(data)
+            data = self._resample_if_needed(data, now_utc=now_utc)
 
         # Convert to target user timezone
         if isinstance(data.index, pd.DatetimeIndex):

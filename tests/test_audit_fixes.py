@@ -9,6 +9,7 @@ import pytest
 from yfinance_ta_patterns.ai.analyst import AIMarketAnalyst
 from yfinance_ta_patterns.ai.scorer import (
     AIPatternScorer,
+    TradeSetup,
     calc_wilder_atr,
     calc_wilder_rsi,
 )
@@ -609,3 +610,156 @@ def test_forex_position_sizing_and_commission() -> None:
         slippage=0.0,
     )
     assert np.isclose(tester_eur._calc_position_units(1.08), 1000.0 / 1.08)
+
+
+def test_historical_fx_pnl_conversion() -> None:
+    """Issue 1: Two trades with identical JPY PnL and different historical USDJPY rates produce different USD results."""
+    dates = pd.date_range("2025-01-01", periods=10, freq="1d", tz="UTC")
+    df = pd.DataFrame(
+        {
+            "Open": [150.0] * 10,
+            "High": [151.0] * 10,
+            "Low": [149.0] * 10,
+            "Close": [150.0] * 10,
+            "Volume": [1000.0] * 10,
+        },
+        index=dates,
+    )
+    # Historical series with USDJPY changing over time: 140.0 on Jan 2, 160.0 on Jan 8
+    fx_series = pd.Series([140.0, 160.0], index=[dates[2], dates[8]])
+    tester = PatternRankingTester(
+        df,
+        symbol="EURJPY",
+        account_currency="USD",
+        fx_history={"USDJPY": fx_series},
+    )
+    # Trade 1 exits at dates[2] with raw_pnl = 1400.0 JPY
+    res1 = tester._convert_pnl_to_account_currency(1400.0, 150.0, exit_time=dates[2])
+    # Trade 2 exits at dates[8] with raw_pnl = 1400.0 JPY
+    res2 = tester._convert_pnl_to_account_currency(1400.0, 150.0, exit_time=dates[8])
+    # 1400 JPY / 140 = 10.0 USD
+    # 1400 JPY / 160 = 8.75 USD
+    assert np.isclose(res1, 10.0)
+    assert np.isclose(res2, 8.75)
+    assert res1 != res2
+
+
+def test_unclosed_4h_candle_filtered_out() -> None:
+    """Issue 2: Resampling 4h with closed_only=True excludes incomplete candle at 10:30 UTC."""
+    # Hourly bars at 08:00, 09:00, 10:00 UTC (now is 10:30 UTC)
+    hours = pd.date_range("2025-01-01 08:00", periods=3, freq="1h", tz="UTC")
+    df = pd.DataFrame(
+        {
+            "Open": [100.0, 101.0, 102.0],
+            "High": [102.0, 103.0, 104.0],
+            "Low": [99.0, 100.0, 101.0],
+            "Close": [101.0, 102.0, 103.0],
+            "Volume": [1000.0, 1000.0, 1000.0],
+        },
+        index=hours,
+    )
+    now_utc = pd.Timestamp("2025-01-01 10:30", tz="UTC")
+    loader = MarketDataLoader("BTC-USD", interval="4h", timezone="UTC", closed_only=True)
+    resampled = loader.process(df, now_utc=now_utc)
+    # The 08:00–12:00 candle ends at 12:00 UTC, which is > 10:30 UTC, so it must NOT be present
+    assert resampled.empty
+
+    # But with now_utc = 12:30 UTC and full 4 bars (08, 09, 10, 11), it should be included
+    hours_full = pd.date_range("2025-01-01 08:00", periods=4, freq="1h", tz="UTC")
+    df_full = pd.DataFrame(
+        {
+            "Open": [100.0, 101.0, 102.0, 103.0],
+            "High": [102.0, 103.0, 104.0, 105.0],
+            "Low": [99.0, 100.0, 101.0, 102.0],
+            "Close": [101.0, 102.0, 103.0, 104.0],
+            "Volume": [1000.0] * 4,
+        },
+        index=hours_full,
+    )
+    resampled_closed = loader.process(df_full, now_utc=pd.Timestamp("2025-01-01 12:30", tz="UTC"))
+    assert len(resampled_closed) == 1
+    assert resampled_closed.index[0] == pd.Timestamp("2025-01-01 08:00", tz="UTC")
+
+
+def test_validate_ohlc_rejects_inf() -> None:
+    """Issue 3: validate_ohlc rejects positive/negative inf values in strict mode and filters them in non-strict."""
+    df_inf = pd.DataFrame(
+        {
+            "Open": [float("inf"), 100.0],
+            "High": [float("inf"), 105.0],
+            "Low": [float("inf"), 95.0],
+            "Close": [float("inf"), 102.0],
+        }
+    )
+    with pytest.raises(ValueError, match="non-finite"):
+        validate_ohlc(df_inf, strict=True)
+
+    cleaned = validate_ohlc(df_inf, strict=False)
+    assert len(cleaned) == 1
+    assert cleaned["Open"].iloc[0] == 100.0
+
+
+def test_score_signal_rejects_zero_raw_signal(synthetic_ohlcv_data: pd.DataFrame) -> None:
+    """Issue 4: score_signal raises ValueError on raw_signal=0 rather than creating a SELL setup."""
+    scorer = AIPatternScorer(synthetic_ohlcv_data)
+    valid_ts = synthetic_ohlcv_data.index[10]
+    with pytest.raises(ValueError, match="Cannot score an inactive signal"):
+        scorer.score_signal("CDLHAMMER", valid_ts, raw_signal=0)
+
+
+def test_stock_sol_not_treated_as_crypto() -> None:
+    """Issue 5: Stock tickers like SOL (Emeren Group) and ETH (Ethan Allen) use stock calendar, not crypto 24/7."""
+    # Stock calendar for 1h is 252 * 6.5 = 1638.0
+    assert resolve_periods_per_year("1h", "SOL") == 252.0 * 6.5
+    assert resolve_periods_per_year("1h", "ETH") == 252.0 * 6.5
+    # Crypto pair with -USD suffix uses 365 * 24 = 8760.0
+    assert resolve_periods_per_year("1h", "SOL-USD") == 365.0 * 24.0
+    # Explicit asset_type override works
+    assert resolve_periods_per_year("1h", "SOL", asset_type="crypto") == 365.0 * 24.0
+
+
+def test_validate_ohlc_strict_without_ohlc_columns() -> None:
+    """Issue 6: Strict validation raises ValueError when OHLC columns are missing even if Volume is present."""
+    df_volume_only = pd.DataFrame({"Volume": [10.0, 20.0]})
+    with pytest.raises(ValueError, match="Missing required OHLC columns"):
+        validate_ohlc(df_volume_only, strict=True)
+
+
+def test_duplicate_timestamp_handling() -> None:
+    """Issue 7: Duplicate candle timestamps are rejected with informative error."""
+    ts = pd.Timestamp("2025-01-01 10:00", tz="UTC")
+    df_duplicates = pd.DataFrame(
+        {
+            "Open": [100.0, 101.0],
+            "High": [105.0, 106.0],
+            "Low": [95.0, 96.0],
+            "Close": [102.0, 103.0],
+            "Volume": [1000.0, 1000.0],
+        },
+        index=[ts, ts],
+    )
+    loader = MarketDataLoader("AAPL")
+    with pytest.raises(ValueError, match="duplicate candle timestamps"):
+        loader.process(df_duplicates)
+
+    with pytest.raises(ValueError, match="duplicate candle timestamps"):
+        validate_ohlc(df_duplicates, strict=True)
+
+
+def test_tradesetup_microcap_precision() -> None:
+    """Issue 8: TradeSetup.to_dict retains full float precision for micro-cap tokens (< 0.00001)."""
+    setup = TradeSetup(
+        direction="BUY",
+        entry_price=0.00000123,
+        stop_loss=0.00000098,
+        take_profit_1=0.00000160,
+        take_profit_2=0.00000198,
+        risk_reward_ratio=1.5,
+        risk_per_unit=0.00000025,
+    )
+    d = setup.to_dict()
+    assert d["entry_price"] == 0.00000123
+    assert d["stop_loss"] == 0.00000098
+    assert d["entry_price"] != 0.0
+    assert d["stop_loss"] != d["entry_price"]
+

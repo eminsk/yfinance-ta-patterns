@@ -38,14 +38,14 @@ class TradeSetup:
         """Convert setup to plain dictionary."""
         return {
             "direction": self.direction,
-            "entry_price": round(self.entry_price, 5),
-            "stop_loss": round(self.stop_loss, 5),
-            "take_profit_1": round(self.take_profit_1, 5),
-            "take_profit_2": round(self.take_profit_2, 5),
+            "entry_price": self.entry_price,
+            "stop_loss": self.stop_loss,
+            "take_profit_1": self.take_profit_1,
+            "take_profit_2": self.take_profit_2,
             "risk_reward_ratio": round(self.risk_reward_ratio, 2),
             "rr_tp1": round(self.rr_tp1, 2),
             "rr_tp2": round(self.rr_tp2, 2),
-            "risk_per_unit": round(self.risk_per_unit, 5),
+            "risk_per_unit": self.risk_per_unit,
         }
 
 
@@ -280,6 +280,9 @@ class AIPatternScorer:
         raw_signal: int,
     ) -> PatternConfidenceResult:
         """Compute multi-factor AI confidence score and trade setup for a specific signal."""
+        if raw_signal == 0:
+            raise ValueError("Cannot score an inactive signal: raw_signal must be non-zero (+100/-100 or +1/-1).")
+
         if timestamp not in self.df.index:
             raise KeyError(f"Timestamp {timestamp} not found in market data.")
 
