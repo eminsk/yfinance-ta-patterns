@@ -208,8 +208,17 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
     if asset_type.lower() == "crypto":
         if "/" in clean:
             parts = clean.split("/")
+            if len(parts) != 2 or not parts[0] or not parts[1]:
+                raise ValueError(
+                    f"Invalid crypto ticker format: '{symbol}'. Expected format like 'BTC/USD' or 'BTC-USD'."
+                )
             return f"{parts[0]}-{parts[1]}"
         if "-" in clean:
+            parts = clean.split("-")
+            if len(parts) != 2 or not parts[0] or not parts[1]:
+                raise ValueError(
+                    f"Invalid crypto ticker format: '{symbol}'. Expected format like 'BTC-USD'."
+                )
             return clean
         for quote in _KNOWN_CRYPTO_QUOTES:
             if clean.endswith(quote) and len(clean) > len(quote):
@@ -219,25 +228,38 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
     # Slashes in auto or forex mode
     if "/" in clean:
         parts = clean.split("/")
-        if len(parts) == 2:
-            base, quote = parts[0], parts[1]
-            if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
-                return f"{base}{quote}=X"
-            if (
-                base in _KNOWN_CRYPTO_SYMBOLS
-                or quote in _KNOWN_CRYPTO_SYMBOLS
-                or quote in _KNOWN_CRYPTO_QUOTES
-                or quote in _CURRENCY_CODES
-                or quote in ("USDT", "USDC")
-            ):
-                return f"{base}-{quote}"
-            if len(base) == 3 and len(quote) == 3:
-                clean = f"{base}{quote}"
+        if len(parts) != 2 or not parts[0] or not parts[1]:
+            raise ValueError(
+                f"Invalid ticker format: '{symbol}'. Slashes must separate exactly two symbols (e.g. 'EUR/USD' or 'BTC/USD')."
+            )
+        base, quote = parts[0], parts[1]
+        if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
+            return f"{base}{quote}=X"
+        if (
+            base in _KNOWN_CRYPTO_SYMBOLS
+            or quote in _KNOWN_CRYPTO_SYMBOLS
+            or quote in _KNOWN_CRYPTO_QUOTES
+            or quote in _CURRENCY_CODES
+            or quote in ("USDT", "USDC")
+        ):
+            return f"{base}-{quote}"
+        if len(base) == 3 and len(quote) == 3:
+            clean = f"{base}{quote}"
 
     if asset_type.lower() == "forex":
+        if "-" in clean:
+            parts = clean.split("-")
+            if len(parts) == 2 and parts[0] in _CURRENCY_CODES and parts[1] in _CURRENCY_CODES:
+                return f"{parts[0]}{parts[1]}=X"
         return clean if clean.endswith("=X") else f"{clean}=X"
 
     if asset_type.lower() == "auto":
+        # Check if hyphen separates two ISO currency codes (e.g. EUR-USD -> EURUSD=X)
+        if "-" in clean:
+            parts = clean.split("-")
+            if len(parts) == 2 and parts[0] in _CURRENCY_CODES and parts[1] in _CURRENCY_CODES:
+                return f"{parts[0]}{parts[1]}=X"
+
         # Check if already has a suffix or special prefix
         if clean.endswith("=X") or clean.endswith("=F") or clean.startswith("^") or "-" in clean:
             return clean
@@ -618,9 +640,6 @@ class MarketDataLoader:
         is_forex = resolved_type == "forex"
 
         def _is_bucket_complete(ts: pd.Timestamp, count: int) -> bool:
-            if is_crypto:
-                return count >= 4
-
             rule_str = str(self._resample_rule or "4h")
             bucket_start = ts
             bucket_end = ts + pd.Timedelta(rule_str)
@@ -629,8 +648,29 @@ class MarketDataLoader:
             if len(bucket_stamps) == 0:
                 return False
 
+            if is_crypto:
+                # Crypto trades 24/7. Exactly 4 hourly bars expected on the regular 1h grid:
+                # ts, ts+1h, ts+2h, ts+3h.
+                # Must have exactly 4 bars, no irregular displaced timestamps, and match expected slots 1-to-1.
+                if len(bucket_stamps) != 4:
+                    return False
+                expected_crypto = [bucket_start + pd.Timedelta(hours=k) for k in range(4)]
+                matched_indices = set()
+                for exp in expected_crypto:
+                    found = None
+                    for i, act in enumerate(bucket_stamps):
+                        if i in matched_indices:
+                            continue
+                        if abs((act - exp).total_seconds()) <= 300:  # within 5 minutes of the hour
+                            found = i
+                            break
+                    if found is None:
+                        return False
+                    matched_indices.add(found)
+                return True
+
             if is_forex:
-                open_slots = 0
+                open_slots: list[pd.Timestamp] = []
                 for k in range(4):
                     slot = ts + pd.Timedelta(hours=k)
                     slot_ny = (
@@ -646,11 +686,23 @@ class MarketDataLoader:
                         or (wd == 4 and hr < 17)
                     )
                     if is_open:
-                        open_slots += 1
-                if open_slots == 0:
+                        open_slots.append(slot)
+                if len(open_slots) == 0:
                     return False
-                if count < open_slots:
+                if len(bucket_stamps) < len(open_slots):
                     return False
+                matched_fx_indices = set()
+                for exp in open_slots:
+                    found = None
+                    for i, act in enumerate(bucket_stamps):
+                        if i in matched_fx_indices:
+                            continue
+                        if abs((act - exp).total_seconds()) <= 300:
+                            found = i
+                            break
+                    if found is None:
+                        return False
+                    matched_fx_indices.add(found)
                 if len(bucket_stamps) > 1:
                     diffs = np.diff(bucket_stamps.values).astype("timedelta64[m]").astype(int)
                     if np.any(diffs > 75):
@@ -658,31 +710,62 @@ class MarketDataLoader:
                 return True
 
             # Stocks and other assets:
-            if count >= 4:
-                return True
+            # Build expected hourly session grid from exchange open_time to close_time.
+            # Compare actual timestamps 1-to-1 without bar reuse.
+            dates_to_check = {bucket_start.date(), (bucket_end - pd.Timedelta(seconds=1)).date()}
+            expected_stock_slots: list[pd.Timestamp] = []
+            for d in sorted(dates_to_check):
+                if d.weekday() >= 5:
+                    continue  # Weekend
+                tz_name, open_time, close_time = _get_market_session_hours(self.ticker, d)
+                s_open = pd.Timestamp(
+                    year=d.year,
+                    month=d.month,
+                    day=d.day,
+                    hour=open_time.hour,
+                    minute=open_time.minute,
+                    tz=tz_name,
+                )
+                s_close = pd.Timestamp(
+                    year=d.year,
+                    month=d.month,
+                    day=d.day,
+                    hour=close_time.hour,
+                    minute=close_time.minute,
+                    tz=tz_name,
+                )
+                curr = s_open
+                while curr < s_close:
+                    curr_utc = (
+                        curr.tz_convert("UTC")
+                        if bucket_start.tz is not None
+                        else curr.tz_convert("UTC").tz_localize(None)
+                    )
+                    if bucket_start <= curr_utc < bucket_end:
+                        expected_stock_slots.append(curr_utc)
+                    curr += pd.Timedelta(hours=1)
 
-            # Check intra-bucket gaps between existing bars
+            if len(expected_stock_slots) > 0:
+                if len(bucket_stamps) < len(expected_stock_slots):
+                    return False
+                matched_stock_indices = set()
+                for exp in expected_stock_slots:
+                    found = None
+                    for i, act in enumerate(bucket_stamps):
+                        if i in matched_stock_indices:
+                            continue
+                        if abs((act - exp).total_seconds()) <= 300:
+                            found = i
+                            break
+                    if found is None:
+                        return False
+                    matched_stock_indices.add(found)
+
             if len(bucket_stamps) > 1:
                 diffs = np.diff(bucket_stamps.values).astype("timedelta64[m]").astype(int)
                 if np.any(diffs > 75):
                     return False
 
-            # Check that missing slots in the 4h window are outside exchange trading hours
-            tz_name, open_time, close_time = _get_market_session_hours(self.ticker, ts.date())
-            for k in range(4):
-                slot = ts + pd.Timedelta(hours=k)
-                has_bar = any(abs((b_ts - slot).total_seconds()) <= 1800 for b_ts in bucket_stamps)
-                if not has_bar:
-                    slot_local = (
-                        slot.tz_convert(tz_name)
-                        if slot.tz is not None
-                        else slot.tz_localize("UTC").tz_convert(tz_name)
-                    )
-                    if slot_local.weekday() < 5:
-                        t_val = slot_local.time()
-                        if open_time <= t_val < close_time:
-                            # Missing bar inside regular trading session!
-                            return False
             return True
 
         valid_buckets = [
@@ -741,6 +824,7 @@ class MarketDataLoader:
             return data
 
         idx = data.index
+        orig_dates = list(idx.date) if isinstance(idx, pd.DatetimeIndex) else None
         if isinstance(idx, pd.DatetimeIndex):
             if idx.tz is None:
                 data.index = idx.tz_localize(pytz.UTC)
@@ -767,18 +851,25 @@ class MarketDataLoader:
                 clean_sym = self.ticker.strip().upper()
 
                 candle_end_list = []
-                for ts in data.index:
-                    d = ts.date()
+                for i, ts in enumerate(data.index):
                     if asset_class == "crypto":
                         # 24/7 calendar: closes at next day 00:00 UTC
+                        d = ts.date()
                         close_ts = pd.Timestamp(d, tz=pytz.UTC) + pd.Timedelta(days=1)
                     elif asset_class == "forex":
                         # Forex daily rollover: 17:00 America/New_York
+                        d = orig_dates[i] if orig_dates is not None and i < len(orig_dates) else ts.date()
                         close_ts = pd.Timestamp(
                             year=d.year, month=d.month, day=d.day, hour=17, minute=0, tz="America/New_York"
                         ).tz_convert(pytz.UTC)
                     else:
                         # Stock / Commodity / Index
+                        # Asian exchanges and international markets: determine session date in local exchange timezone
+                        tz_name, _open_t, _ = _get_market_session_hours(clean_sym, ts.date())
+                        ts_local = ts.tz_convert(tz_name) if ts.tz is not None else ts
+                        d = ts_local.date()
+                        if orig_dates is not None and i < len(orig_dates):
+                            d = orig_dates[i]
                         tz_name, _open_t, close_t = _get_market_session_hours(clean_sym, d)
                         close_ts = pd.Timestamp(
                             year=d.year,

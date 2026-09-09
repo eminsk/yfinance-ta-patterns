@@ -277,7 +277,11 @@ class PatternRankingTester:
         self._slippage: float = max(slippage, 0.0)
         self._min_signals: int = max(min_signals, 1)
         self._min_trades: int | None = min_trades
-        self._fx_rates: dict[str, float] = fx_rates or {}
+        self._fx_rates: dict[str, float] = (
+            {k: float(v) for k, v in fx_rates.items() if np.isfinite(v) and v > 0}
+            if fx_rates
+            else {}
+        )
         self._fx_history: dict[str, pd.Series] | pd.DataFrame | None = fx_history
         self._strict_fx: bool = strict_fx
         self._max_fx_staleness: pd.Timedelta | None = (
@@ -346,7 +350,7 @@ class PatternRankingTester:
                 return None
             last_ts = sub.index[-1]
             val = float(cast(Any, sub.iloc[-1]))
-            if val <= 0:
+            if not np.isfinite(val) or val <= 0:
                 return None
 
             if self._max_fx_staleness is not None:
@@ -365,8 +369,10 @@ class PatternRankingTester:
         s_inv = get_series(inv_pair)
         if s_inv is not None:
             val = check_staleness_and_val(s_inv)
-            if val is not None:
-                return 1.0 / val
+            if val is not None and np.isfinite(val) and val > 0:
+                inv_val = 1.0 / val
+                if np.isfinite(inv_val) and inv_val > 0:
+                    return inv_val
 
         return None
 
@@ -410,8 +416,16 @@ class PatternRankingTester:
             if from_curr != "USD" and to_curr != "USD":
                 from_usd = self._lookup_hist_rate(f"{from_curr}USD", f"USD{from_curr}", timestamp)
                 to_usd = self._lookup_hist_rate(f"{to_curr}USD", f"USD{to_curr}", timestamp)
-                if from_usd is not None and to_usd is not None and to_usd > 0:
-                    return from_usd / to_usd
+                if (
+                    from_usd is not None
+                    and to_usd is not None
+                    and np.isfinite(from_usd)
+                    and np.isfinite(to_usd)
+                    and to_usd > 0
+                ):
+                    bridge_rate = from_usd / to_usd
+                    if np.isfinite(bridge_rate) and bridge_rate > 0:
+                        return bridge_rate
 
             raise ValueError(
                 f"Missing historical FX rate for {direct_pair} at {timestamp}"
@@ -426,33 +440,55 @@ class PatternRankingTester:
             if from_curr != "USD" and to_curr != "USD":
                 from_usd = self._lookup_hist_rate(f"{from_curr}USD", f"USD{from_curr}", timestamp)
                 to_usd = self._lookup_hist_rate(f"{to_curr}USD", f"USD{to_curr}", timestamp)
-                if from_usd is not None and to_usd is not None and to_usd > 0:
-                    return from_usd / to_usd
+                if (
+                    from_usd is not None
+                    and to_usd is not None
+                    and np.isfinite(from_usd)
+                    and np.isfinite(to_usd)
+                    and to_usd > 0
+                ):
+                    bridge_rate = from_usd / to_usd
+                    if np.isfinite(bridge_rate) and bridge_rate > 0:
+                        return bridge_rate
 
         # 2. Static rates table
         rates = {**DEFAULT_FX_USD_RATES, **self._fx_rates}
-        if direct_pair in rates and rates[direct_pair] > 0:
+        if direct_pair in rates and np.isfinite(rates[direct_pair]) and rates[direct_pair] > 0:
             return rates[direct_pair]
-        if inv_pair in rates and rates[inv_pair] > 0:
-            return 1.0 / rates[inv_pair]
+        if inv_pair in rates and np.isfinite(rates[inv_pair]) and rates[inv_pair] > 0:
+            inv_rate = 1.0 / rates[inv_pair]
+            if np.isfinite(inv_rate) and inv_rate > 0:
+                return inv_rate
 
         # USD bridge via static rates
         from_usd_rate: float | None = 1.0 if from_curr == "USD" else None
         if from_usd_rate is None:
-            if f"{from_curr}USD" in rates and rates[f"{from_curr}USD"] > 0:
+            if f"{from_curr}USD" in rates and np.isfinite(rates[f"{from_curr}USD"]) and rates[f"{from_curr}USD"] > 0:
                 from_usd_rate = rates[f"{from_curr}USD"]
-            elif f"USD{from_curr}" in rates and rates[f"USD{from_curr}"] > 0:
-                from_usd_rate = 1.0 / rates[f"USD{from_curr}"]
+            elif f"USD{from_curr}" in rates and np.isfinite(rates[f"USD{from_curr}"]) and rates[f"USD{from_curr}"] > 0:
+                inv_bridge = 1.0 / rates[f"USD{from_curr}"]
+                if np.isfinite(inv_bridge) and inv_bridge > 0:
+                    from_usd_rate = inv_bridge
 
         to_usd_rate: float | None = 1.0 if to_curr == "USD" else None
         if to_usd_rate is None:
-            if f"{to_curr}USD" in rates and rates[f"{to_curr}USD"] > 0:
+            if f"{to_curr}USD" in rates and np.isfinite(rates[f"{to_curr}USD"]) and rates[f"{to_curr}USD"] > 0:
                 to_usd_rate = rates[f"{to_curr}USD"]
-            elif f"USD{to_curr}" in rates and rates[f"USD{to_curr}"] > 0:
-                to_usd_rate = 1.0 / rates[f"USD{to_curr}"]
+            elif f"USD{to_curr}" in rates and np.isfinite(rates[f"USD{to_curr}"]) and rates[f"USD{to_curr}"] > 0:
+                inv_bridge = 1.0 / rates[f"USD{to_curr}"]
+                if np.isfinite(inv_bridge) and inv_bridge > 0:
+                    to_usd_rate = inv_bridge
 
-        if from_usd_rate is not None and to_usd_rate is not None and to_usd_rate > 0:
-            return from_usd_rate / to_usd_rate
+        if (
+            from_usd_rate is not None
+            and to_usd_rate is not None
+            and np.isfinite(from_usd_rate)
+            and np.isfinite(to_usd_rate)
+            and to_usd_rate > 0
+        ):
+            bridge_val = from_usd_rate / to_usd_rate
+            if np.isfinite(bridge_val) and bridge_val > 0:
+                return bridge_val
 
         raise ValueError(
             f"Unable to convert currency from {from_curr} to {to_curr}: no exchange rate available. "
