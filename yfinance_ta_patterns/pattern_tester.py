@@ -95,24 +95,51 @@ def is_forex_symbol(symbol: str) -> bool:
     return classify_asset(symbol) == "forex"
 
 
-def resolve_periods_per_year(timeframe: str, symbol: str = "", asset_type: str = "auto") -> float:
+def resolve_periods_per_year(
+    timeframe: str,
+    symbol: str = "",
+    asset_type: str = "auto",
+    periods_per_year: float | None = None,
+) -> float:
     """Resolve asset-aware annualization factor for Sharpe Ratio calculation."""
+    if periods_per_year is not None:
+        if not np.isfinite(periods_per_year) or periods_per_year <= 0:
+            raise ValueError(f"periods_per_year must be positive and finite, got {periods_per_year}")
+        return float(periods_per_year)
+
     tf = normalize_interval(timeframe) if timeframe else "1d"
     a_type = asset_type.lower() if asset_type else "auto"
+    clean_sym = symbol.strip().upper() if symbol else ""
+
     if a_type == "crypto":
         return CRYPTO_PERIODS_PER_YEAR.get(tf, 365.0)
     elif a_type == "forex":
         return FOREX_PERIODS_PER_YEAR.get(tf, 260.0)
-    elif a_type == "stock":
-        return TIMEFRAME_PERIODS_PER_YEAR.get(tf, 252.0)
-
-    # auto mode
-    if symbol:
-        detected = classify_asset(symbol, asset_type=asset_type)
+    elif a_type == "auto" and clean_sym:
+        detected = classify_asset(clean_sym, asset_type=asset_type)
         if detected == "crypto":
             return CRYPTO_PERIODS_PER_YEAR.get(tf, 365.0)
         elif detected == "forex":
             return FOREX_PERIODS_PER_YEAR.get(tf, 260.0)
+
+    # Equities / stocks
+    # LSE (.L, .IL) or European exchanges (.DE, .PA, etc.) have 8.5h trading sessions
+    if any(clean_sym.endswith(sfx) for sfx in (".L", ".IL")) or any(
+        clean_sym.endswith(sfx)
+        for sfx in (
+            ".DE", ".PA", ".AS", ".BR", ".LS", ".MI", ".MC", ".VI", ".HE",
+            ".F", ".AT", ".SW", ".ST", ".OL", ".CO"
+        )
+    ):
+        if tf in ("1h", "60m"):
+            return 252.0 * 8.5  # 2,142 periods/year
+        if tf == "4h":
+            return 252.0 * 2.125
+        if tf == "30m":
+            return 252.0 * 17.0
+        if tf == "15m":
+            return 252.0 * 34.0
+
     return TIMEFRAME_PERIODS_PER_YEAR.get(tf, 252.0)
 
 
@@ -138,6 +165,7 @@ class PatternResult:
     profit_factor: float = 0.0
     score: float = 0.0
     total_trades: int = 0
+    open_trade: dict[str, Any] | None = None
 
 
 class PatternRankingTester:
@@ -256,9 +284,36 @@ class PatternRankingTester:
         min_trades : int, optional
             Minimum completed trades required for ranking
         """
+        if not np.isfinite(initial_capital) or initial_capital <= 0:
+            raise ValueError(f"initial_capital must be positive and finite, got {initial_capital}")
+        if not np.isfinite(position_size) or position_size <= 0:
+            raise ValueError(f"position_size must be positive and finite, got {position_size}")
+        if not np.isfinite(commission) or commission < 0:
+            raise ValueError(f"commission must be non-negative and finite, got {commission}")
+        if not np.isfinite(slippage) or slippage < 0:
+            raise ValueError(f"slippage must be non-negative and finite, got {slippage}")
+        if not isinstance(min_signals, int) or isinstance(min_signals, bool) or min_signals < 1:
+            raise ValueError(f"min_signals must be an integer >= 1, got {min_signals}")
+        if min_trades is not None and (
+            not isinstance(min_trades, int) or isinstance(min_trades, bool) or min_trades < 1
+        ):
+            raise ValueError(f"min_trades must be None or an integer >= 1, got {min_trades}")
+        if holding_period is not None and (
+            not isinstance(holding_period, int) or isinstance(holding_period, bool) or holding_period < 1
+        ):
+            raise ValueError(
+                f"holding_period must be None or a positive integer >= 1, got {holding_period}"
+            )
+        if periods_per_year is not None and (
+            not np.isfinite(periods_per_year) or periods_per_year <= 0
+        ):
+            raise ValueError(
+                f"periods_per_year must be positive and finite, got {periods_per_year}"
+            )
+
         self._data: pd.DataFrame = data
-        self._initial_capital: float = initial_capital
-        self._position_size: float = position_size
+        self._initial_capital: float = float(initial_capital)
+        self._position_size: float = float(position_size)
         self._results: list[PatternResult] = []
         self._news_dates: set[str] = set(news_dates) if news_dates else set()
         self._execution: str = execution
@@ -273,9 +328,9 @@ class PatternRankingTester:
         self._account_currency: str = _norm_c(account_currency)
         self._force_exit_on_last_bar: bool = force_exit_on_last_bar
         self._allow_short: bool = allow_short
-        self._commission: float = max(commission, 0.0)
-        self._slippage: float = max(slippage, 0.0)
-        self._min_signals: int = max(min_signals, 1)
+        self._commission: float = float(commission)
+        self._slippage: float = float(slippage)
+        self._min_signals: int = min_signals
         self._min_trades: int | None = min_trades
         self._fx_rates: dict[str, float] = (
             {k: float(v) for k, v in fx_rates.items() if np.isfinite(v) and v > 0}
@@ -303,7 +358,7 @@ class PatternRankingTester:
             self._quote_currency = _norm_c(quote_currency or "USD")
 
         if periods_per_year is not None:
-            self._periods_per_year: float = periods_per_year
+            self._periods_per_year: float = float(periods_per_year)
         else:
             self._periods_per_year = resolve_periods_per_year(
                 self._timeframe, self._symbol, asset_type=self._asset_type
@@ -573,6 +628,9 @@ class PatternRankingTester:
         filter_news: bool = False,
     ) -> PatternResult | None:
         """Test a single candlestick pattern by name."""
+        self.trades = []
+        self.equity_curve = [self._initial_capital]
+        self._last_open_trade = None
         return self._test_single_pattern(pattern_name, filter_news=filter_news)
 
     def _test_single_pattern(
@@ -581,6 +639,10 @@ class PatternRankingTester:
         filter_news: bool,
     ) -> PatternResult | None:
         """Test a single pattern."""
+        self.trades = []
+        self.equity_curve = [self._initial_capital]
+        self._last_open_trade = None
+
         pattern_func = getattr(talib, pattern_name, None)
         if not pattern_func:
             print(f"Pattern function not found: {pattern_name}")
@@ -622,8 +684,8 @@ class PatternRankingTester:
         # Calculate trades
         trades = self._calculate_trades(signals)
 
-        # Return None if no trades or too few signals
-        if not trades:
+        # Return None if no trades and no open position
+        if not trades and self._last_open_trade is None:
             total_signals = int(np.sum(signals != 0))
             if total_signals == 0:
                 print(f"{pattern_name}: No signals generated")
@@ -704,7 +766,7 @@ class PatternRankingTester:
 
         # Trade-level Sharpe ratio (scaled by annual trade frequency)
         pnls = [t["pnl"] for t in trades]
-        std_pnl = float(np.std(pnls))
+        std_pnl = float(np.std(pnls)) if len(pnls) > 1 else 0.0
         duration_years = max(n_bars / self._periods_per_year, 1e-6)
         trades_per_year = len(trades) / duration_years
         trade_sharpe = (
@@ -774,6 +836,7 @@ class PatternRankingTester:
             profit_factor=profit_factor,
             score=score,
             total_trades=len(trades),
+            open_trade=self._last_open_trade,
         )
 
     def _calc_position_units(
@@ -848,7 +911,8 @@ class PatternRankingTester:
                         "direction": direction,
                         "position": abs(position),
                         "entry_price": entry_price,
-                        "exit_price": exec_price,
+                        "exit_price": eff_exit,
+                        "market_exit_price": exec_price,
                         "pnl": pnl,
                         "time_exit": True,
                     }
@@ -880,7 +944,8 @@ class PatternRankingTester:
                             "direction": "SHORT",
                             "position": abs(position),
                             "entry_price": entry_price,
-                            "exit_price": exec_price,
+                            "exit_price": eff_exit,
+                            "market_exit_price": exec_price,
                             "pnl": pnl,
                         }
                     )
@@ -914,7 +979,8 @@ class PatternRankingTester:
                             "direction": "LONG",
                             "position": abs(position),
                             "entry_price": entry_price,
-                            "exit_price": exec_price,
+                            "exit_price": eff_exit,
+                            "market_exit_price": exec_price,
                             "pnl": pnl,
                         }
                     )
@@ -952,7 +1018,8 @@ class PatternRankingTester:
                     "direction": direction,
                     "position": abs(position),
                     "entry_price": entry_price,
-                    "exit_price": last_exit_price,
+                    "exit_price": eff_exit,
+                    "market_exit_price": last_exit_price,
                     "pnl": pnl,
                     "forced_exit": True,
                 }

@@ -519,7 +519,6 @@ class AIPatternScorer:
         buffer = 0.2 * atr
         rr_tp1 = 1.5
         rr_tp2 = 3.0
-        rrr = 1.5  # Primary target risk-reward ratio matching TP1
 
         if is_bullish:
             direction = "BUY"
@@ -529,6 +528,8 @@ class AIPatternScorer:
             risk = max(entry - stop_loss, close * 1e-5)
             tp1 = entry + (rr_tp1 * risk)
             tp2 = entry + (rr_tp2 * risk)
+            actual_rr_tp1 = (tp1 - entry) / risk if risk > 0 else rr_tp1
+            actual_rr_tp2 = (tp2 - entry) / risk if risk > 0 else rr_tp2
         else:
             direction = "SELL"
             entry = close
@@ -538,6 +539,11 @@ class AIPatternScorer:
             # Ensure profit targets remain strictly positive
             tp1 = max(entry - (rr_tp1 * risk), close * 0.001)
             tp2 = max(entry - (rr_tp2 * risk), close * 0.0005)
+            actual_rr_tp1 = max(entry - tp1, 0.0) / risk if risk > 0 else 0.0
+            actual_rr_tp2 = max(entry - tp2, 0.0) / risk if risk > 0 else 0.0
+
+        actual_rr_tp1 = round(actual_rr_tp1, 2)
+        actual_rr_tp2 = round(actual_rr_tp2, 2)
 
         return TradeSetup(
             direction=direction,
@@ -545,10 +551,10 @@ class AIPatternScorer:
             stop_loss=stop_loss,
             take_profit_1=tp1,
             take_profit_2=tp2,
-            risk_reward_ratio=rrr,
+            risk_reward_ratio=actual_rr_tp1,
             risk_per_unit=risk,
-            rr_tp1=rr_tp1,
-            rr_tp2=rr_tp2,
+            rr_tp1=actual_rr_tp1,
+            rr_tp2=actual_rr_tp2,
         )
 
     def score_all_signals(

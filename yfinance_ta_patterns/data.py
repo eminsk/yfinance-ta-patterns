@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import warnings
 from typing import Any, cast
 
 import numpy as np
@@ -514,15 +515,63 @@ def _get_market_session_hours(
 ) -> tuple[str, datetime.time, datetime.time]:
     """Get exchange timezone, open time, and close time for an equity symbol."""
     clean_sym = symbol.strip().upper()
-    if clean_sym.endswith(".L"):
+    if clean_sym.endswith(".L") or clean_sym.endswith(".IL"):
         return "Europe/London", datetime.time(8, 0), datetime.time(16, 30)
-    if any(clean_sym.endswith(sfx) for sfx in (".DE", ".PA", ".AS", ".BR", ".MI", ".MC", ".VI", ".HE", ".F", ".AT")):
+    if any(clean_sym.endswith(sfx) for sfx in (".DE", ".PA", ".AS", ".BR", ".LS", ".MI", ".MC", ".VI", ".HE", ".F", ".AT")):
         return "Europe/Berlin", datetime.time(9, 0), datetime.time(17, 30)
+    if clean_sym.endswith(".SW"):
+        return "Europe/Zurich", datetime.time(9, 0), datetime.time(17, 30)
+    if any(clean_sym.endswith(sfx) for sfx in (".ST", ".OL", ".CO")):
+        return "Europe/Stockholm", datetime.time(9, 0), datetime.time(17, 30)
     if clean_sym.endswith(".T"):
         close_min = 30 if d >= datetime.date(2024, 11, 5) else 0
         return "Asia/Tokyo", datetime.time(9, 0), datetime.time(15, close_min)
     if clean_sym.endswith(".HK"):
         return "Asia/Hong_Kong", datetime.time(9, 30), datetime.time(16, 0)
+    if any(clean_sym.endswith(sfx) for sfx in (".SS", ".SZ")):
+        return "Asia/Shanghai", datetime.time(9, 30), datetime.time(15, 0)
+    if clean_sym.endswith(".AX"):
+        return "Australia/Sydney", datetime.time(10, 0), datetime.time(16, 0)
+    if clean_sym.endswith(".NZ"):
+        return "Pacific/Auckland", datetime.time(10, 0), datetime.time(16, 45)
+    if any(clean_sym.endswith(sfx) for sfx in (".TO", ".V", ".CN")):
+        return "America/Toronto", datetime.time(9, 30), datetime.time(16, 0)
+    if any(clean_sym.endswith(sfx) for sfx in (".KS", ".KQ")):
+        return "Asia/Seoul", datetime.time(9, 0), datetime.time(15, 30)
+    if any(clean_sym.endswith(sfx) for sfx in (".TW", ".TWO")):
+        return "Asia/Taipei", datetime.time(9, 0), datetime.time(13, 30)
+    if any(clean_sym.endswith(sfx) for sfx in (".SI", ".SG")):
+        return "Asia/Singapore", datetime.time(9, 0), datetime.time(17, 0)
+    if any(clean_sym.endswith(sfx) for sfx in (".NS", ".BO")):
+        return "Asia/Kolkata", datetime.time(9, 15), datetime.time(15, 30)
+    if clean_sym.endswith(".SA"):
+        return "America/Sao_Paulo", datetime.time(10, 0), datetime.time(17, 0)
+    if clean_sym.endswith(".MX"):
+        return "America/Mexico_City", datetime.time(8, 30), datetime.time(15, 0)
+    if clean_sym.endswith(".JO"):
+        return "Africa/Johannesburg", datetime.time(9, 0), datetime.time(17, 0)
+    if clean_sym.endswith(".TA"):
+        return "Asia/Jerusalem", datetime.time(10, 0), datetime.time(17, 25)
+    if clean_sym.endswith(".IS"):
+        return "Europe/Istanbul", datetime.time(10, 0), datetime.time(18, 0)
+    if clean_sym.endswith(".JK"):
+        return "Asia/Jakarta", datetime.time(9, 0), datetime.time(16, 0)
+    if clean_sym.endswith(".BK"):
+        return "Asia/Bangkok", datetime.time(10, 0), datetime.time(16, 30)
+    if clean_sym.endswith(".KL"):
+        return "Asia/Kuala_Lumpur", datetime.time(9, 0), datetime.time(17, 0)
+
+    # Check for unrecognized foreign exchange suffix (e.g. SYM.XYZ)
+    if "." in clean_sym and not any(clean_sym.endswith(sfx) for sfx in ("-USD", "=X")):
+        suffix = clean_sym.rsplit(".", 1)[-1]
+        if suffix.isalpha():
+            warnings.warn(
+                f"Unknown exchange suffix '.{suffix}' in '{clean_sym}'. "
+                f"Defaulting to US market session (America/New_York, 09:30-16:00).",
+                UserWarning,
+                stacklevel=2,
+            )
+
     # Default US Equities
     is_early_close = False
     if d.month == 11 and d.weekday() == 4 and 23 <= d.day <= 29:
