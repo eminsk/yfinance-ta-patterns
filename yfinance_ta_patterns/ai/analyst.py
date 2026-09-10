@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from ..data import validate_asset_type
 from .scorer import PatternConfidenceResult, SignalGrade
 
 
@@ -28,6 +29,7 @@ class AIMarketAnalyst:
         *,
         symbol: str = "ASSET",
         timeframe: str = "1d",
+        asset_type: str = "auto",
     ) -> None:
         """Initialize analyst with market data and optional evaluated patterns.
 
@@ -36,12 +38,14 @@ class AIMarketAnalyst:
             scored_results: Optional pre-computed list of PatternConfidenceResult.
             symbol: Ticker symbol (e.g. 'BTC-USD', 'EURUSD'). Default is 'ASSET'.
             timeframe: Timeframe or interval (e.g. '4h', '1d'). Default is '1d'.
+            asset_type: Asset classification ('auto', 'stock', 'forex', 'crypto', 'commodity', 'index').
         """
         self.data = data
         self.symbol = symbol
         self.timeframe = timeframe
+        self.asset_type: str = validate_asset_type(asset_type)
         self.scored_results: list[PatternConfidenceResult] = (
-            sorted(scored_results, key=lambda r: r.confidence_score, reverse=True)
+            sorted(scored_results, key=lambda r: r.confidence, reverse=True)
             if scored_results is not None
             else []
         )
@@ -164,7 +168,7 @@ class AIMarketAnalyst:
 
         for i, res in enumerate(results[:5], 1):
             grade_badge = f"[{res.grade.value}]"
-            conf_pct = f"{res.confidence_score * 100:.1f}%"
+            conf_pct = f"{res.confidence * 100:.1f}%"
             lines.append(f"### {i}. {res.pattern_name} - {grade_badge} (Confluence: {conf_pct})")
             lines.append(f"- **Timestamp:** `{res.timestamp}` | **Regime:** `{res.trend_regime}`")
             lines.append(
@@ -202,6 +206,7 @@ class AIMarketAnalyst:
         return {
             "symbol": symbol,
             "timeframe": tf,
+            "asset_type": self.asset_type,
             "market_summary": self.get_market_regime_summary(),
             "patterns": [r.to_dict() for r in results],
         }

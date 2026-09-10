@@ -64,7 +64,7 @@ class PatternConfidenceResult:
     pattern_name: str
     timestamp: pd.Timestamp
     raw_signal: int
-    confidence_score: float = 0.0
+    confidence_score: float | None = None
     grade: SignalGrade = SignalGrade.WEAK
     trend_regime: str = "NEUTRAL"
     rvol: float = 1.0
@@ -74,45 +74,44 @@ class PatternConfidenceResult:
     risk_factors: list[str] = field(default_factory=list)
     trade_setup: TradeSetup | None = None
     insufficient_history: bool = False
-    confluence_score: float = 0.0
+    confluence_score: float | None = None
 
     def __post_init__(self) -> None:
-        # Validate finiteness
-        if not np.isfinite(self.confidence_score):
-            raise ValueError(
-                f"confidence_score must be a finite number, got {self.confidence_score}"
-            )
-        if not np.isfinite(self.confluence_score):
-            raise ValueError(
-                f"confluence_score must be a finite number, got {self.confluence_score}"
-            )
+        conf = self.confidence_score
+        confl = self.confluence_score
 
-        # Validate range [0.0, 1.0]
-        if not (0.0 <= self.confidence_score <= 1.0):
-            raise ValueError(
-                f"confidence_score must be between 0.0 and 1.0, got {self.confidence_score}"
-            )
-        if not (0.0 <= self.confluence_score <= 1.0):
-            raise ValueError(
-                f"confluence_score must be between 0.0 and 1.0, got {self.confluence_score}"
-            )
+        if conf is not None and confl is not None:
+            if not np.isfinite(conf) or isinstance(conf, bool):
+                raise ValueError(f"confidence_score must be a finite number, got {conf}")
+            if not np.isfinite(confl) or isinstance(confl, bool):
+                raise ValueError(f"confluence_score must be a finite number, got {confl}")
+            if not (0.0 <= conf <= 1.0):
+                raise ValueError(f"confidence_score must be between 0.0 and 1.0, got {conf}")
+            if not (0.0 <= confl <= 1.0):
+                raise ValueError(f"confluence_score must be between 0.0 and 1.0, got {confl}")
+            if abs(conf - confl) > 1e-6:
+                raise ValueError(
+                    f"Conflicting scores provided: confidence_score={conf} and "
+                    f"confluence_score={confl}. They must be equal."
+                )
+            score = float(conf)
+        elif conf is not None:
+            if not np.isfinite(conf) or isinstance(conf, bool):
+                raise ValueError(f"confidence_score must be a finite number, got {conf}")
+            if not (0.0 <= conf <= 1.0):
+                raise ValueError(f"confidence_score must be between 0.0 and 1.0, got {conf}")
+            score = float(conf)
+        elif confl is not None:
+            if not np.isfinite(confl) or isinstance(confl, bool):
+                raise ValueError(f"confluence_score must be a finite number, got {confl}")
+            if not (0.0 <= confl <= 1.0):
+                raise ValueError(f"confluence_score must be between 0.0 and 1.0, got {confl}")
+            score = float(confl)
+        else:
+            score = 0.0
 
-        # Check for contradictory scores
-        if (
-            self.confluence_score != 0.0
-            and self.confidence_score != 0.0
-            and abs(self.confidence_score - self.confluence_score) > 1e-6
-        ):
-            raise ValueError(
-                f"Conflicting scores provided: confidence_score={self.confidence_score} and "
-                f"confluence_score={self.confluence_score}. They must be equal."
-            )
-
-        # Synchronize
-        if self.confluence_score == 0.0 and self.confidence_score != 0.0:
-            object.__setattr__(self, "confluence_score", self.confidence_score)
-        elif self.confidence_score == 0.0 and self.confluence_score != 0.0:
-            object.__setattr__(self, "confidence_score", self.confluence_score)
+        object.__setattr__(self, "confidence_score", score)
+        object.__setattr__(self, "confluence_score", score)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert result to a structured dictionary for JSON / LLM consumption."""
@@ -120,8 +119,8 @@ class PatternConfidenceResult:
             "pattern": self.pattern_name,
             "timestamp": str(self.timestamp),
             "raw_signal": self.raw_signal,
-            "confluence_score": round(self.confluence_score, 4),
-            "confidence_score": round(self.confidence_score, 4),
+            "confluence_score": round(self.confidence, 4),
+            "confidence_score": round(self.confidence, 4),
             "grade": self.grade.value,
             "trend_regime": self.trend_regime,
             "insufficient_history": self.insufficient_history,
@@ -138,12 +137,12 @@ class PatternConfidenceResult:
     @property
     def confidence(self) -> float:
         """Convenience alias for confidence_score / confluence_score."""
-        return self.confluence_score
+        return float(self.confidence_score if self.confidence_score is not None else 0.0)
 
     @property
     def confluence(self) -> float:
         """Convenience alias for confluence_score."""
-        return self.confluence_score
+        return float(self.confluence_score if self.confluence_score is not None else 0.0)
 
     @property
     def setup(self) -> TradeSetup | None:
@@ -617,10 +616,10 @@ class AIPatternScorer:
             if raw_sig == 0:
                 continue
             scored = self.score_signal(pattern_name, pd.to_datetime(cast(Any, ts)), int(raw_sig))
-            if scored.confidence_score >= min_confidence:
+            if scored.confidence >= min_confidence:
                 results.append(scored)
 
-        results.sort(key=lambda r: r.confidence_score, reverse=True)
+        results.sort(key=lambda r: r.confidence, reverse=True)
         return results
 
     def score_all_active(
@@ -674,7 +673,7 @@ class AIPatternScorer:
             scored = self.score_all_signals(signals, clean_name, min_confidence=min_confidence)
             all_scored.extend(scored)
 
-        all_scored.sort(key=lambda r: r.confidence_score, reverse=True)
+        all_scored.sort(key=lambda r: r.confidence, reverse=True)
         return all_scored
 
     def score_all_history(

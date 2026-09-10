@@ -206,25 +206,33 @@ def test_pattern_confidence_result_validation() -> None:
     assert res.confidence_score == pytest.approx(0.85)
     assert res.confluence_score == pytest.approx(0.85)
 
-    # Synchronizes confidence -> confluence
+    # Synchronizes confidence -> confluence when confluence_score is omitted
     res_sync1 = PatternConfidenceResult(
         pattern_name="HAMMER",
         timestamp=dt,
         raw_signal=1,
         confidence_score=0.75,
-        confluence_score=0.0,
     )
     assert res_sync1.confluence_score == pytest.approx(0.75)
 
-    # Synchronizes confluence -> confidence
+    # Synchronizes confluence -> confidence when confidence_score is omitted
     res_sync2 = PatternConfidenceResult(
         pattern_name="HAMMER",
         timestamp=dt,
         raw_signal=1,
-        confidence_score=0.0,
         confluence_score=0.65,
     )
     assert res_sync2.confidence_score == pytest.approx(0.65)
+
+    # Conflicting scores (including one 0.0 and one non-zero) raise ValueError
+    with pytest.raises(ValueError, match="Conflicting scores"):
+        PatternConfidenceResult(
+            pattern_name="HAMMER",
+            timestamp=dt,
+            raw_signal=1,
+            confidence_score=0.75,
+            confluence_score=0.0,
+        )
 
     # Divergent non-zero scores raise ValueError
     with pytest.raises(ValueError, match="Conflicting scores"):

@@ -304,7 +304,7 @@ def run_cli(args: argparse.Namespace) -> int:
 
         print(f"=== AI Pattern Intelligence: {args.symbol} ({interval}, {period}){range_info} ===")
         for res in all_scored_results:
-            conf_score = f"{res.confidence_score * 100:.1f}/100"
+            conf_score = f"{res.confidence * 100:.1f}/100"
             print(
                 f"\n[{res.grade.value}] {res.pattern_name} at {res.timestamp} | AI Confluence: {conf_score}"
             )

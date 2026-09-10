@@ -281,7 +281,7 @@ def normalize_ticker(symbol: str, asset_type: str = "auto", strict: bool = True)
                         f"Base and quote symbols cannot be identical: '{base}/{quote}'."
                     )
                 return f"{base}-{quote}"
-        return clean
+        return f"{clean}-USD"
 
     # 2. Explicit forex handling: rejects crypto symbols and ensures valid currency pair format
     if a_type == "forex":
@@ -581,6 +581,12 @@ def resolve_asset_currencies(
     # If instrument metadata specifies currency, respect it directly
     if metadata_currency is not None and metadata_currency.strip():
         meta_q = metadata_currency.strip()
+        if meta_q in ("GBp", "GBX", "GBx"):
+            meta_q = "GBp"
+        elif meta_q in ("ZAc", "ZAC", "Zac", "zac"):
+            meta_q = "ZAc"
+        elif meta_q.upper() == "ILA":
+            meta_q = "ILA"
         if clean.endswith("=X"):
             clean_fx = clean[:-2]
             if len(clean_fx) == 6:
@@ -988,6 +994,11 @@ class MarketDataLoader:
                 auto_adjust=self.auto_adjust,
                 repair=repair_opt,
                 progress=False,
+            )
+        if data.empty:
+            raise ValueError(
+                f"No market data found on Yahoo Finance for ticker '{self.ticker}'. "
+                "Verify that the symbol is valid and active."
             )
         return cast(pd.DataFrame, data)
 

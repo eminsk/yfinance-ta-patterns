@@ -139,6 +139,8 @@ DEFAULT_FX_USD_RATES: dict[str, float] = {
     "USDJPY": 150.0,
     "USDCHF": 0.89,
     "USDCAD": 1.37,
+    "USDILS": 3.70,
+    "USDZAR": 18.0,
 }
 
 
@@ -162,6 +164,7 @@ def resolve_periods_per_year(
     asset_type: str = "auto",
     periods_per_year: float | None = None,
     as_of_date: datetime.date | None = None,
+    date_range: tuple[datetime.date, datetime.date] | None = None,
 ) -> float:
     """Resolve asset-aware annualization factor for Sharpe Ratio calculation."""
     if periods_per_year is not None:
@@ -188,10 +191,29 @@ def resolve_periods_per_year(
 
     # Asian exchanges
     if clean_sym.endswith(".T"):
-        ref_date = as_of_date or datetime.date.today()
-        if ref_date < datetime.date(2024, 11, 5):
-            return TOKYO_PERIODS_PER_YEAR_PRE_2024.get(tf, 245.0)
-        return TOKYO_PERIODS_PER_YEAR_POST_2024.get(tf, 245.0)
+        split_d = datetime.date(2024, 11, 5)
+        pre_factor = TOKYO_PERIODS_PER_YEAR_PRE_2024.get(tf, 245.0)
+        post_factor = TOKYO_PERIODS_PER_YEAR_POST_2024.get(tf, 245.0)
+        if date_range is not None:
+            start_d, end_d = date_range
+            if end_d < split_d:
+                return pre_factor
+            if start_d >= split_d:
+                return post_factor
+            # Mixed period spanning across 2024-11-05
+            days_pre = max((split_d - start_d).days, 0)
+            days_post = max((end_d - split_d).days + 1, 0)
+            total_days = days_pre + days_post
+            if total_days > 0:
+                w_pre = days_pre / total_days
+                w_post = days_post / total_days
+                return float(w_pre * pre_factor + w_post * post_factor)
+            return post_factor
+        if as_of_date is not None:
+            if as_of_date < split_d:
+                return pre_factor
+            return post_factor
+        return post_factor
 
     if clean_sym.endswith(".HK"):
         return HONG_KONG_PERIODS_PER_YEAR.get(tf, 250.0)
@@ -303,6 +325,7 @@ class PatternRankingTester:
         "_symbol",
         "_timeframe",
         "_use_adj_close",
+        "_used_approx_fx",
         "equity_curve",
         "trades",
     )
@@ -445,6 +468,10 @@ class PatternRankingTester:
             c_str = c.strip()
             if c_str in ("GBp", "GBX", "GBx"):
                 return "GBp"
+            if c_str in ("ZAc", "ZAC", "Zac"):
+                return "ZAc"
+            if c_str.upper() == "ILA":
+                return "ILA"
             return c_str.upper()
 
         self._account_currency: str = _norm_c(account_currency)
@@ -461,6 +488,7 @@ class PatternRankingTester:
         )
         self._fx_history: dict[str, pd.Series] | pd.DataFrame | None = fx_history
         self._strict_fx: bool = strict_fx
+        self._used_approx_fx: bool = False
         self._max_fx_staleness: pd.Timedelta | None = (
             pd.Timedelta(max_fx_staleness)
             if isinstance(max_fx_staleness, str)
@@ -488,15 +516,20 @@ class PatternRankingTester:
             self._periods_per_year: float = float(periods_per_year)
         else:
             as_of = None
+            d_range = None
             if hasattr(self._data.index, "max") and len(self._data) > 0:
+                first_ts = self._data.index.min()
                 last_ts = self._data.index.max()
                 if hasattr(last_ts, "date"):
                     as_of = last_ts.date()
+                if hasattr(first_ts, "date") and hasattr(last_ts, "date"):
+                    d_range = (first_ts.date(), last_ts.date())
             self._periods_per_year = resolve_periods_per_year(
                 self._timeframe,
                 self._symbol,
                 asset_type=self._asset_type,
                 as_of_date=as_of,
+                date_range=d_range,
             )
 
         self.equity_curve: list[float] = [initial_capital]
@@ -574,17 +607,31 @@ class PatternRankingTester:
         self, from_curr: str, to_curr: str, timestamp: pd.Timestamp | None = None
     ) -> tuple[float, str]:
         """Resolve exchange rate and identify the source of the rate ('historical', 'custom_static', 'default_static', 'same_currency')."""
-        # 0. Handle pence sterling (GBp / GBX) scaling
-        is_from_pence = from_curr in ("GBp", "GBX", "GBx")
-        is_to_pence = to_curr in ("GBp", "GBX", "GBx")
-        if is_from_pence and is_to_pence:
-            return 1.0, "same_currency"
-        if is_from_pence:
-            rate, src = self._resolve_fx_rate_with_source("GBP", to_curr, timestamp)
-            return 0.01 * rate, src
-        if is_to_pence:
-            rate, src = self._resolve_fx_rate_with_source(from_curr, "GBP", timestamp)
-            return rate * 100.0, src
+        # 0. Handle subunit currencies (GBp, ILA, ZAc)
+        subunit_map: dict[str, tuple[str, float]] = {
+            "GBp": ("GBP", 0.01),
+            "GBX": ("GBP", 0.01),
+            "GBx": ("GBP", 0.01),
+            "ILA": ("ILS", 0.01),
+            "ila": ("ILS", 0.01),
+            "Ila": ("ILS", 0.01),
+            "ZAc": ("ZAR", 0.01),
+            "ZAC": ("ZAR", 0.01),
+            "Zac": ("ZAR", 0.01),
+            "zac": ("ZAR", 0.01),
+        }
+        sub_from = subunit_map.get(from_curr)
+        sub_to = subunit_map.get(to_curr)
+        if sub_from and sub_to and sub_from[0] == sub_to[0]:
+            return sub_from[1] / sub_to[1], "same_currency"
+        if sub_from:
+            parent, factor = sub_from
+            rate, src = self._resolve_fx_rate_with_source(parent, to_curr, timestamp)
+            return factor * rate, src
+        if sub_to:
+            parent, factor = sub_to
+            rate, src = self._resolve_fx_rate_with_source(from_curr, parent, timestamp)
+            return rate * (1.0 / factor), src
 
         from_curr = from_curr.upper()
         to_curr = to_curr.upper()
@@ -649,6 +696,7 @@ class PatternRankingTester:
         used_default_static = False
         rates = {**DEFAULT_FX_USD_RATES, **self._fx_rates}
         if direct_pair in rates and np.isfinite(rates[direct_pair]) and rates[direct_pair] > 0:
+            self._used_approx_fx = True
             if direct_pair not in self._fx_rates:
                 warnings.warn(
                     f"Static default FX rate used for {from_curr}->{to_curr} currency conversion at {timestamp}. "
@@ -661,6 +709,7 @@ class PatternRankingTester:
         if inv_pair in rates and np.isfinite(rates[inv_pair]) and rates[inv_pair] > 0:
             inv_rate = 1.0 / rates[inv_pair]
             if np.isfinite(inv_rate) and inv_rate > 0:
+                self._used_approx_fx = True
                 if inv_pair not in self._fx_rates:
                     warnings.warn(
                         f"Static default FX rate used for {from_curr}->{to_curr} currency conversion at {timestamp}. "
@@ -723,6 +772,7 @@ class PatternRankingTester:
         ):
             bridge_val = from_usd_rate / to_usd_rate
             if np.isfinite(bridge_val) and bridge_val > 0:
+                self._used_approx_fx = True
                 if used_default_static:
                     warnings.warn(
                         f"Static default FX rate used for {from_curr}->{to_curr} currency conversion at {timestamp}. "
@@ -1255,6 +1305,16 @@ class PatternRankingTester:
 
         return trades
 
+    @property
+    def used_approx_fx(self) -> bool:
+        """Whether approximate/static FX rates were used during currency conversion."""
+        return self._used_approx_fx
+
+    @property
+    def has_static_fx_conversion(self) -> bool:
+        """Whether approximate/static FX rates were used during currency conversion."""
+        return self._used_approx_fx
+
     def get_top_patterns(self, n: int = 10) -> list[PatternResult]:
         """Get top N patterns by performance."""
         return self._results[:n]
@@ -1286,7 +1346,15 @@ class PatternRankingTester:
                 }
             )
 
-        return pd.DataFrame(data)
+        df = pd.DataFrame(data)
+        if self._used_approx_fx:
+            df.attrs["fx_warning"] = (
+                "Static/approximate FX rates were used during currency conversion. "
+                "For historical accuracy, provide fx_history or enable strict_fx=True."
+            )
+        else:
+            df.attrs["fx_warning"] = None
+        return df
 
     def export_results(self, filename: str = "pattern_ranking.csv") -> None:
         """Export results to CSV."""
@@ -1331,6 +1399,18 @@ class PatternRankingTester:
             "Sharpe Ratio",
             "Score",
         ]
+        if self._used_approx_fx:
+            warnings.warn(
+                "Exporting results that used static/approximate FX rates. "
+                "For historical accuracy, provide fx_history or enable strict_fx=True.",
+                UserWarning,
+                stacklevel=2,
+            )
+            columns.append("FX Warning")
+            for row in data:
+                row["FX Warning"] = (
+                    "Static/approximate FX rate used. For historical accuracy, provide fx_history or enable strict_fx=True."
+                )
         df = pd.DataFrame(data, columns=columns)
         df.to_csv(filename, index=False)
         print(f"Results exported to {filename}")
