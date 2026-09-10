@@ -6,7 +6,7 @@
 [![Downloads](https://static.pepy.tech/badge/yfinance-ta-patterns)](https://pepy.tech/project/yfinance-ta-patterns)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-High-performance Python library and CLI that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate probabilistic confidence scores, trade setups, and LLM-ready market briefs.
+High-performance Python library and CLI that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate multi-factor confluence scores (deterministic quantitative confluence heuristic, not uncalibrated win-rate probability), trade setups, and LLM-ready market briefs.
 
 Compatible with **Python 3.12, 3.13, 3.14, and Python 3.15 (Release Candidate & Preview)**.
 
@@ -16,7 +16,7 @@ Compatible with **Python 3.12, 3.13, 3.14, and Python 3.15 (Release Candidate & 
 
 - **Multi-Asset Data Loader**: Universal fetching and candle normalization for stocks (`AAPL`, `NVDA`), crypto (`BTC-USD`), commodities (`GC=F`), indices (`^GSPC`), and forex pairs (`EURUSD`). Supports custom date ranges (`start`, `end`), timezone conversion, UTC-anchored 4h resampling, and raw OHLC integrity validation.
 - **TA-Lib Pattern Detection**: Full recognition engine across 60+ classic candlestick patterns (via native TA-Lib) with built-in zero-dependency pure-NumPy fallback engine for 11 core patterns.
-- **AI Pattern Confidence Scorer**: Probabilistic score ($0.0 - 1.0$) evaluating multi-factor confluence:
+- **AI Pattern Confluence Scorer**: Multi-factor confluence score ($0.0 - 1.0$) evaluating quantitative confluence (deterministic heuristic, not win-rate probability):
   - Multi-EMA trend alignment (20, 50, 200 EMA) with safe warm-up handling
   - Zero-lookahead Relative Volume surge (RVOL)
   - Canonical Wilder's RSI (14) momentum exhaustion & divergence

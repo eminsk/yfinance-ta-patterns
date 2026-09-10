@@ -74,6 +74,38 @@ class PatternConfidenceResult:
     confluence_score: float = 0.0
 
     def __post_init__(self) -> None:
+        # Validate finiteness
+        if not np.isfinite(self.confidence_score):
+            raise ValueError(
+                f"confidence_score must be a finite number, got {self.confidence_score}"
+            )
+        if not np.isfinite(self.confluence_score):
+            raise ValueError(
+                f"confluence_score must be a finite number, got {self.confluence_score}"
+            )
+
+        # Validate range [0.0, 1.0]
+        if not (0.0 <= self.confidence_score <= 1.0):
+            raise ValueError(
+                f"confidence_score must be between 0.0 and 1.0, got {self.confidence_score}"
+            )
+        if not (0.0 <= self.confluence_score <= 1.0):
+            raise ValueError(
+                f"confluence_score must be between 0.0 and 1.0, got {self.confluence_score}"
+            )
+
+        # Check for contradictory scores
+        if (
+            self.confluence_score != 0.0
+            and self.confidence_score != 0.0
+            and abs(self.confidence_score - self.confluence_score) > 1e-6
+        ):
+            raise ValueError(
+                f"Conflicting scores provided: confidence_score={self.confidence_score} and "
+                f"confluence_score={self.confluence_score}. They must be equal."
+            )
+
+        # Synchronize
         if self.confluence_score == 0.0 and self.confidence_score != 0.0:
             object.__setattr__(self, "confluence_score", self.confidence_score)
         elif self.confidence_score == 0.0 and self.confluence_score != 0.0:
@@ -368,7 +400,7 @@ class AIPatternScorer:
                 "Insufficient History: Indicators not warmed up (< 14 bars); estimated values used."
             )
 
-        # Baseline prior probability
+        # Baseline confluence score
         confidence = 0.50
         is_bullish = raw_signal > 0
 

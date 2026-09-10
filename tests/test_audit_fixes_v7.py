@@ -128,7 +128,9 @@ def test_international_equities_market_session_hours() -> None:
 
 
 # --- Issue 3: Open position equity curve without closed trades ---
-def test_open_position_generates_equity_curve_without_closed_trades(sample_ohlcv_df: pd.DataFrame) -> None:
+def test_open_position_generates_equity_curve_without_closed_trades(
+    sample_ohlcv_df: pd.DataFrame,
+) -> None:
     """When force_exit_on_last_bar=False and an open trade exists, an MTM curve is generated."""
     tester = PatternRankingTester(
         sample_ohlcv_df,
@@ -153,6 +155,7 @@ def test_open_position_generates_equity_curve_without_closed_trades(sample_ohlcv
         return signals * 100
 
     from yfinance_ta_patterns.talib_compat import talib
+
     original_func = getattr(talib, "CDLHAMMER", None)
     talib.CDLHAMMER = mock_cdl
     try:
@@ -253,7 +256,9 @@ def test_invalid_tester_parameters_raise_value_error(sample_ohlcv_df: pd.DataFra
 
 
 # --- Issue 6: Market-aware annualization factors and custom periods_per_year ---
-def test_market_aware_annualization_and_custom_periods_per_year(sample_ohlcv_df: pd.DataFrame) -> None:
+def test_market_aware_annualization_and_custom_periods_per_year(
+    sample_ohlcv_df: pd.DataFrame,
+) -> None:
     """Verify market-aware annualization factors and custom periods_per_year override."""
     # US equities hourly: standard 252 * 7 = 1764.0 (7 observations/day)
     us_hourly = resolve_periods_per_year("1h", symbol="AAPL")

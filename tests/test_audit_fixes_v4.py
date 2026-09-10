@@ -22,6 +22,7 @@ from yfinance_ta_patterns.pattern_tester import (
 # 1. Timezone Does Not Shift Daily Candle Close Bounds
 # ==============================================================================
 
+
 def test_timezone_does_not_shift_daily_candle_close() -> None:
     """Issue 1: closed_only daily filtering is identical whether timezone is UTC or America/Los_Angeles."""
     dt_candle = pd.Timestamp("2024-05-15 00:00:00", tz="UTC")
@@ -68,6 +69,7 @@ def test_timezone_does_not_shift_daily_candle_close() -> None:
 # 2. Unknown FX Exchange Rate Fallback Raises Error
 # ==============================================================================
 
+
 def test_unknown_fx_rate_raises_error() -> None:
     """Issue 2: Unknown exchange rate raises ValueError instead of silently using 1.0."""
     dates = pd.date_range("2024-01-01", periods=5, freq="D", tz="UTC")
@@ -111,6 +113,7 @@ def test_unknown_fx_rate_raises_error() -> None:
 # 3. Hyphenated Stock Tickers (BRK-B, BF-B) Not Parsed as Currency Pairs
 # ==============================================================================
 
+
 def test_hyphenated_stocks_not_parsed_as_pairs() -> None:
     """Issue 3: Hyphenated stocks like BRK-B and BF-B are preserved as stock symbols with USD quote."""
     assert resolve_asset_currencies("BRK-B", asset_type="stock") == ("BRK-B", "USD")
@@ -129,6 +132,7 @@ def test_hyphenated_stocks_not_parsed_as_pairs() -> None:
 # ==============================================================================
 # 4. 90m Interval Candle Duration and Sharpe Ratios
 # ==============================================================================
+
 
 def test_90m_interval_candle_duration_and_sharpe() -> None:
     """Issue 4: 90m interval uses 90-minute delta (not 1D) and has correct Sharpe annual factors."""
@@ -156,7 +160,9 @@ def test_90m_interval_candle_duration_and_sharpe() -> None:
     assert len(res_closed) == 1
 
     # Annual Sharpe periods
-    assert resolve_periods_per_year("90m", "AAPL") == 252.0 * (390.0 / 90.0)  # 1092.0
+    assert (
+        resolve_periods_per_year("90m", "AAPL") == 252.0 * 5.0
+    )  # 1260.0 (5 candles per US trading day)
     assert resolve_periods_per_year("90m", "BTC-USD") == 365.0 * 16.0  # 5840.0
     assert resolve_periods_per_year("90m", "EURUSD=X") == 260.0 * 16.0  # 4160.0
 
@@ -164,6 +170,7 @@ def test_90m_interval_candle_duration_and_sharpe() -> None:
 # ==============================================================================
 # 5. 3mo and 5d Candle Boundaries
 # ==============================================================================
+
 
 def test_3mo_and_5d_candle_boundaries() -> None:
     """Issue 5: 3mo uses 3-month DateOffset, 5d uses 5-day delta, and unknown intervals raise ValueError."""
@@ -210,6 +217,7 @@ def test_3mo_and_5d_candle_boundaries() -> None:
 # ==============================================================================
 # 6. Confluence Score Naming and Backward Compatibility
 # ==============================================================================
+
 
 def test_confluence_score_naming_and_compatibility() -> None:
     """Issue 6: PatternConfidenceResult supports confluence_score with full backward compatibility."""

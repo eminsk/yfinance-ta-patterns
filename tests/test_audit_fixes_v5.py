@@ -107,14 +107,24 @@ def test_unlisted_crypto_classification_and_currencies() -> None:
 def test_4h_bucket_completeness_session_gaps() -> None:
     """Issue 3: Incomplete 4h blocks reject intra-session missing bars for Crypto, Forex, and Equities."""
     # 1. Crypto (FET-USD): strictly requires 4 hourly bars
-    loader_crypto = MarketDataLoader("FET-USD", interval="4h", asset_type="auto", timezone="UTC", closed_only=False)
-    idx_3bars = pd.DatetimeIndex([
-        "2025-01-15 00:00:00+00:00",
-        "2025-01-15 01:00:00+00:00",
-        "2025-01-15 02:00:00+00:00",
-    ])
+    loader_crypto = MarketDataLoader(
+        "FET-USD", interval="4h", asset_type="auto", timezone="UTC", closed_only=False
+    )
+    idx_3bars = pd.DatetimeIndex(
+        [
+            "2025-01-15 00:00:00+00:00",
+            "2025-01-15 01:00:00+00:00",
+            "2025-01-15 02:00:00+00:00",
+        ]
+    )
     df_crypto_3 = pd.DataFrame(
-        {"Open": [1.0] * 3, "High": [1.1] * 3, "Low": [0.9] * 3, "Close": [1.0] * 3, "Volume": [100] * 3},
+        {
+            "Open": [1.0] * 3,
+            "High": [1.1] * 3,
+            "Low": [0.9] * 3,
+            "Close": [1.0] * 3,
+            "Volume": [100] * 3,
+        },
         index=idx_3bars,
     )
     assert len(loader_crypto.process(df_crypto_3)) == 0
@@ -122,13 +132,21 @@ def test_4h_bucket_completeness_session_gaps() -> None:
     # 2. Forex (EURUSD=X):
     loader_forex = MarketDataLoader("EURUSD=X", interval="4h", timezone="UTC", closed_only=False)
     # Dropped bar inside trading hours: 08:00, 09:00, 11:00 (10:00 missing on Wednesday)
-    idx_fx_gap = pd.DatetimeIndex([
-        "2025-01-15 08:00:00+00:00",
-        "2025-01-15 09:00:00+00:00",
-        "2025-01-15 11:00:00+00:00",
-    ])
+    idx_fx_gap = pd.DatetimeIndex(
+        [
+            "2025-01-15 08:00:00+00:00",
+            "2025-01-15 09:00:00+00:00",
+            "2025-01-15 11:00:00+00:00",
+        ]
+    )
     df_fx_gap = pd.DataFrame(
-        {"Open": [1.05] * 3, "High": [1.06] * 3, "Low": [1.04] * 3, "Close": [1.05] * 3, "Volume": [100] * 3},
+        {
+            "Open": [1.05] * 3,
+            "High": [1.06] * 3,
+            "Low": [1.04] * 3,
+            "Close": [1.05] * 3,
+            "Volume": [100] * 3,
+        },
         index=idx_fx_gap,
     )
     assert len(loader_forex.process(df_fx_gap)) == 0
@@ -136,12 +154,20 @@ def test_4h_bucket_completeness_session_gaps() -> None:
     # 3. Equities (AAPL):
     loader_stock = MarketDataLoader("AAPL", interval="4h", timezone="UTC", closed_only=False)
     # In-session dropped bar: 13:30 and 15:30 (missing 14:30 inside 09:30-16:00 NY session)
-    idx_stock_gap = pd.DatetimeIndex([
-        "2025-01-15 13:30:00+00:00",
-        "2025-01-15 15:30:00+00:00",
-    ])
+    idx_stock_gap = pd.DatetimeIndex(
+        [
+            "2025-01-15 13:30:00+00:00",
+            "2025-01-15 15:30:00+00:00",
+        ]
+    )
     df_stock_gap = pd.DataFrame(
-        {"Open": [150.0] * 2, "High": [155.0] * 2, "Low": [149.0] * 2, "Close": [152.0] * 2, "Volume": [1000] * 2},
+        {
+            "Open": [150.0] * 2,
+            "High": [155.0] * 2,
+            "Low": [149.0] * 2,
+            "Close": [152.0] * 2,
+            "Volume": [1000] * 2,
+        },
         index=idx_stock_gap,
     )
     assert len(loader_stock.process(df_stock_gap)) == 0
@@ -166,7 +192,9 @@ def test_historical_fx_staleness_limit() -> None:
 
     # FX history ends on 2024-01-01
     fx_history = {
-        "EURUSD": pd.Series([1.10], index=pd.date_range("2024-01-01", periods=1, freq="1D", tz="UTC")),
+        "EURUSD": pd.Series(
+            [1.10], index=pd.date_range("2024-01-01", periods=1, freq="1D", tz="UTC")
+        ),
     }
 
     # Tester with default 7-day staleness limit
@@ -198,7 +226,9 @@ def test_historical_fx_staleness_limit() -> None:
         strict_fx=True,
         max_fx_staleness=None,
     )
-    rate_unlimited = tester_unlimited._lookup_hist_rate("EURUSD", "USDEUR", pd.Timestamp("2024-01-20", tz="UTC"))
+    rate_unlimited = tester_unlimited._lookup_hist_rate(
+        "EURUSD", "USDEUR", pd.Timestamp("2024-01-20", tz="UTC")
+    )
     assert rate_unlimited == 1.10
 
 
@@ -248,7 +278,13 @@ def test_trade_sharpe_timeframe_invariance_and_scaling() -> None:
     # Hourly timeframe (1764 bars = 1.0 year) with same 4 trades
     tester_1h = PatternRankingTester(
         pd.DataFrame(
-            {"Open": [100.0] * 1764, "High": [101.0] * 1764, "Low": [99.0] * 1764, "Close": [100.0] * 1764, "Volume": [100] * 1764},
+            {
+                "Open": [100.0] * 1764,
+                "High": [101.0] * 1764,
+                "Low": [99.0] * 1764,
+                "Close": [100.0] * 1764,
+                "Volume": [100] * 1764,
+            },
             index=pd.date_range("2024-01-01", periods=1764, freq="1h", tz="UTC"),
         ),
         timeframe="1h",

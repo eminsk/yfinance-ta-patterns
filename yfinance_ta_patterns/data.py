@@ -342,7 +342,11 @@ def classify_asset(symbol: str, asset_type: str = "auto") -> str:
     return "stock"
 
 
-def resolve_asset_currencies(symbol: str, asset_type: str = "auto") -> tuple[str, str]:
+def resolve_asset_currencies(
+    symbol: str,
+    asset_type: str = "auto",
+    metadata_currency: str | None = None,
+) -> tuple[str, str]:
     """Resolve base and quote currency for any asset symbol.
 
     Returns (base_currency, quote_currency).
@@ -357,6 +361,21 @@ def resolve_asset_currencies(symbol: str, asset_type: str = "auto") -> tuple[str
       'AAPL' -> ('AAPL', 'USD')
     """
     clean = symbol.strip().upper()
+
+    # If instrument metadata specifies currency, respect it directly
+    if metadata_currency is not None and metadata_currency.strip():
+        meta_q = metadata_currency.strip()
+        if clean.endswith("=X"):
+            clean_fx = clean[:-2]
+            if len(clean_fx) == 6:
+                return clean_fx[:3], meta_q
+        sep = "-" if "-" in clean else ("/" if "/" in clean else None)
+        if sep:
+            parts = clean.split(sep)
+            if len(parts) == 2:
+                return parts[0], meta_q
+        return clean, meta_q
+
     if clean.endswith("=X"):
         clean_fx = clean[:-2]
         if len(clean_fx) == 6:
@@ -365,6 +384,12 @@ def resolve_asset_currencies(symbol: str, asset_type: str = "auto") -> tuple[str
     # Check exchange suffix for stocks (e.g. .DE -> EUR, .L -> GBp, .TO -> CAD)
     for suffix, quote_curr in _EXCHANGE_SUFFIX_MAP.items():
         if clean.endswith(suffix):
+            warnings.warn(
+                f"Quote currency for '{symbol}' inferred as '{quote_curr}' using exchange suffix heuristic. "
+                "For multi-currency exchanges (e.g. LSE with GBP/USD instruments), pass metadata_currency or explicit quote_currency.",
+                UserWarning,
+                stacklevel=2,
+            )
             return clean, quote_curr
 
     # If explicitly or auto-classified as stock, treat entire ticker as base and USD as quote
@@ -517,7 +542,10 @@ def _get_market_session_hours(
     clean_sym = symbol.strip().upper()
     if clean_sym.endswith(".L") or clean_sym.endswith(".IL"):
         return "Europe/London", datetime.time(8, 0), datetime.time(16, 30)
-    if any(clean_sym.endswith(sfx) for sfx in (".DE", ".PA", ".AS", ".BR", ".LS", ".MI", ".MC", ".VI", ".HE", ".F", ".AT")):
+    if any(
+        clean_sym.endswith(sfx)
+        for sfx in (".DE", ".PA", ".AS", ".BR", ".LS", ".MI", ".MC", ".VI", ".HE", ".F", ".AT")
+    ):
         return "Europe/Berlin", datetime.time(9, 0), datetime.time(17, 30)
     if clean_sym.endswith(".SW"):
         return "Europe/Zurich", datetime.time(9, 0), datetime.time(17, 30)
@@ -615,7 +643,24 @@ class MarketDataLoader:
         timeframe: str | None = None,
         closed_only: bool = True,
     ) -> None:
-        """Initialize data loader with symbol and timeframe parameters."""
+        """Initialize data loader with symbol and timeframe parameters.
+
+        Args:
+            symbol: Ticker symbol (e.g. 'AAPL', 'EURUSD', 'BTC-USD').
+            period: History period (e.g. '60d', '1y', 'max').
+            interval: Bar interval (e.g. '15m', '1h', '4h', '1d').
+            timezone: Output timezone for candle index (default 'Europe/Moscow').
+            asset_type: 'auto', 'stock', 'forex', 'crypto', 'commodity', 'index'.
+            start: Optional start date string (YYYY-MM-DD).
+            end: Optional end date string (YYYY-MM-DD).
+            auto_adjust: If False (default), preserves raw historical traded prices and supplies
+                separate 'Adj Close' column. Appropriate for price action and chart patterns.
+                If True, adjusts all OHLC prices for corporate actions (splits and dividends),
+                producing a total-return series suitable for total-return quantitative backtesting.
+            repair: If True, attempts price anomaly correction via yfinance (requires scikit-learn).
+            timeframe: Alias keyword for interval.
+            closed_only: If True, filters out unclosed (forming) candles based on market session.
+        """
         effective_interval = timeframe if timeframe is not None else interval
         norm_interval = normalize_interval(effective_interval)
         self.symbol: str = symbol
@@ -753,9 +798,7 @@ class MarketDataLoader:
                     wd = slot_ny.weekday()
                     hr = slot_ny.hour
                     is_open = (
-                        (wd == 6 and hr >= 17)
-                        or (wd in (0, 1, 2, 3))
-                        or (wd == 4 and hr < 17)
+                        (wd == 6 and hr >= 17) or (wd in (0, 1, 2, 3)) or (wd == 4 and hr < 17)
                     )
                     if is_open:
                         open_slots.append(slot)
@@ -1042,9 +1085,18 @@ class MarketDataLoader:
                         close_ts = pd.Timestamp(d, tz=pytz.UTC) + pd.Timedelta(days=1)
                     elif asset_class == "forex":
                         # Forex daily rollover: 17:00 America/New_York
-                        d = orig_dates[i] if orig_dates is not None and i < len(orig_dates) else ts.date()
+                        d = (
+                            orig_dates[i]
+                            if orig_dates is not None and i < len(orig_dates)
+                            else ts.date()
+                        )
                         close_ts = pd.Timestamp(
-                            year=d.year, month=d.month, day=d.day, hour=17, minute=0, tz="America/New_York"
+                            year=d.year,
+                            month=d.month,
+                            day=d.day,
+                            hour=17,
+                            minute=0,
+                            tz="America/New_York",
                         ).tz_convert(pytz.UTC)
                     else:
                         # Stock / Commodity / Index
@@ -1118,6 +1170,11 @@ class MarketDataLoader:
         # Convert to target user timezone after closed-only filtering
         if isinstance(data.index, pd.DatetimeIndex):
             data.index = data.index.tz_convert(self.timezone)
+
+        # Store metadata in DataFrame attributes
+        data.attrs["symbol"] = self.symbol
+        data.attrs["ticker"] = self.ticker
+        data.attrs["auto_adjust"] = self.auto_adjust
 
         return data
 

@@ -23,9 +23,10 @@ TIMEFRAME_PERIODS_PER_YEAR: dict[str, float] = {
     "5m": 252.0 * 78.0,  # 19,656 periods/year
     "15m": 252.0 * 26.0,  # 6,552 periods/year
     "30m": 252.0 * 13.0,  # 3,276 periods/year
-    "60m": 252.0 * 7.0,  # 1,764 periods/year (7 hourly candles/day: 9:30, 10:30, 11:30, 12:30, 13:30, 14:30, 15:30)
+    "60m": 252.0
+    * 7.0,  # 1,764 periods/year (7 hourly candles/day: 9:30, 10:30, 11:30, 12:30, 13:30, 14:30, 15:30)
     "1h": 252.0 * 7.0,  # 1,764 periods/year
-    "90m": 252.0 * (390.0 / 90.0),  # 1,092 periods/year
+    "90m": 252.0 * 5.0,  # 1,260 periods/year (5 observations/day: 9:30, 11:00, 12:30, 14:00, 15:30)
     "4h": 252.0 * 2.0,  # 504 periods/year
     "1d": 252.0,  # 252 trading days/year
     "5d": 252.0 / 5.0,  # 50.4 periods/year
@@ -105,7 +106,9 @@ def resolve_periods_per_year(
     """Resolve asset-aware annualization factor for Sharpe Ratio calculation."""
     if periods_per_year is not None:
         if not np.isfinite(periods_per_year) or periods_per_year <= 0:
-            raise ValueError(f"periods_per_year must be positive and finite, got {periods_per_year}")
+            raise ValueError(
+                f"periods_per_year must be positive and finite, got {periods_per_year}"
+            )
         return float(periods_per_year)
 
     tf = normalize_interval(timeframe) if timeframe else "1d"
@@ -128,18 +131,41 @@ def resolve_periods_per_year(
     if any(clean_sym.endswith(sfx) for sfx in (".L", ".IL")) or any(
         clean_sym.endswith(sfx)
         for sfx in (
-            ".DE", ".PA", ".AS", ".BR", ".LS", ".MI", ".MC", ".VI", ".HE",
-            ".F", ".AT", ".SW", ".ST", ".OL", ".CO"
+            ".DE",
+            ".PA",
+            ".AS",
+            ".BR",
+            ".LS",
+            ".MI",
+            ".MC",
+            ".VI",
+            ".HE",
+            ".F",
+            ".AT",
+            ".SW",
+            ".ST",
+            ".OL",
+            ".CO",
         )
     ):
         if tf in ("1h", "60m"):
-            return 252.0 * 9.0  # 2,268 periods/year (9 hourly observations/day: 8:00-16:00 + 16:00-16:30)
+            return (
+                252.0 * 9.0
+            )  # 2,268 periods/year (9 hourly observations/day: 8:00-16:00 + 16:00-16:30)
         if tf == "4h":
             return 252.0 * 2.125
+        if tf == "90m":
+            return 252.0 * 6.0  # 1,512 periods/year (6 observations/day: 5 full 90m + 1 60m)
         if tf == "30m":
-            return 252.0 * 17.0
+            return 252.0 * 17.0  # 4,284 periods/year
         if tf == "15m":
-            return 252.0 * 34.0
+            return 252.0 * 34.0  # 8,568 periods/year
+        if tf == "5m":
+            return 252.0 * 102.0  # 25,704 periods/year (102 observations/day)
+        if tf == "2m":
+            return 252.0 * 255.0  # 64,260 periods/year (255 observations/day)
+        if tf == "1m":
+            return 252.0 * 510.0  # 128,520 periods/year (510 observations/day)
 
     return TIMEFRAME_PERIODS_PER_YEAR.get(tf, 252.0)
 
@@ -167,6 +193,7 @@ class PatternResult:
     score: float = 0.0
     total_trades: int = 0
     open_trade: dict[str, Any] | None = None
+    fx_source: str = "same_currency"
 
 
 class PatternRankingTester:
@@ -190,6 +217,7 @@ class PatternRankingTester:
         "_initial_capital",
         "_last_open_trade",
         "_max_fx_staleness",
+        "_metadata_currency",
         "_min_signals",
         "_min_trades",
         "_news_dates",
@@ -202,6 +230,7 @@ class PatternRankingTester:
         "_strict_fx",
         "_symbol",
         "_timeframe",
+        "_use_adj_close",
         "equity_curve",
         "trades",
     )
@@ -232,6 +261,8 @@ class PatternRankingTester:
         quote_currency: str | None = None,
         min_trades: int | None = None,
         max_fx_staleness: pd.Timedelta | str | None = "7D",
+        use_adj_close: bool = False,
+        metadata_currency: str | None = None,
     ) -> None:
         """Initialize pattern tester.
 
@@ -300,7 +331,9 @@ class PatternRankingTester:
         ):
             raise ValueError(f"min_trades must be None or an integer >= 1, got {min_trades}")
         if holding_period is not None and (
-            not isinstance(holding_period, int) or isinstance(holding_period, bool) or holding_period < 1
+            not isinstance(holding_period, int)
+            or isinstance(holding_period, bool)
+            or holding_period < 1
         ):
             raise ValueError(
                 f"holding_period must be None or a positive integer >= 1, got {holding_period}"
@@ -312,7 +345,13 @@ class PatternRankingTester:
                 f"periods_per_year must be positive and finite, got {periods_per_year}"
             )
 
-        self._data: pd.DataFrame = data
+        if use_adj_close and "Adj Close" in data.columns:
+            self._data = data.copy()
+            self._data["Close"] = self._data["Adj Close"]
+        else:
+            self._data = data
+        self._use_adj_close: bool = use_adj_close
+        self._metadata_currency: str | None = metadata_currency
         self._initial_capital: float = float(initial_capital)
         self._position_size: float = float(position_size)
         self._results: list[PatternResult] = []
@@ -320,6 +359,7 @@ class PatternRankingTester:
         self._execution: str = execution
         self._timeframe: str = normalize_interval(timeframe) if timeframe else "1d"
         self._symbol: str = symbol
+
         def _norm_c(c: str) -> str:
             c_str = c.strip()
             if c_str in ("GBp", "GBX", "GBx"):
@@ -341,17 +381,22 @@ class PatternRankingTester:
         self._fx_history: dict[str, pd.Series] | pd.DataFrame | None = fx_history
         self._strict_fx: bool = strict_fx
         self._max_fx_staleness: pd.Timedelta | None = (
-            pd.Timedelta(max_fx_staleness) if isinstance(max_fx_staleness, str) else max_fx_staleness
+            pd.Timedelta(max_fx_staleness)
+            if isinstance(max_fx_staleness, str)
+            else max_fx_staleness
         )
         self._asset_type: str = asset_type
         self._sharpe_mode: str = sharpe_mode
         self._holding_period: int | None = holding_period
 
+        meta_curr = metadata_currency or getattr(data, "attrs", {}).get("currency")
         if base_currency and quote_currency:
             self._base_currency: str = _norm_c(base_currency)
             self._quote_currency: str = _norm_c(quote_currency)
         elif self._symbol:
-            b, q = resolve_asset_currencies(self._symbol, asset_type=self._asset_type)
+            b, q = resolve_asset_currencies(
+                self._symbol, asset_type=self._asset_type, metadata_currency=meta_curr
+            )
             self._base_currency = _norm_c(base_currency or b)
             self._quote_currency = _norm_c(quote_currency or q)
         else:
@@ -391,6 +436,10 @@ class PatternRankingTester:
                 for c in candidates:
                     if c in self._fx_history.columns:
                         return self._fx_history[c]
+            elif isinstance(self._fx_history, pd.Series) and (
+                self._fx_history.name in candidates or self._fx_history.name is None
+            ):
+                return self._fx_history
             return None
 
         def check_staleness_and_val(s: pd.Series) -> float | None:
@@ -432,24 +481,26 @@ class PatternRankingTester:
 
         return None
 
-    def _get_fx_rate(
+    def _resolve_fx_rate_with_source(
         self, from_curr: str, to_curr: str, timestamp: pd.Timestamp | None = None
-    ) -> float:
-        """Get exchange rate converting 1 unit of from_curr to to_curr at timestamp."""
+    ) -> tuple[float, str]:
+        """Resolve exchange rate and identify the source of the rate ('historical', 'custom_static', 'default_static', 'same_currency')."""
         # 0. Handle pence sterling (GBp / GBX) scaling
         is_from_pence = from_curr in ("GBp", "GBX", "GBx")
         is_to_pence = to_curr in ("GBp", "GBX", "GBx")
         if is_from_pence and is_to_pence:
-            return 1.0
+            return 1.0, "same_currency"
         if is_from_pence:
-            return 0.01 * self._get_fx_rate("GBP", to_curr, timestamp)
+            rate, src = self._resolve_fx_rate_with_source("GBP", to_curr, timestamp)
+            return 0.01 * rate, src
         if is_to_pence:
-            return self._get_fx_rate(from_curr, "GBP", timestamp) * 100.0
+            rate, src = self._resolve_fx_rate_with_source(from_curr, "GBP", timestamp)
+            return rate * 100.0, src
 
         from_curr = from_curr.upper()
         to_curr = to_curr.upper()
         if from_curr == to_curr:
-            return 1.0
+            return 1.0, "same_currency"
 
         direct_pair = f"{from_curr}{to_curr}"
         inv_pair = f"{to_curr}{from_curr}"
@@ -466,7 +517,7 @@ class PatternRankingTester:
                 )
             hist_rate = self._lookup_hist_rate(direct_pair, inv_pair, timestamp)
             if hist_rate is not None:
-                return hist_rate
+                return hist_rate, "historical"
 
             # USD bridge via historical rates
             if from_curr != "USD" and to_curr != "USD":
@@ -481,16 +532,14 @@ class PatternRankingTester:
                 ):
                     bridge_rate = from_usd / to_usd
                     if np.isfinite(bridge_rate) and bridge_rate > 0:
-                        return bridge_rate
+                        return bridge_rate, "historical"
 
-            raise ValueError(
-                f"Missing historical FX rate for {direct_pair} at {timestamp}"
-            )
+            raise ValueError(f"Missing historical FX rate for {direct_pair} at {timestamp}")
 
         if self._fx_history is not None and timestamp is not None:
             hist_rate = self._lookup_hist_rate(direct_pair, inv_pair, timestamp)
             if hist_rate is not None:
-                return hist_rate
+                return hist_rate, "historical"
 
             # USD bridge via historical rates
             if from_curr != "USD" and to_curr != "USD":
@@ -505,7 +554,7 @@ class PatternRankingTester:
                 ):
                     bridge_rate = from_usd / to_usd
                     if np.isfinite(bridge_rate) and bridge_rate > 0:
-                        return bridge_rate
+                        return bridge_rate, "historical"
 
         # 2. Static rates table
         used_default_static = False
@@ -518,7 +567,8 @@ class PatternRankingTester:
                     UserWarning,
                     stacklevel=2,
                 )
-            return rates[direct_pair]
+                return rates[direct_pair], "default_static"
+            return rates[direct_pair], "custom_static"
         if inv_pair in rates and np.isfinite(rates[inv_pair]) and rates[inv_pair] > 0:
             inv_rate = 1.0 / rates[inv_pair]
             if np.isfinite(inv_rate) and inv_rate > 0:
@@ -529,16 +579,25 @@ class PatternRankingTester:
                         UserWarning,
                         stacklevel=2,
                     )
-                return inv_rate
+                    return inv_rate, "default_static"
+                return inv_rate, "custom_static"
 
         # USD bridge via static rates
         from_usd_rate: float | None = 1.0 if from_curr == "USD" else None
         if from_usd_rate is None:
-            if f"{from_curr}USD" in rates and np.isfinite(rates[f"{from_curr}USD"]) and rates[f"{from_curr}USD"] > 0:
+            if (
+                f"{from_curr}USD" in rates
+                and np.isfinite(rates[f"{from_curr}USD"])
+                and rates[f"{from_curr}USD"] > 0
+            ):
                 from_usd_rate = rates[f"{from_curr}USD"]
                 if f"{from_curr}USD" not in self._fx_rates:
                     used_default_static = True
-            elif f"USD{from_curr}" in rates and np.isfinite(rates[f"USD{from_curr}"]) and rates[f"USD{from_curr}"] > 0:
+            elif (
+                f"USD{from_curr}" in rates
+                and np.isfinite(rates[f"USD{from_curr}"])
+                and rates[f"USD{from_curr}"] > 0
+            ):
                 inv_bridge = 1.0 / rates[f"USD{from_curr}"]
                 if np.isfinite(inv_bridge) and inv_bridge > 0:
                     from_usd_rate = inv_bridge
@@ -547,11 +606,19 @@ class PatternRankingTester:
 
         to_usd_rate: float | None = 1.0 if to_curr == "USD" else None
         if to_usd_rate is None:
-            if f"{to_curr}USD" in rates and np.isfinite(rates[f"{to_curr}USD"]) and rates[f"{to_curr}USD"] > 0:
+            if (
+                f"{to_curr}USD" in rates
+                and np.isfinite(rates[f"{to_curr}USD"])
+                and rates[f"{to_curr}USD"] > 0
+            ):
                 to_usd_rate = rates[f"{to_curr}USD"]
                 if f"{to_curr}USD" not in self._fx_rates:
                     used_default_static = True
-            elif f"USD{to_curr}" in rates and np.isfinite(rates[f"USD{to_curr}"]) and rates[f"USD{to_curr}"] > 0:
+            elif (
+                f"USD{to_curr}" in rates
+                and np.isfinite(rates[f"USD{to_curr}"])
+                and rates[f"USD{to_curr}"] > 0
+            ):
                 inv_bridge = 1.0 / rates[f"USD{to_curr}"]
                 if np.isfinite(inv_bridge) and inv_bridge > 0:
                     to_usd_rate = inv_bridge
@@ -574,32 +641,48 @@ class PatternRankingTester:
                         UserWarning,
                         stacklevel=2,
                     )
-                return bridge_val
+                    return bridge_val, "default_static"
+                return bridge_val, "custom_static"
 
         raise ValueError(
             f"Unable to convert currency from {from_curr} to {to_curr}: no exchange rate available. "
             f"Please provide fx_history or fx_rates."
         )
 
+    def _get_fx_rate(
+        self, from_curr: str, to_curr: str, timestamp: pd.Timestamp | None = None
+    ) -> float:
+        """Get exchange rate converting 1 unit of from_curr to to_curr at timestamp."""
+        rate, _ = self._resolve_fx_rate_with_source(from_curr, to_curr, timestamp)
+        return rate
+
+    def _convert_pnl_with_source(
+        self, raw_pnl: float, exit_price: float, exit_time: pd.Timestamp | None = None
+    ) -> tuple[float, float, str]:
+        """Universal conversion: normalize raw PnL into account base currency with FX rate and source tracking."""
+        if raw_pnl == 0.0:
+            return 0.0, 1.0, "same_currency"
+
+        # 1. Quote currency matches account currency
+        if self._quote_currency == self._account_currency:
+            return raw_pnl, 1.0, "same_currency"
+
+        # 2. Base currency is account currency and instrument price is exit_price
+        if self._base_currency == self._account_currency and exit_price > 0:
+            return raw_pnl / exit_price, 1.0 / exit_price, "instrument_price"
+
+        # 3. Universal conversion from quote currency to account currency
+        rate, source = self._resolve_fx_rate_with_source(
+            self._quote_currency, self._account_currency, exit_time
+        )
+        return raw_pnl * rate, rate, source
+
     def _convert_pnl_to_account_currency(
         self, raw_pnl: float, exit_price: float, exit_time: pd.Timestamp | None = None
     ) -> float:
         """Universal conversion: normalize raw PnL (in quote currency) into account base currency."""
-        if raw_pnl == 0.0:
-            return 0.0
-
-        # 1. Quote currency matches account currency -> raw_pnl is already in account currency
-        if self._quote_currency == self._account_currency:
-            return raw_pnl
-
-        # 2. Base currency is account currency and instrument price is exit_price
-        # (e.g. USDJPY with USD account: raw_pnl is in JPY, exit_price is JPY per USD)
-        if self._base_currency == self._account_currency and exit_price > 0:
-            return raw_pnl / exit_price
-
-        # 3. Universal conversion from quote currency to account currency
-        rate = self._get_fx_rate(self._quote_currency, self._account_currency, exit_time)
-        return raw_pnl * rate
+        converted, _, _ = self._convert_pnl_with_source(raw_pnl, exit_price, exit_time)
+        return converted
 
     def test_all_patterns(
         self,
@@ -848,6 +931,17 @@ class PatternRankingTester:
             * float(np.log1p(len(trades)))
         )
 
+        if any(t.get("fx_source") == "default_static" for t in trades):
+            overall_fx = "default_static"
+        elif any(t.get("fx_source") == "custom_static" for t in trades):
+            overall_fx = "custom_static"
+        elif any(t.get("fx_source") == "historical" for t in trades):
+            overall_fx = "historical"
+        elif any(t.get("fx_source") == "instrument_price" for t in trades):
+            overall_fx = "instrument_price"
+        else:
+            overall_fx = "same_currency"
+
         return PatternResult(
             pattern_name=pattern_name.replace("CDL", ""),
             total_signals=int(np.sum(signals != 0)),
@@ -868,6 +962,7 @@ class PatternRankingTester:
             score=score,
             total_trades=len(trades),
             open_trade=self._last_open_trade,
+            fx_source=overall_fx,
         )
 
     def _calc_position_units(
@@ -927,12 +1022,10 @@ class PatternRankingTester:
                     eff_exit = exec_price + self._slippage
                     raw_pnl = (-position) * (entry_price - eff_exit)
                     direction = "SHORT"
-                pnl = (
-                    self._convert_pnl_to_account_currency(
-                        raw_pnl, exec_price, exit_time=times[exec_idx]
-                    )
-                    - self._commission
+                conv_pnl, fx_rate, fx_src = self._convert_pnl_with_source(
+                    raw_pnl, exec_price, exit_time=times[exec_idx]
                 )
+                pnl = conv_pnl - self._commission
                 trades.append(
                     {
                         "entry_idx": entry_idx,
@@ -945,6 +1038,8 @@ class PatternRankingTester:
                         "exit_price": eff_exit,
                         "market_exit_price": exec_price,
                         "pnl": pnl,
+                        "fx_rate": fx_rate,
+                        "fx_source": fx_src,
                         "time_exit": True,
                     }
                 )
@@ -960,12 +1055,10 @@ class PatternRankingTester:
                 if position < 0.0 and entry_idx is not None:
                     eff_exit = exec_price + self._slippage
                     raw_pnl = (-position) * (entry_price - eff_exit)
-                    pnl = (
-                        self._convert_pnl_to_account_currency(
-                            raw_pnl, exec_price, exit_time=times[exec_idx]
-                        )
-                        - self._commission
+                    conv_pnl, fx_rate, fx_src = self._convert_pnl_with_source(
+                        raw_pnl, exec_price, exit_time=times[exec_idx]
                     )
+                    pnl = conv_pnl - self._commission
                     trades.append(
                         {
                             "entry_idx": entry_idx,
@@ -978,6 +1071,8 @@ class PatternRankingTester:
                             "exit_price": eff_exit,
                             "market_exit_price": exec_price,
                             "pnl": pnl,
+                            "fx_rate": fx_rate,
+                            "fx_source": fx_src,
                         }
                     )
                     position = 0.0
@@ -986,21 +1081,17 @@ class PatternRankingTester:
                 elif position == 0.0:
                     entry_idx = exec_idx
                     entry_price = exec_price + self._slippage
-                    position = self._calc_position_units(
-                        entry_price, entry_time=entry_time_curr
-                    )
+                    position = self._calc_position_units(entry_price, entry_time=entry_time_curr)
 
             elif signal == -1:
                 # Close Long if currently long
                 if position > 0.0 and entry_idx is not None:
                     eff_exit = exec_price - self._slippage
                     raw_pnl = position * (eff_exit - entry_price)
-                    pnl = (
-                        self._convert_pnl_to_account_currency(
-                            raw_pnl, exec_price, exit_time=times[exec_idx]
-                        )
-                        - self._commission
+                    conv_pnl, fx_rate, fx_src = self._convert_pnl_with_source(
+                        raw_pnl, exec_price, exit_time=times[exec_idx]
                     )
+                    pnl = conv_pnl - self._commission
                     trades.append(
                         {
                             "entry_idx": entry_idx,
@@ -1013,6 +1104,8 @@ class PatternRankingTester:
                             "exit_price": eff_exit,
                             "market_exit_price": exec_price,
                             "pnl": pnl,
+                            "fx_rate": fx_rate,
+                            "fx_source": fx_src,
                         }
                     )
                     position = 0.0
@@ -1021,9 +1114,7 @@ class PatternRankingTester:
                 elif position == 0.0 and self._allow_short:
                     entry_idx = exec_idx
                     entry_price = exec_price - self._slippage
-                    position = -self._calc_position_units(
-                        entry_price, entry_time=entry_time_curr
-                    )
+                    position = -self._calc_position_units(entry_price, entry_time=entry_time_curr)
 
         # Force-close position on the last bar if still open
         if self._force_exit_on_last_bar and position != 0.0 and entry_idx is not None:
@@ -1036,10 +1127,10 @@ class PatternRankingTester:
                 eff_exit = last_exit_price + self._slippage
                 raw_pnl = (-position) * (entry_price - eff_exit)
                 direction = "SHORT"
-            pnl = (
-                self._convert_pnl_to_account_currency(raw_pnl, last_exit_price, exit_time=times[-1])
-                - self._commission
+            conv_pnl, fx_rate, fx_src = self._convert_pnl_with_source(
+                raw_pnl, last_exit_price, exit_time=times[-1]
             )
+            pnl = conv_pnl - self._commission
             trades.append(
                 {
                     "entry_idx": entry_idx,
@@ -1052,6 +1143,8 @@ class PatternRankingTester:
                     "exit_price": eff_exit,
                     "market_exit_price": last_exit_price,
                     "pnl": pnl,
+                    "fx_rate": fx_rate,
+                    "fx_source": fx_src,
                     "forced_exit": True,
                 }
             )

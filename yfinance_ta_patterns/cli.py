@@ -52,11 +52,11 @@ def normalize_timeframe(timeframe: str) -> str:
     return interval
 
 
-def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
-    """Parse CLI arguments."""
+def get_parser() -> argparse.ArgumentParser:
+    """Build CLI argument parser."""
     parser = argparse.ArgumentParser(
         prog="yfinance-ta-patterns",
-        description="Scan candlestick patterns with optional AI probabilistic confidence scoring and trade setups.",
+        description="Scan candlestick patterns with optional AI multi-factor confluence scoring and trade setups.",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=(
             "Examples:\n"
@@ -122,13 +122,13 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
         "--min-confidence",
         type=float,
         default=0.0,
-        help="Minimum AI confidence score threshold (0.0 to 1.0, e.g. 0.65).",
+        help="Minimum AI multi-factor confluence score threshold (0.0 to 1.0, e.g. 0.65).",
     )
     parser.add_argument(
         "--auto-adjust",
         action="store_true",
         default=False,
-        help="Enable split and dividend price adjustments (useful for long historical equity backtests).",
+        help="Adjust OHLC prices for splits and dividends (total-return analysis). Default is raw unadjusted prices.",
     )
     parser.add_argument(
         "--execution",
@@ -170,7 +170,12 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
         default="text",
         help="Output presentation format.",
     )
-    return parser.parse_args(args)
+    return parser
+
+
+def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments."""
+    return get_parser().parse_args(args)
 
 
 def run_cli(args: argparse.Namespace) -> int:

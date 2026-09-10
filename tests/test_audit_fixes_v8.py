@@ -72,7 +72,11 @@ def test_static_fx_fallback_emits_warning() -> None:
         warnings.simplefilter("always")
         rate_explicit = tester_explicit._get_fx_rate("EUR", "USD", timestamp=dates[0])
         assert rate_explicit == 1.12
-    fx_warnings = [w for w in record if issubclass(w.category, UserWarning) and "Static default" in str(w.message)]
+    fx_warnings = [
+        w
+        for w in record
+        if issubclass(w.category, UserWarning) and "Static default" in str(w.message)
+    ]
     assert len(fx_warnings) == 0
 
 
@@ -158,7 +162,9 @@ def test_last_hourly_candle_closes_at_session_close() -> None:
     # Previously, candle_end was 15:30 + 1h = 16:30 EDT (20:30 UTC), so at 20:15 UTC it was wrongly excluded!
     now_at_1615 = pd.Timestamp("2024-06-14 20:15:00", tz="UTC")
     processed = loader.process(df, now_utc=now_at_1615)
-    assert len(processed) == 1, "Completed 15:30 candle should NOT be filtered out after 16:00 session close"
+    assert len(processed) == 1, (
+        "Completed 15:30 candle should NOT be filtered out after 16:00 session close"
+    )
 
     # Before session close (e.g. 15:45 EDT / 19:45 UTC), candle is still forming -> should be filtered out
     now_at_1545 = pd.Timestamp("2024-06-14 19:45:00", tz="UTC")

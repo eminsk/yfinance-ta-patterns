@@ -30,14 +30,22 @@ def test_asian_exchange_daily_session_date_shift() -> None:
 
     idx = pd.DatetimeIndex(["2026-05-19 00:00:00"], tz="Asia/Tokyo")
     df = pd.DataFrame(
-        {"Open": [2500.0], "High": [2550.0], "Low": [2480.0], "Close": [2520.0], "Volume": [100000]},
+        {
+            "Open": [2500.0],
+            "High": [2550.0],
+            "Low": [2480.0],
+            "Close": [2520.0],
+            "Volume": [100000],
+        },
         index=idx,
     )
 
     # At 02:00 UTC (11:00 AM JST) on 2026-05-19: TSE is still trading -> candle must NOT be closed!
     now_before_close = pd.Timestamp("2026-05-19 02:00:00", tz="UTC")
     res_before = loader.process(df, now_utc=now_before_close)
-    assert len(res_before) == 0, "Unclosed Asian daily candle must be excluded before exchange close"
+    assert len(res_before) == 0, (
+        "Unclosed Asian daily candle must be excluded before exchange close"
+    )
 
     # At 06:35 UTC (15:35 JST) on 2026-05-19: TSE closed at 15:30 JST -> candle is closed!
     now_after_close = pd.Timestamp("2026-05-19 06:35:00", tz="UTC")
@@ -126,12 +134,20 @@ def test_stock_4h_grid_rejects_missing_hour() -> None:
     assert len(res_missing) == 0, "4h bucket with missing intra-session 15:30 bar must be rejected"
 
     # Both 14:30 and 15:30 UTC present -> bucket is complete
-    idx_complete = pd.DatetimeIndex([
-        "2025-01-15 14:30:00+00:00",
-        "2025-01-15 15:30:00+00:00",
-    ])
+    idx_complete = pd.DatetimeIndex(
+        [
+            "2025-01-15 14:30:00+00:00",
+            "2025-01-15 15:30:00+00:00",
+        ]
+    )
     df_complete = pd.DataFrame(
-        {"Open": [150.0, 152.0], "High": [155.0, 156.0], "Low": [149.0, 151.0], "Close": [152.0, 154.0], "Volume": [1000, 1200]},
+        {
+            "Open": [150.0, 152.0],
+            "High": [155.0, 156.0],
+            "Low": [149.0, 151.0],
+            "Close": [152.0, 154.0],
+            "Volume": [1000, 1200],
+        },
         index=idx_complete,
     )
     res_complete = loader.process(df_complete)
@@ -170,28 +186,44 @@ def test_crypto_4h_irregular_timestamps_rejected() -> None:
     loader = MarketDataLoader("BTC-USD", interval="4h", timezone="UTC", closed_only=False)
 
     # 4 bars but irregular: 00:00, 00:10, 01:00, 02:00 (03:00 is missing)
-    idx_irregular = pd.DatetimeIndex([
-        "2025-01-15 00:00:00+00:00",
-        "2025-01-15 00:10:00+00:00",
-        "2025-01-15 01:00:00+00:00",
-        "2025-01-15 02:00:00+00:00",
-    ])
+    idx_irregular = pd.DatetimeIndex(
+        [
+            "2025-01-15 00:00:00+00:00",
+            "2025-01-15 00:10:00+00:00",
+            "2025-01-15 01:00:00+00:00",
+            "2025-01-15 02:00:00+00:00",
+        ]
+    )
     df_irregular = pd.DataFrame(
-        {"Open": [50000.0] * 4, "High": [50100.0] * 4, "Low": [49900.0] * 4, "Close": [50050.0] * 4, "Volume": [100.0] * 4},
+        {
+            "Open": [50000.0] * 4,
+            "High": [50100.0] * 4,
+            "Low": [49900.0] * 4,
+            "Close": [50050.0] * 4,
+            "Volume": [100.0] * 4,
+        },
         index=idx_irregular,
     )
     res_irregular = loader.process(df_irregular)
     assert len(res_irregular) == 0, "Crypto 4h bucket with irregular timestamps must be rejected"
 
     # 4 regular bars: 00:00, 01:00, 02:00, 03:00 -> accepted
-    idx_regular = pd.DatetimeIndex([
-        "2025-01-15 00:00:00+00:00",
-        "2025-01-15 01:00:00+00:00",
-        "2025-01-15 02:00:00+00:00",
-        "2025-01-15 03:00:00+00:00",
-    ])
+    idx_regular = pd.DatetimeIndex(
+        [
+            "2025-01-15 00:00:00+00:00",
+            "2025-01-15 01:00:00+00:00",
+            "2025-01-15 02:00:00+00:00",
+            "2025-01-15 03:00:00+00:00",
+        ]
+    )
     df_regular = pd.DataFrame(
-        {"Open": [50000.0] * 4, "High": [50100.0] * 4, "Low": [49900.0] * 4, "Close": [50050.0] * 4, "Volume": [100.0] * 4},
+        {
+            "Open": [50000.0] * 4,
+            "High": [50100.0] * 4,
+            "Low": [49900.0] * 4,
+            "Close": [50050.0] * 4,
+            "Volume": [100.0] * 4,
+        },
         index=idx_regular,
     )
     res_regular = loader.process(df_regular)

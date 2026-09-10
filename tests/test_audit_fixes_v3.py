@@ -26,6 +26,7 @@ from yfinance_ta_patterns.pattern_tester import (
 # 1. Foreign Stock Currency & Pence Detection
 # ==============================================================================
 
+
 def test_foreign_stock_currency_detection_and_pence() -> None:
     """Issue 1: Foreign stock exchange suffixes (.DE, .PA, .L, .TO, etc.) and pence (GBp) scaling."""
     assert resolve_asset_currencies("SAP.DE") == ("SAP.DE", "EUR")
@@ -74,6 +75,7 @@ def test_foreign_stock_currency_detection_and_pence() -> None:
 # 2. Crypto Sharpe Annual Normalization for Pairs
 # ==============================================================================
 
+
 @pytest.mark.parametrize(
     "sym",
     [
@@ -104,6 +106,7 @@ def test_crypto_sharpe_annualization_stock_and_forex_contrast() -> None:
 # ==============================================================================
 # 3. strict_fx Historical Rate Enforcement
 # ==============================================================================
+
 
 def test_strict_fx_rejects_missing_history_and_timestamp() -> None:
     """Issue 3: strict_fx=True forbids static rate fallback and requires fx_history and timestamp."""
@@ -153,6 +156,7 @@ def test_strict_fx_rejects_missing_history_and_timestamp() -> None:
 # ==============================================================================
 # 4. Session Closing Calendar for closed_only Daily Candles
 # ==============================================================================
+
 
 def test_closed_only_session_close_and_dst() -> None:
     """Issue 4: Daily candle availability reflects exchange closing bell and DST."""
@@ -214,6 +218,7 @@ def test_closed_only_session_close_and_dst() -> None:
 # 5. Unseparated Crypto Ticker Normalization in Auto Mode
 # ==============================================================================
 
+
 @pytest.mark.parametrize(
     ("raw", "expected_norm", "expected_base", "expected_quote"),
     [
@@ -239,6 +244,7 @@ def test_unseparated_crypto_normalization_auto(
 # 6. Explicit NaN / Finiteness Validation in Wilder RSI & ATR
 # ==============================================================================
 
+
 def test_calc_wilder_rsi_and_atr_rejects_nan() -> None:
     """Issue 6: Wilder RSI and ATR raise ValueError when price series contains NaNs or infs."""
     s_nan = pd.Series([10.0, 11.0, np.nan, 12.0, 13.0, 14.0])
@@ -261,6 +267,7 @@ def test_calc_wilder_rsi_and_atr_rejects_nan() -> None:
 # ==============================================================================
 # 7. Preserve Valid OHLC 4h-Candles with Zero Volume
 # ==============================================================================
+
 
 def test_resample_4h_zero_volume_candle_retained() -> None:
     """Issue 7: Valid complete 4h bar with Volume=0 is retained during resampling."""
@@ -294,6 +301,7 @@ def test_resample_4h_zero_volume_candle_retained() -> None:
 # ==============================================================================
 # 8. Index Uniqueness, Monotonicity & OHLC Validation in AIPatternScorer
 # ==============================================================================
+
 
 def test_ai_pattern_scorer_rejects_duplicate_index_and_nan() -> None:
     """Issue 8: AIPatternScorer rejects duplicate timestamps, unsorted indices, missing OHLC, and NaNs."""
