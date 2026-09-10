@@ -981,8 +981,8 @@ def test_screenshot1_monthly_calendar_boundaries() -> None:
         {"Open": [100.0], "High": [105.0], "Low": [95.0], "Close": [102.0], "Volume": [1000.0]},
         index=idx_leap,
     )
-    # At 2024-02-29 23:59:00, February is NOT closed yet
-    now_feb29 = pd.Timestamp("2024-02-29 23:59:00", tz="UTC")
+    # At 2024-02-29 12:00:00 (mid-day, before session close at 21:00 UTC), February is NOT closed yet
+    now_feb29 = pd.Timestamp("2024-02-29 12:00:00", tz="UTC")
     assert len(loader.process(df_leap, now_utc=now_feb29)) == 0
 
     # At 2024-03-01 00:00:00, February IS closed

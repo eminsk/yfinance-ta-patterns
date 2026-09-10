@@ -9,6 +9,7 @@ from typing import Any, cast
 
 import numpy as np
 import pandas as pd
+import pytz
 
 from yfinance_ta_patterns.data import (
     classify_asset,
@@ -416,9 +417,18 @@ class PatternRankingTester:
                 f"periods_per_year must be positive and finite, got {periods_per_year}"
             )
 
-        if use_adj_close and "Adj Close" in data.columns:
+        if use_adj_close and "Adj Close" in data.columns and "Close" in data.columns:
             self._data = data.copy()
-            self._data["Close"] = self._data["Adj Close"]
+            raw_close = self._data["Close"].astype(float)
+            adj_close = self._data["Adj Close"].astype(float)
+            valid_mask = (
+                (raw_close > 0) & np.isfinite(raw_close) & (adj_close > 0) & np.isfinite(adj_close)
+            )
+            ratio = np.where(valid_mask, adj_close / raw_close, 1.0)
+            for col in ("Open", "High", "Low"):
+                if col in self._data.columns:
+                    self._data[col] = self._data[col].astype(float) * ratio
+            self._data["Close"] = adj_close
         else:
             self._data = data
         self._use_adj_close: bool = use_adj_close
@@ -527,7 +537,7 @@ class PatternRankingTester:
             if s_tz is not None and ts.tz is None:
                 ts = ts.tz_localize("UTC").tz_convert(s_tz)
             elif s_tz is None and ts.tz is not None:
-                ts = ts.tz_localize(None)
+                ts = ts.tz_convert(pytz.UTC).tz_localize(None)
 
             sub = s.loc[:ts].dropna()
             if sub.empty:

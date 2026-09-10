@@ -727,7 +727,9 @@ def normalize_interval(interval: str) -> str:
     return lower
 
 
-def validate_ohlc(data: pd.DataFrame, strict: bool = False) -> pd.DataFrame:
+def validate_ohlc(
+    data: pd.DataFrame, strict: bool = False, require_ohlc: bool = False
+) -> pd.DataFrame:
     """Validate OHLC price integrity, drop corrupted rows, and check invariants.
 
     Parameters:
@@ -736,6 +738,8 @@ def validate_ohlc(data: pd.DataFrame, strict: bool = False) -> pd.DataFrame:
         OHLCV market dataframe
     strict : bool
         If True, raises ValueError on bad data or missing OHLC; if False, validates available columns
+    require_ohlc : bool
+        If True, raises ValueError if required OHLC columns are missing, even when strict=False
 
     Returns:
     --------
@@ -749,7 +753,7 @@ def validate_ohlc(data: pd.DataFrame, strict: bool = False) -> pd.DataFrame:
 
     req_cols = [c for c in ["Open", "High", "Low", "Close"] if c in data.columns]
 
-    if strict and len(req_cols) < 4:
+    if (strict or require_ohlc) and len(req_cols) < 4:
         missing = [c for c in ["Open", "High", "Low", "Close"] if c not in data.columns]
         raise ValueError(f"Missing required OHLC columns: {missing}")
 
@@ -783,6 +787,17 @@ def validate_ohlc(data: pd.DataFrame, strict: bool = False) -> pd.DataFrame:
             if strict:
                 raise ValueError("Inconsistent OHLC bar geometry detected.")
             cleaned = cleaned[~broken_bars]
+
+    dropped = len(data) - len(cleaned)
+    if dropped > 0:
+        if not strict:
+            warnings.warn(
+                f"validate_ohlc dropped {dropped} invalid OHLC row(s) (non-finite, non-positive, or broken bar geometry). "
+                f"Note that dropping rows may create artificial time gaps that glue non-consecutive candles in multi-candle pattern analysis.",
+                UserWarning,
+                stacklevel=2,
+            )
+        cleaned.attrs["dropped_rows"] = dropped
 
     return cast(pd.DataFrame, cleaned)
 
@@ -1298,7 +1313,7 @@ class MarketDataLoader:
         if not data.index.is_monotonic_increasing:
             data = data.sort_index()
 
-        data = validate_ohlc(data)
+        data = validate_ohlc(data, require_ohlc=True)
         if data.empty:
             return data
 
@@ -1320,10 +1335,62 @@ class MarketDataLoader:
             if now.tz is None:
                 now = now.tz_localize(pytz.UTC)
 
-            if self.interval == "1mo":
-                candle_ends = data.index + pd.DateOffset(months=1)
-            elif self.interval == "3mo":
-                candle_ends = data.index + pd.DateOffset(months=3)
+            if self.interval in ("1mo", "3mo"):
+                num_months = 1 if self.interval == "1mo" else 3
+                asset_class = classify_asset(self.ticker, self.asset_type)
+                clean_sym = self.ticker.strip().upper()
+                candle_end_list = []
+                for i, ts in enumerate(data.index):
+                    d = (
+                        orig_dates[i]
+                        if orig_dates is not None and i < len(orig_dates)
+                        else (ts.date() if ts.tz is None else ts.tz_localize(None).date())
+                    )
+                    start_m = pd.Timestamp(year=d.year, month=d.month, day=1)
+                    next_m = (start_m + pd.DateOffset(months=num_months)).date()
+                    last_cal_day = next_m - datetime.timedelta(days=1)
+
+                    if asset_class == "crypto":
+                        close_ts = pd.Timestamp(next_m, tz=pytz.UTC)
+                        if ts.tz is None:
+                            close_ts = close_ts.tz_localize(None)
+                    elif asset_class == "forex":
+                        curr = last_cal_day
+                        while curr.weekday() >= 5:  # Sat, Sun
+                            curr -= datetime.timedelta(days=1)
+                        close_ts = pd.Timestamp(
+                            year=curr.year,
+                            month=curr.month,
+                            day=curr.day,
+                            hour=17,
+                            minute=0,
+                            tz="America/New_York",
+                        ).tz_convert(pytz.UTC)
+                        if ts.tz is None:
+                            close_ts = close_ts.tz_localize(None)
+                    else:
+                        # Stock / Commodity / Index
+                        curr = last_cal_day
+                        is_israel = clean_sym.endswith(".TA")
+                        while (curr.weekday() in (4, 5)) if is_israel else (curr.weekday() >= 5):
+                            curr -= datetime.timedelta(days=1)
+                        last_session = curr
+                        tz_name, _, close_t = _get_market_session_hours(clean_sym, last_session)
+                        s_close = pd.Timestamp(
+                            year=last_session.year,
+                            month=last_session.month,
+                            day=last_session.day,
+                            hour=close_t.hour,
+                            minute=close_t.minute,
+                            tz=tz_name,
+                        )
+                        if ts.tz is not None:
+                            close_ts = s_close.tz_convert(ts.tz)
+                        else:
+                            close_ts = s_close.tz_localize(None)
+
+                    candle_end_list.append(close_ts)
+                candle_ends = pd.DatetimeIndex(candle_end_list)
             elif self.interval in ("1d", "1D"):
                 # Session-aware daily candle close
                 asset_class = classify_asset(self.ticker, self.asset_type)
@@ -1396,7 +1463,18 @@ class MarketDataLoader:
                                 )
                             end_d = d + datetime.timedelta(days=days_ahead)
                         elif self.interval == "5d":
-                            end_d = d + datetime.timedelta(days=4)
+                            curr = d
+                            days_added = 0
+                            is_israel = clean_sym.endswith(".TA")
+                            while days_added < 4:
+                                curr += datetime.timedelta(days=1)
+                                if is_israel:
+                                    if curr.weekday() not in (4, 5):
+                                        days_added += 1
+                                else:
+                                    if curr.weekday() < 5:
+                                        days_added += 1
+                            end_d = curr
                         else:
                             end_d = d
 
@@ -1414,10 +1492,13 @@ class MarketDataLoader:
                         else:
                             s_close_cmp = s_close.tz_localize(None)
 
-                        raw_end = ts + delta
-                        capped_ends.append(
-                            min(raw_end, s_close_cmp) if ts <= s_close_cmp else raw_end
-                        )
+                        if self.interval in ("1wk", "5d"):
+                            capped_ends.append(s_close_cmp)
+                        else:
+                            raw_end = ts + delta
+                            capped_ends.append(
+                                min(raw_end, s_close_cmp) if ts <= s_close_cmp else raw_end
+                            )
                     candle_ends = pd.DatetimeIndex(capped_ends)
                 else:
                     candle_ends = data.index + delta

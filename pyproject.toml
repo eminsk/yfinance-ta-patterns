@@ -1,6 +1,6 @@
 [project]
 name = "yfinance-ta-patterns"
-version = "0.3.18"
+version = "0.3.19"
 description = "Institutional-grade market candlestick pattern scanner with multi-asset backtesting, AI confluence scoring, and LLM market intelligence."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -87,6 +87,7 @@ filterwarnings = [
     "ignore:Data repair was requested.*:UserWarning",
     "ignore:Static default FX rate used.*:UserWarning",
     "ignore:Quote currency for .* using exchange suffix heuristic.*:UserWarning",
+    "ignore:validate_ohlc dropped.*:UserWarning",
 ]
 
 [tool.ruff]

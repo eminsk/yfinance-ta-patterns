@@ -37,12 +37,19 @@ def test_process_timezone_and_multiindex():
     assert loader.ticker == "GBPUSD=X"
 
     # MultiIndex columns (like yfinance download format)
-    cols = pd.MultiIndex.from_tuples([("Open", "GBPUSD=X"), ("Close", "GBPUSD=X")])
+    cols = pd.MultiIndex.from_tuples(
+        [
+            ("Open", "GBPUSD=X"),
+            ("High", "GBPUSD=X"),
+            ("Low", "GBPUSD=X"),
+            ("Close", "GBPUSD=X"),
+        ]
+    )
     idx = pd.date_range("2024-01-01 12:00", periods=2, freq="1h")
-    df = pd.DataFrame([[1.2, 1.3], [1.3, 1.4]], index=idx, columns=cols)
+    df = pd.DataFrame([[1.2, 1.25, 1.15, 1.22], [1.22, 1.28, 1.20, 1.25]], index=idx, columns=cols)
 
     processed = loader.process(df)
-    assert list(processed.columns) == ["Open", "Close"]
+    assert list(processed.columns) == ["Open", "High", "Low", "Close"]
     assert str(processed.index.tz) == "Europe/London"
 
 
