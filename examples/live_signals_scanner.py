@@ -94,7 +94,8 @@ for symbol in WATCHLIST:
                                 if setup
                                 else ("BUY" if signal_val > 0 else "SELL"),
                                 "Pattern": pat.replace("CDL", ""),
-                                "Confidence": f"{res.confidence_score * 100:.1f}%",
+                                # Эвристическая оценка согласованности (confluence), не вероятность выигрыша/прибыли
+                                "Confluence": f"{res.confluence_score * 100:.1f}/100",
                                 "Score_Raw": res.confidence_score,
                                 "Grade": grade_label,
                                 "Entry": setup.entry_price if setup else df.loc[ts, "Close"],
@@ -118,7 +119,7 @@ if all_signals:
     )
 
     print("\n" + "=" * 105)
-    print(f" НАЙДЕНО СИГНАЛОВ: {len(signals_df)} (отсортированы по качеству)")
+    print(f" НАЙДЕНО СИГНАЛОВ: {len(signals_df)} (отсортированы по качеству/согласованности)")
     print("=" * 105)
 
     print(
@@ -128,7 +129,7 @@ if all_signals:
                 "Symbol",
                 "Direction",
                 "Pattern",
-                "Confidence",
+                "Confluence",
                 "Grade",
                 "Entry",
                 "StopLoss",
@@ -142,7 +143,9 @@ if all_signals:
     best = signals_df.iloc[0]
     print("\n" + "*" * 55)
     print(f" ТОП-1 СИГНАЛ: {best['Symbol']} — {best['Direction']} ({best['Pattern']})")
-    print(f" Время свечи: {best['Time']} | Уверенность: {best['Confidence']} [{best['Grade']}]")
+    print(
+        f" Время свечи: {best['Time']} | Confluence: {best['Confluence']} [{best['Grade']}] (эвристика согласованности, не вероятность прибыли)"
+    )
     print(f" Тренд рынка: {best['Trend']} | RSI: {best['RSI']}")
     print(f" Точка входа: {best['Entry']}")
     print(f" Stop Loss:   {best['StopLoss']}")
@@ -150,5 +153,5 @@ if all_signals:
     print("*" * 55)
 else:
     print(
-        f"\nЗа последние {LOOKBACK_BARS} бара(ов) сигналов с уверенностью >= {MIN_CONFIDENCE * 100:.0f}% не обнаружено."
+        f"\nЗа последние {LOOKBACK_BARS} бара(ов) сигналов с Confluence >= {MIN_CONFIDENCE * 100:.0f}/100 не обнаружено."
     )

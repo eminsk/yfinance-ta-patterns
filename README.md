@@ -179,16 +179,16 @@ uv run examples/live_signals_scanner.py
 **Sample Output:**
 ```text
 =========================================================================================================
- SIGNALS FOUND: 26 (Ranked by AI Confidence)
+ SIGNALS FOUND: 26 (Ranked by AI Confluence / Quality)
 =========================================================================================================
-       Time  Symbol Direction        Pattern Confidence     Grade        Entry     StopLoss  TakeProfit_1 Risk_Reward          Trend
-08.09 19:00 ETH-USD       BUY 3WHITESOLDIERS      80.0% EXCELLENT  2499.389893  2483.227621   2523.633300       1:1.5        BULLISH
-08.09 17:00  EURUSD       BUY 3WHITESOLDIERS      70.0%    STRONG     1.163332     1.162101      1.165178       1:1.5 STRONG_BULLISH
-08.09 17:00  USDCAD      SELL     HANGINGMAN      70.0%    STRONG     1.377840     1.378940      1.376190       1:1.5 STRONG_BEARISH
+       Time  Symbol Direction        Pattern Confluence     Grade        Entry     StopLoss  TakeProfit_1 Risk_Reward          Trend
+08.09 19:00 ETH-USD       BUY 3WHITESOLDIERS   80.0/100 EXCELLENT  2499.389893  2483.227621   2523.633300       1:1.5        BULLISH
+08.09 17:00  EURUSD       BUY 3WHITESOLDIERS   70.0/100    STRONG     1.163332     1.162101      1.165178       1:1.5 STRONG_BULLISH
+08.09 17:00  USDCAD      SELL     HANGINGMAN   70.0/100    STRONG     1.377840     1.378940      1.376190       1:1.5 STRONG_BEARISH
 
 **********************************************************
  TOP-1 SIGNAL: ETH-USD — BUY (3WHITESOLDIERS)
- Candle Time: 08.09 19:00 | Confidence: 80.0% [EXCELLENT]
+ Candle Time: 08.09 19:00 | Confluence: 80.0/100 [EXCELLENT] (deterministic heuristic, not win probability)
  Market Trend: BULLISH | RSI: 56.3
  Entry Price: 2499.39
  Stop Loss:   2483.23

@@ -116,13 +116,13 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--ai",
         action="store_true",
-        help="Enable AI multi-factor confidence scoring and automated trade setup calculation.",
+        help="Enable AI multi-factor confluence scoring and automated trade setup calculation.",
     )
     parser.add_argument(
         "--min-confidence",
         type=float,
         default=0.0,
-        help="Minimum AI multi-factor confluence score threshold (0.0 to 1.0, e.g. 0.65).",
+        help="Minimum AI multi-factor confluence score threshold (0.0 to 1.0, e.g. 0.65; deterministic heuristic, not win probability).",
     )
     parser.add_argument(
         "--auto-adjust",
@@ -304,9 +304,9 @@ def run_cli(args: argparse.Namespace) -> int:
 
         print(f"=== AI Pattern Intelligence: {args.symbol} ({interval}, {period}){range_info} ===")
         for res in all_scored_results:
-            conf_pct = f"{res.confidence_score * 100:.1f}%"
+            conf_score = f"{res.confidence_score * 100:.1f}/100"
             print(
-                f"\n[{res.grade.value}] {res.pattern_name} at {res.timestamp} | AI Confluence: {conf_pct}"
+                f"\n[{res.grade.value}] {res.pattern_name} at {res.timestamp} | AI Confluence: {conf_score}"
             )
             print(
                 f"  Regime: {res.trend_regime} | RVOL: {res.rvol:.2f}x | RSI: {res.rsi:.1f} | ATR: {res.atr:.5f}"

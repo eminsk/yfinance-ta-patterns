@@ -596,6 +596,9 @@ class AIPatternScorer:
         min_confidence: float = 0.0,
     ) -> list[PatternConfidenceResult]:
         """Evaluate a series of TA-Lib signals and return sorted scored results."""
+        if not np.isfinite(min_confidence) or not 0.0 <= min_confidence <= 1.0:
+            raise ValueError("min_confidence must be finite and within [0, 1]")
+
         results: list[PatternConfidenceResult] = []
         for ts, raw_sig in signals.items():
             if raw_sig == 0:
@@ -612,6 +615,7 @@ class AIPatternScorer:
         min_confidence: float = 0.5,
         patterns: list[str] | None = None,
         date: str | None = None,
+        lookback_bars: int | None = 1,
     ) -> list[PatternConfidenceResult]:
         """Scan data for active patterns and return scored results above min_confidence.
 
@@ -620,10 +624,19 @@ class AIPatternScorer:
             patterns: Optional list of pattern names (e.g. ['CDLHAMMER', 'CDLENGULFING']).
                       If None, scans all available patterns.
             date: Optional date filter string.
+            lookback_bars: Number of most recent bars to evaluate for active signals.
+                           Defaults to 1 (evaluating only the latest closed candle).
+                           Set to None for full historical scanning.
 
         Returns:
             List of PatternConfidenceResult sorted by confidence score descending.
         """
+        if not np.isfinite(min_confidence) or not 0.0 <= min_confidence <= 1.0:
+            raise ValueError("min_confidence must be finite and within [0, 1]")
+
+        if lookback_bars is not None and lookback_bars <= 0:
+            raise ValueError("lookback_bars must be a positive integer (>= 1)")
+
         from ..pattern_analyzer import PatternAnalyzer
 
         analyzer = PatternAnalyzer(self.df)
@@ -637,9 +650,36 @@ class AIPatternScorer:
                 continue
             if signals.empty:
                 continue
+            if date is None and lookback_bars is not None:
+                signals = signals.reindex(self.df.index[-lookback_bars:]).dropna()
+                if signals.empty:
+                    continue
             clean_name = pat.replace("CDL", "")
             scored = self.score_all_signals(signals, clean_name, min_confidence=min_confidence)
             all_scored.extend(scored)
 
         all_scored.sort(key=lambda r: r.confidence_score, reverse=True)
         return all_scored
+
+    def score_all_history(
+        self,
+        min_confidence: float = 0.5,
+        patterns: list[str] | None = None,
+        date: str | None = None,
+    ) -> list[PatternConfidenceResult]:
+        """Scan entire data history for pattern signals without lookback restriction.
+
+        Args:
+            min_confidence: Threshold between 0.0 and 1.0 to filter low-conviction signals.
+            patterns: Optional list of pattern names. If None, scans all available patterns.
+            date: Optional date filter string.
+
+        Returns:
+            List of PatternConfidenceResult across full history sorted by confidence score descending.
+        """
+        return self.score_all_active(
+            min_confidence=min_confidence,
+            patterns=patterns,
+            date=date,
+            lookback_bars=None,
+        )

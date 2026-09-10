@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from .scorer import PatternConfidenceResult, SignalGrade
@@ -49,6 +50,7 @@ class AIMarketAnalyst:
         min_confidence: float = 0.5,
         patterns: list[str] | None = None,
         date: str | None = None,
+        lookback_bars: int | None = 1,
     ) -> list[PatternConfidenceResult]:
         """Automatically scan and score candlestick patterns across the dataset.
 
@@ -56,10 +58,15 @@ class AIMarketAnalyst:
             min_confidence: Threshold between 0.0 and 1.0 to filter low-conviction signals.
             patterns: Optional list of specific pattern names to scan. If None, scans all patterns.
             date: Optional single-date filter string.
+            lookback_bars: Number of most recent bars to evaluate for active signals.
+                           Defaults to 1. Set to None for full historical scan.
 
         Returns:
             List of PatternConfidenceResult sorted by confidence score descending.
         """
+        if not np.isfinite(min_confidence) or not 0.0 <= min_confidence <= 1.0:
+            raise ValueError("min_confidence must be finite and within [0, 1]")
+
         from .scorer import AIPatternScorer
 
         scorer = AIPatternScorer(self.data)
@@ -67,6 +74,7 @@ class AIMarketAnalyst:
             min_confidence=min_confidence,
             patterns=patterns,
             date=date,
+            lookback_bars=lookback_bars,
         )
         return self.scored_results
 
