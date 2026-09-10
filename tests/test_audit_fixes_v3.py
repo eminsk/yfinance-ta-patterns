@@ -95,7 +95,7 @@ def test_crypto_sharpe_annualization_pairs(sym: str) -> None:
 
 def test_crypto_sharpe_annualization_stock_and_forex_contrast() -> None:
     """Verify stock and forex retain their standard calendars."""
-    assert resolve_periods_per_year("1h", "AAPL") == 1638.0
+    assert resolve_periods_per_year("1h", "AAPL") == 1764.0
     assert resolve_periods_per_year("1d", "AAPL") == 252.0
     assert resolve_periods_per_year("1h", "EURUSD=X") == 6240.0
     assert resolve_periods_per_year("1d", "EURUSD=X") == 260.0

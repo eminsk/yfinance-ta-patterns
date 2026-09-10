@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -15,15 +16,15 @@ from yfinance_ta_patterns.data import (
 )
 from yfinance_ta_patterns.talib_compat import talib
 
-# Standard annual periods for timeframe-aware Sharpe Ratio calculation (Equities: 252 days, 6.5h session)
+# Standard annual periods for timeframe-aware Sharpe Ratio calculation (Equities: 252 days, 6.5h session -> 7 observations/day)
 TIMEFRAME_PERIODS_PER_YEAR: dict[str, float] = {
     "1m": 252.0 * 390.0,  # 98,280 periods/year
     "2m": 252.0 * 195.0,  # 49,140 periods/year
     "5m": 252.0 * 78.0,  # 19,656 periods/year
     "15m": 252.0 * 26.0,  # 6,552 periods/year
     "30m": 252.0 * 13.0,  # 3,276 periods/year
-    "60m": 252.0 * 6.5,  # 1,638 periods/year
-    "1h": 252.0 * 6.5,  # 1,638 periods/year
+    "60m": 252.0 * 7.0,  # 1,764 periods/year (7 hourly candles/day: 9:30, 10:30, 11:30, 12:30, 13:30, 14:30, 15:30)
+    "1h": 252.0 * 7.0,  # 1,764 periods/year
     "90m": 252.0 * (390.0 / 90.0),  # 1,092 periods/year
     "4h": 252.0 * 2.0,  # 504 periods/year
     "1d": 252.0,  # 252 trading days/year
@@ -132,7 +133,7 @@ def resolve_periods_per_year(
         )
     ):
         if tf in ("1h", "60m"):
-            return 252.0 * 8.5  # 2,142 periods/year
+            return 252.0 * 9.0  # 2,268 periods/year (9 hourly observations/day: 8:00-16:00 + 16:00-16:30)
         if tf == "4h":
             return 252.0 * 2.125
         if tf == "30m":
@@ -507,12 +508,27 @@ class PatternRankingTester:
                         return bridge_rate
 
         # 2. Static rates table
+        used_default_static = False
         rates = {**DEFAULT_FX_USD_RATES, **self._fx_rates}
         if direct_pair in rates and np.isfinite(rates[direct_pair]) and rates[direct_pair] > 0:
+            if direct_pair not in self._fx_rates:
+                warnings.warn(
+                    f"Static default FX rate used for {from_curr}->{to_curr} currency conversion at {timestamp}. "
+                    "For historical accuracy, provide fx_history or enable strict_fx=True.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             return rates[direct_pair]
         if inv_pair in rates and np.isfinite(rates[inv_pair]) and rates[inv_pair] > 0:
             inv_rate = 1.0 / rates[inv_pair]
             if np.isfinite(inv_rate) and inv_rate > 0:
+                if inv_pair not in self._fx_rates:
+                    warnings.warn(
+                        f"Static default FX rate used for {from_curr}->{to_curr} currency conversion at {timestamp}. "
+                        "For historical accuracy, provide fx_history or enable strict_fx=True.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
                 return inv_rate
 
         # USD bridge via static rates
@@ -520,19 +536,27 @@ class PatternRankingTester:
         if from_usd_rate is None:
             if f"{from_curr}USD" in rates and np.isfinite(rates[f"{from_curr}USD"]) and rates[f"{from_curr}USD"] > 0:
                 from_usd_rate = rates[f"{from_curr}USD"]
+                if f"{from_curr}USD" not in self._fx_rates:
+                    used_default_static = True
             elif f"USD{from_curr}" in rates and np.isfinite(rates[f"USD{from_curr}"]) and rates[f"USD{from_curr}"] > 0:
                 inv_bridge = 1.0 / rates[f"USD{from_curr}"]
                 if np.isfinite(inv_bridge) and inv_bridge > 0:
                     from_usd_rate = inv_bridge
+                    if f"USD{from_curr}" not in self._fx_rates:
+                        used_default_static = True
 
         to_usd_rate: float | None = 1.0 if to_curr == "USD" else None
         if to_usd_rate is None:
             if f"{to_curr}USD" in rates and np.isfinite(rates[f"{to_curr}USD"]) and rates[f"{to_curr}USD"] > 0:
                 to_usd_rate = rates[f"{to_curr}USD"]
+                if f"{to_curr}USD" not in self._fx_rates:
+                    used_default_static = True
             elif f"USD{to_curr}" in rates and np.isfinite(rates[f"USD{to_curr}"]) and rates[f"USD{to_curr}"] > 0:
                 inv_bridge = 1.0 / rates[f"USD{to_curr}"]
                 if np.isfinite(inv_bridge) and inv_bridge > 0:
                     to_usd_rate = inv_bridge
+                    if f"USD{to_curr}" not in self._fx_rates:
+                        used_default_static = True
 
         if (
             from_usd_rate is not None
@@ -543,6 +567,13 @@ class PatternRankingTester:
         ):
             bridge_val = from_usd_rate / to_usd_rate
             if np.isfinite(bridge_val) and bridge_val > 0:
+                if used_default_static:
+                    warnings.warn(
+                        f"Static default FX rate used for {from_curr}->{to_curr} currency conversion at {timestamp}. "
+                        "For historical accuracy, provide fx_history or enable strict_fx=True.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
                 return bridge_val
 
         raise ValueError(

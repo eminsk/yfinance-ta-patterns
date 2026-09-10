@@ -584,6 +584,20 @@ def _get_market_session_hours(
     return "America/New_York", datetime.time(9, 30), datetime.time(close_hour, 0)
 
 
+def _get_market_lunch_break(
+    symbol: str, d: datetime.date
+) -> tuple[datetime.time, datetime.time] | None:
+    """Return lunch break start and end times in exchange local timezone if applicable."""
+    clean_sym = symbol.strip().upper()
+    if clean_sym.endswith(".T"):
+        return datetime.time(11, 30), datetime.time(12, 30)
+    if clean_sym.endswith(".HK"):
+        return datetime.time(12, 0), datetime.time(13, 0)
+    if any(clean_sym.endswith(sfx) for sfx in (".SS", ".SZ")):
+        return datetime.time(11, 30), datetime.time(13, 0)
+    return None
+
+
 class MarketDataLoader:
     """Universal market data loader for Yahoo Finance tickers."""
 
@@ -633,7 +647,16 @@ class MarketDataLoader:
         """Fetch raw market data via yfinance."""
         start_val = self.start or self.start_date
         end_val = self.end or self.end_date
-        repair_opt = self.repair and HAS_SKLEARN
+        if self.repair and not HAS_SKLEARN:
+            warnings.warn(
+                "Data repair was requested (repair=True), but 'scikit-learn' is not installed. "
+                "Disabling yfinance data repair. Install scikit-learn via 'pip install scikit-learn' to enable repair.",
+                UserWarning,
+                stacklevel=2,
+            )
+            repair_opt = False
+        else:
+            repair_opt = self.repair
 
         if start_val or end_val:
             data = yf.download(
@@ -759,14 +782,28 @@ class MarketDataLoader:
                 return True
 
             # Stocks and other assets:
-            # Build expected hourly session grid from exchange open_time to close_time.
-            # Compare actual timestamps 1-to-1 without bar reuse.
-            dates_to_check = {bucket_start.date(), (bucket_end - pd.Timedelta(seconds=1)).date()}
+            # Build expected hourly session grid from exchange open_time to close_time,
+            # taking scheduled lunch breaks into account for Asian exchanges.
+            tz_sample, _, _ = _get_market_session_hours(self.ticker, bucket_start.date())
+            b_start_loc = (
+                bucket_start.tz_convert(tz_sample)
+                if bucket_start.tz is not None
+                else bucket_start.tz_localize("UTC").tz_convert(tz_sample)
+            )
+            b_end_loc = (
+                (bucket_end - pd.Timedelta(seconds=1)).tz_convert(tz_sample)
+                if bucket_end.tz is not None
+                else (bucket_end - pd.Timedelta(seconds=1)).tz_localize("UTC").tz_convert(tz_sample)
+            )
+            dates_to_check = {b_start_loc.date(), b_end_loc.date()}
             expected_stock_slots: list[pd.Timestamp] = []
+            break_windows: list[tuple[pd.Timestamp, pd.Timestamp]] = []
+
             for d in sorted(dates_to_check):
                 if d.weekday() >= 5:
                     continue  # Weekend
                 tz_name, open_time, close_time = _get_market_session_hours(self.ticker, d)
+                lunch_break = _get_market_lunch_break(self.ticker, d)
                 s_open = pd.Timestamp(
                     year=d.year,
                     month=d.month,
@@ -783,16 +820,71 @@ class MarketDataLoader:
                     minute=close_time.minute,
                     tz=tz_name,
                 )
-                curr = s_open
-                while curr < s_close:
-                    curr_utc = (
-                        curr.tz_convert("UTC")
-                        if bucket_start.tz is not None
-                        else curr.tz_convert("UTC").tz_localize(None)
+
+                if lunch_break is not None:
+                    br_start_t, br_end_t = lunch_break
+                    s_br_start = pd.Timestamp(
+                        year=d.year,
+                        month=d.month,
+                        day=d.day,
+                        hour=br_start_t.hour,
+                        minute=br_start_t.minute,
+                        tz=tz_name,
                     )
-                    if bucket_start <= curr_utc < bucket_end:
-                        expected_stock_slots.append(curr_utc)
-                    curr += pd.Timedelta(hours=1)
+                    s_br_end = pd.Timestamp(
+                        year=d.year,
+                        month=d.month,
+                        day=d.day,
+                        hour=br_end_t.hour,
+                        minute=br_end_t.minute,
+                        tz=tz_name,
+                    )
+                    br_utc_start = (
+                        s_br_start.tz_convert("UTC")
+                        if bucket_start.tz is not None
+                        else s_br_start.tz_convert("UTC").tz_localize(None)
+                    )
+                    br_utc_end = (
+                        s_br_end.tz_convert("UTC")
+                        if bucket_start.tz is not None
+                        else s_br_end.tz_convert("UTC").tz_localize(None)
+                    )
+                    break_windows.append((br_utc_start, br_utc_end))
+
+                    # Morning session
+                    curr = s_open
+                    while curr < s_br_start:
+                        curr_utc = (
+                            curr.tz_convert("UTC")
+                            if bucket_start.tz is not None
+                            else curr.tz_convert("UTC").tz_localize(None)
+                        )
+                        if bucket_start <= curr_utc < bucket_end:
+                            expected_stock_slots.append(curr_utc)
+                        curr += pd.Timedelta(hours=1)
+
+                    # Afternoon session
+                    curr = s_br_end
+                    while curr < s_close:
+                        curr_utc = (
+                            curr.tz_convert("UTC")
+                            if bucket_start.tz is not None
+                            else curr.tz_convert("UTC").tz_localize(None)
+                        )
+                        if bucket_start <= curr_utc < bucket_end:
+                            expected_stock_slots.append(curr_utc)
+                        curr += pd.Timedelta(hours=1)
+                else:
+                    curr = s_open
+                    while curr < s_close:
+                        curr_utc = (
+                            curr.tz_convert("UTC")
+                            if bucket_start.tz is not None
+                            else curr.tz_convert("UTC").tz_localize(None)
+                        )
+                        if bucket_start <= curr_utc < bucket_end:
+                            expected_stock_slots.append(curr_utc)
+                        curr += pd.Timedelta(hours=1)
 
             if len(expected_stock_slots) > 0:
                 if len(bucket_stamps) < len(expected_stock_slots):
@@ -811,9 +903,21 @@ class MarketDataLoader:
                     matched_stock_indices.add(found)
 
             if len(bucket_stamps) > 1:
-                diffs = np.diff(bucket_stamps.values).astype("timedelta64[m]").astype(int)
-                if np.any(diffs > 75):
-                    return False
+                # Check for unexpected gaps between consecutive bars.
+                # If gap spans across a scheduled lunch break, allow break duration + 75m.
+                for i in range(len(bucket_stamps) - 1):
+                    t1 = bucket_stamps[i]
+                    t2 = bucket_stamps[i + 1]
+                    gap_minutes = int((t2 - t1).total_seconds() / 60)
+                    is_scheduled_break = False
+                    for b_s, b_e in break_windows:
+                        if t1 <= b_s and t2 >= b_e:
+                            br_duration = int((b_e - b_s).total_seconds() / 60)
+                            if gap_minutes <= 75 + br_duration:
+                                is_scheduled_break = True
+                                break
+                    if not is_scheduled_break and gap_minutes > 75:
+                        return False
 
             return True
 
@@ -829,9 +933,8 @@ class MarketDataLoader:
             and not resampled.empty
             and isinstance(resampled.index, pd.DatetimeIndex)
         ):
-            ends = resampled.index + pd.Timedelta(self._resample_rule)
             now = now_utc if now_utc is not None else pd.Timestamp.now(tz=pytz.UTC)
-            ends_tz = getattr(ends, "tz", None)
+            ends_tz = getattr(resampled.index, "tz", None)
             if ends_tz is not None and now.tz is None:
                 now = now.tz_localize(pytz.UTC)
             elif ends_tz is None and now.tz is not None:
@@ -845,8 +948,40 @@ class MarketDataLoader:
             elif ends_tz is None and max_input_end.tz is not None:
                 max_input_end = max_input_end.tz_localize(None)
 
-            cutoff = min(now, max_input_end)
-            resampled = resampled.loc[ends <= cutoff]
+            clean_sym = self.ticker.strip().upper()
+            valid_completed_mask = []
+            for b_start in resampled.index:
+                b_end = b_start + pd.Timedelta(str(self._resample_rule or "4h"))
+                if not is_crypto and not is_forex:
+                    tz_name, _, _ = _get_market_session_hours(clean_sym, b_start.date())
+                    b_loc = (
+                        b_start.tz_convert(tz_name)
+                        if b_start.tz is not None
+                        else b_start.tz_localize("UTC").tz_convert(tz_name)
+                    )
+                    d = b_loc.date()
+                    tz_name, _, close_t = _get_market_session_hours(clean_sym, d)
+                    s_close = pd.Timestamp(
+                        year=d.year,
+                        month=d.month,
+                        day=d.day,
+                        hour=close_t.hour,
+                        minute=close_t.minute,
+                        tz=tz_name,
+                    )
+                    s_close_cmp = (
+                        s_close.tz_convert(ends_tz)
+                        if ends_tz is not None
+                        else s_close.tz_localize(None)
+                    )
+                    effective_end = min(b_end, s_close_cmp) if b_start <= s_close_cmp else b_end
+                else:
+                    effective_end = b_end
+
+                is_complete = (effective_end <= now) and (effective_end <= max_input_end)
+                valid_completed_mask.append(is_complete)
+
+            resampled = resampled.loc[valid_completed_mask]
 
         return cast(pd.DataFrame, resampled)
 
@@ -934,7 +1069,39 @@ class MarketDataLoader:
                 candle_ends = pd.DatetimeIndex(candle_end_list)
             elif self.interval in INTERVAL_DELTAS:
                 delta = INTERVAL_DELTAS[self.interval]
-                candle_ends = data.index + delta
+                asset_class = classify_asset(self.ticker, self.asset_type)
+                if asset_class not in ("crypto", "forex"):
+                    clean_sym = self.ticker.strip().upper()
+                    capped_ends = []
+                    for ts in data.index:
+                        tz_name, _, _ = _get_market_session_hours(clean_sym, ts.date())
+                        ts_loc = (
+                            ts.tz_convert(tz_name)
+                            if ts.tz is not None
+                            else ts.tz_localize("UTC").tz_convert(tz_name)
+                        )
+                        d = ts_loc.date()
+                        tz_name, _, close_t = _get_market_session_hours(clean_sym, d)
+                        s_close = pd.Timestamp(
+                            year=d.year,
+                            month=d.month,
+                            day=d.day,
+                            hour=close_t.hour,
+                            minute=close_t.minute,
+                            tz=tz_name,
+                        )
+                        if ts.tz is not None:
+                            s_close_cmp = s_close.tz_convert(ts.tz)
+                        else:
+                            s_close_cmp = s_close.tz_localize(None)
+
+                        raw_end = ts + delta
+                        capped_ends.append(
+                            min(raw_end, s_close_cmp) if ts <= s_close_cmp else raw_end
+                        )
+                    candle_ends = pd.DatetimeIndex(capped_ends)
+                else:
+                    candle_ends = data.index + delta
             else:
                 raise ValueError(f"Unsupported interval for closed_only filtering: {self.interval}")
 

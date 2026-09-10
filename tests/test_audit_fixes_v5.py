@@ -245,16 +245,16 @@ def test_trade_sharpe_timeframe_invariance_and_scaling() -> None:
     trades_per_year_1d = len(trades) / duration_1d
     expected_sharpe = (mean_pnl / std_pnl) * float(np.sqrt(trades_per_year_1d))
 
-    # Hourly timeframe (1638 bars = 1.0 year) with same 4 trades
+    # Hourly timeframe (1764 bars = 1.0 year) with same 4 trades
     tester_1h = PatternRankingTester(
         pd.DataFrame(
-            {"Open": [100.0] * 1638, "High": [101.0] * 1638, "Low": [99.0] * 1638, "Close": [100.0] * 1638, "Volume": [100] * 1638},
-            index=pd.date_range("2024-01-01", periods=1638, freq="1h", tz="UTC"),
+            {"Open": [100.0] * 1764, "High": [101.0] * 1764, "Low": [99.0] * 1764, "Close": [100.0] * 1764, "Volume": [100] * 1764},
+            index=pd.date_range("2024-01-01", periods=1764, freq="1h", tz="UTC"),
         ),
         timeframe="1h",
         sharpe_mode="trade",
     )
-    duration_1h = max(1638 / tester_1h._periods_per_year, 1e-6)
+    duration_1h = max(1764 / tester_1h._periods_per_year, 1e-6)
     trades_per_year_1h = len(trades) / duration_1h
     sharpe_1h = (mean_pnl / std_pnl) * float(np.sqrt(trades_per_year_1h))
 

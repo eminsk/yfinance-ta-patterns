@@ -255,22 +255,22 @@ def test_invalid_tester_parameters_raise_value_error(sample_ohlcv_df: pd.DataFra
 # --- Issue 6: Market-aware annualization factors and custom periods_per_year ---
 def test_market_aware_annualization_and_custom_periods_per_year(sample_ohlcv_df: pd.DataFrame) -> None:
     """Verify market-aware annualization factors and custom periods_per_year override."""
-    # US equities hourly: standard 252 * 6.5 = 1638.0
+    # US equities hourly: standard 252 * 7 = 1764.0 (7 observations/day)
     us_hourly = resolve_periods_per_year("1h", symbol="AAPL")
-    assert us_hourly == 1638.0
+    assert us_hourly == 1764.0
 
-    # LSE equities hourly: 8.5h session * 252 days = 2142.0
+    # LSE equities hourly: 9 observations * 252 days = 2268.0
     lse_hourly = resolve_periods_per_year("1h", symbol="VOD.L")
-    assert lse_hourly == 2142.0  # 252 * 8.5
+    assert lse_hourly == 2268.0  # 252 * 9.0
 
-    # European equities hourly: 8.5h session * 252 days = 2142.0
+    # European equities hourly: 9 observations * 252 days = 2268.0
     de_hourly = resolve_periods_per_year("1h", symbol="SAP.DE")
-    assert de_hourly == 2142.0  # 252 * 8.5
+    assert de_hourly == 2268.0  # 252 * 9.0
 
-    # Custom override (e.g. 7 hourly bars / day = 1764.0)
-    custom_7bar = 1764.0
-    res_override = resolve_periods_per_year("1h", symbol="AAPL", periods_per_year=custom_7bar)
-    assert res_override == 1764.0
+    # Custom override (e.g. 8 hourly bars / day = 2016.0)
+    custom_override = 2016.0
+    res_override = resolve_periods_per_year("1h", symbol="AAPL", periods_per_year=custom_override)
+    assert res_override == 2016.0
 
     # PatternRankingTester with custom periods_per_year
     tester = PatternRankingTester(sample_ohlcv_df, periods_per_year=1500.0)

@@ -114,14 +114,14 @@ def test_pattern_tester_close_last_trade(synthetic_ohlcv_data: pd.DataFrame) -> 
 def test_sharpe_annualization(synthetic_ohlcv_data: pd.DataFrame) -> None:
     """Issue 6: Sharpe Ratio scales appropriately with timeframe frequencies."""
     assert TIMEFRAME_PERIODS_PER_YEAR["1d"] == 252.0
-    assert TIMEFRAME_PERIODS_PER_YEAR["1h"] == 252.0 * 6.5
+    assert TIMEFRAME_PERIODS_PER_YEAR["1h"] == 252.0 * 7.0
     assert TIMEFRAME_PERIODS_PER_YEAR["15m"] == 252.0 * 26.0
 
     tester_1d = PatternRankingTester(synthetic_ohlcv_data, timeframe="1d")
     tester_1h = PatternRankingTester(synthetic_ohlcv_data, timeframe="1h")
 
     assert tester_1d._periods_per_year == 252.0
-    assert tester_1h._periods_per_year == 252.0 * 6.5
+    assert tester_1h._periods_per_year == 252.0 * 7.0
 
 
 def test_equity_curve_and_drawdown(synthetic_ohlcv_data: pd.DataFrame) -> None:
@@ -540,7 +540,8 @@ def test_universal_cross_fx_eurgbp_conversion() -> None:
     # Default baseline rate: GBPUSD = 1.28
     tester_default = PatternRankingTester(df, symbol="EURGBP", account_currency="USD")
     raw_pnl_gbp = 100.0
-    converted = tester_default._convert_pnl_to_account_currency(raw_pnl_gbp, 0.85)
+    with pytest.warns(UserWarning, match="Static default FX rate used"):
+        converted = tester_default._convert_pnl_to_account_currency(raw_pnl_gbp, 0.85)
     assert np.isclose(converted, 100.0 * DEFAULT_FX_USD_RATES["GBPUSD"])  # 128.0 USD
 
     # Custom rate override: GBPUSD = 1.35
@@ -563,9 +564,9 @@ def test_asset_aware_periods_per_year() -> None:
     assert resolve_periods_per_year("1h", "EURUSD=X") == 6240.0
     assert resolve_periods_per_year("4h", "USDJPY=X") == 1560.0
 
-    # Equities: 252 days / 6.5h
+    # Equities: 252 days / 7 hourly candles
     assert resolve_periods_per_year("1d", "AAPL") == 252.0
-    assert resolve_periods_per_year("1h", "AAPL") == 1638.0
+    assert resolve_periods_per_year("1h", "AAPL") == 1764.0
     assert resolve_periods_per_year("4h", "AAPL") == 504.0
 
 
@@ -710,9 +711,9 @@ def test_score_signal_rejects_zero_raw_signal(synthetic_ohlcv_data: pd.DataFrame
 
 def test_stock_sol_not_treated_as_crypto() -> None:
     """Issue 5: Stock tickers like SOL (Emeren Group) and ETH (Ethan Allen) use stock calendar, not crypto 24/7."""
-    # Stock calendar for 1h is 252 * 6.5 = 1638.0
-    assert resolve_periods_per_year("1h", "SOL") == 252.0 * 6.5
-    assert resolve_periods_per_year("1h", "ETH") == 252.0 * 6.5
+    # Stock calendar for 1h is 252 * 7 = 1764.0
+    assert resolve_periods_per_year("1h", "SOL") == 252.0 * 7.0
+    assert resolve_periods_per_year("1h", "ETH") == 252.0 * 7.0
     # Crypto pair with -USD suffix uses 365 * 24 = 8760.0
     assert resolve_periods_per_year("1h", "SOL-USD") == 365.0 * 24.0
     # Explicit asset_type override works
