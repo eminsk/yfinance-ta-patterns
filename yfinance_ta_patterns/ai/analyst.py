@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from numbers import Integral
 from typing import Any
 
 import numpy as np
@@ -66,6 +67,12 @@ class AIMarketAnalyst:
         """
         if not np.isfinite(min_confidence) or not 0.0 <= min_confidence <= 1.0:
             raise ValueError("min_confidence must be finite and within [0, 1]")
+
+        if lookback_bars is not None:
+            if isinstance(lookback_bars, bool) or not isinstance(lookback_bars, Integral):
+                raise TypeError("lookback_bars must be an integer")
+            if lookback_bars <= 0:
+                raise ValueError("lookback_bars must be a positive integer (>= 1)")
 
         from .scorer import AIPatternScorer
 

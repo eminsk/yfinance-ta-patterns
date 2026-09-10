@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+import numpy as np
 import pandas as pd
 
 from yfinance_ta_patterns.talib_compat import (
@@ -18,6 +19,26 @@ class PatternAnalyzer:
     """Analyze OHLC market data for TA-Lib candlestick patterns."""
 
     def __init__(self, data: pd.DataFrame) -> None:
+        if not isinstance(data, pd.DataFrame):
+            raise TypeError("data must be a pandas DataFrame")
+
+        required = {"Open", "High", "Low", "Close"}
+        missing = required.difference(data.columns)
+        if missing:
+            raise ValueError(f"Missing OHLC columns: {sorted(missing)}")
+
+        if not data.empty:
+            for col in ("Open", "High", "Low", "Close"):
+                if not pd.api.types.is_numeric_dtype(data[col]):
+                    raise TypeError(f"Column '{col}' must be numeric")
+                if not np.isfinite(data[col]).all():
+                    raise ValueError("OHLC data contains non-finite values (NaN or inf)")
+
+            if data.index.has_duplicates:
+                raise ValueError("Index contains duplicate timestamps")
+            if not data.index.is_monotonic_increasing:
+                raise ValueError("Index must be monotonically sorted in chronological order")
+
         self.data = data
         funcs: list[str] = (
             [f for f in dir(talib) if f.startswith("CDL")]
@@ -43,6 +64,8 @@ class PatternAnalyzer:
             if dt is None:
                 return None
             parsed = pd.to_datetime(dt)
+            if parsed.tzinfo is not None and tz is None:
+                raise ValueError("Timezone-aware date requires a timezone-aware index")
             if parsed.tzinfo is None and tz is not None:
                 parsed = parsed.tz_localize(tz)
             elif parsed.tzinfo is not None and tz is not None:
@@ -69,6 +92,9 @@ class PatternAnalyzer:
                 )
             available = ", ".join(p.replace("CDL", "") for p in sorted(self.pattern_functions))
             raise ValueError(f"Unknown pattern '{pattern}'. Available: {available}")
+
+        if self.data.empty:
+            return pd.Series(dtype=int, name=normalized)
 
         pattern_func = getattr(talib, normalized)
         result = pattern_func(

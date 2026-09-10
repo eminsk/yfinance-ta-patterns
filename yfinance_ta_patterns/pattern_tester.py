@@ -13,6 +13,7 @@ from yfinance_ta_patterns.data import (
     classify_asset,
     normalize_interval,
     resolve_asset_currencies,
+    validate_asset_type,
 )
 from yfinance_ta_patterns.talib_compat import talib
 
@@ -112,7 +113,7 @@ def resolve_periods_per_year(
         return float(periods_per_year)
 
     tf = normalize_interval(timeframe) if timeframe else "1d"
-    a_type = asset_type.lower() if asset_type else "auto"
+    a_type = validate_asset_type(asset_type)
     clean_sym = symbol.strip().upper() if symbol else ""
 
     if a_type == "crypto":
@@ -153,7 +154,9 @@ def resolve_periods_per_year(
                 252.0 * 9.0
             )  # 2,268 periods/year (9 hourly observations/day: 8:00-16:00 + 16:00-16:30)
         if tf == "4h":
-            return 252.0 * 2.125
+            return (
+                252.0 * 3.0
+            )  # 756.0 periods/year (3 resampled 4h bars/day: 08:00-12:00, 12:00-16:00, 16:00-20:00)
         if tf == "90m":
             return 252.0 * 6.0  # 1,512 periods/year (6 observations/day: 5 full 90m + 1 60m)
         if tf == "30m":
@@ -385,7 +388,7 @@ class PatternRankingTester:
             if isinstance(max_fx_staleness, str)
             else max_fx_staleness
         )
-        self._asset_type: str = asset_type
+        self._asset_type: str = validate_asset_type(asset_type)
         self._sharpe_mode: str = sharpe_mode
         self._holding_period: int | None = holding_period
 
@@ -757,7 +760,11 @@ class PatternRankingTester:
         self.equity_curve = [self._initial_capital]
         self._last_open_trade = None
 
-        pattern_func = getattr(talib, pattern_name, None)
+        pat = pattern_name.upper()
+        if not pat.startswith("CDL"):
+            pat = f"CDL{pat}"
+
+        pattern_func = getattr(talib, pat, None)
         if not pattern_func:
             print(f"Pattern function not found: {pattern_name}")
             return None
@@ -1183,6 +1190,7 @@ class PatternRankingTester:
                     "Win Rate (With News Filter)": f"{r_yes.win_rate:.1f}%" if r_yes else "N/A",
                     "Total PnL (No Filter)": f"${r_no.total_pnl:.2f}",
                     "Total PnL (With Filter)": f"${r_yes.total_pnl:.2f}" if r_yes else "N/A",
+                    "FX Source": r_no.fx_source,
                     "Signals (No Filter)": r_no.total_signals,
                     "Signals (With Filter)": r_yes.total_signals if r_yes else 0,
                     "Trades (No Filter)": r_no.total_trades,
@@ -1208,6 +1216,7 @@ class PatternRankingTester:
                     "Losing Trades": result.losing_trades,
                     "Win Rate %": f"{result.win_rate:.2f}",
                     "Total PnL": f"{result.total_pnl:.2f}",
+                    "FX Source": result.fx_source,
                     "Avg PnL": f"{result.avg_pnl:.2f}",
                     "Max Profit": f"{result.max_profit:.2f}",
                     "Max Loss": f"{result.max_loss:.2f}",
@@ -1218,6 +1227,24 @@ class PatternRankingTester:
                 }
             )
 
-        df = pd.DataFrame(data)
+        columns = [
+            "Rank",
+            "Pattern",
+            "Total Signals",
+            "Total Trades",
+            "Winning Trades",
+            "Losing Trades",
+            "Win Rate %",
+            "Total PnL",
+            "FX Source",
+            "Avg PnL",
+            "Max Profit",
+            "Max Loss",
+            "Max Drawdown",
+            "Profit Factor",
+            "Sharpe Ratio",
+            "Score",
+        ]
+        df = pd.DataFrame(data, columns=columns)
         df.to_csv(filename, index=False)
         print(f"Results exported to {filename}")

@@ -7,7 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("yfinance-ta-patterns")
 except PackageNotFoundError:  # pragma: no cover - during editable installs
-    __version__ = "0.3.16"
+    __version__ = "0.3.17"
 
 
 from .ai import (
@@ -17,12 +17,20 @@ from .ai import (
     SignalGrade,
     TradeSetup,
 )
-from .data import MarketDataLoader, classify_asset, normalize_ticker, resolve_asset_currencies
+from .data import (
+    ALLOWED_ASSET_TYPES,
+    MarketDataLoader,
+    classify_asset,
+    normalize_ticker,
+    resolve_asset_currencies,
+    validate_asset_type,
+)
 from .forex_data_loader import ForexDataLoader
 from .pattern_analyzer import PatternAnalyzer
 from .pattern_tester import PatternRankingTester, PatternResult
 
 __all__ = [
+    "ALLOWED_ASSET_TYPES",
     "AIMarketAnalyst",
     "AIPatternScorer",
     "ForexDataLoader",
@@ -37,4 +45,5 @@ __all__ = [
     "classify_asset",
     "normalize_ticker",
     "resolve_asset_currencies",
+    "validate_asset_type",
 ]

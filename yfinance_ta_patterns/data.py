@@ -210,6 +210,18 @@ _EXCHANGE_SUFFIX_MAP: dict[str, str] = {
     ".JO": "ZAR",
 }
 
+ALLOWED_ASSET_TYPES: frozenset[str] = frozenset(
+    {"auto", "crypto", "forex", "stock", "index", "commodity"}
+)
+
+
+def validate_asset_type(asset_type: str | None) -> str:
+    """Validate and normalize asset_type against allowed types."""
+    kind = (asset_type or "auto").strip().lower()
+    if kind not in ALLOWED_ASSET_TYPES:
+        raise ValueError(f"Unsupported asset_type: {asset_type}")
+    return kind
+
 
 def normalize_ticker(symbol: str, asset_type: str = "auto", strict: bool = True) -> str:
     """Intelligently normalize symbol for Yahoo Finance API.
@@ -219,7 +231,7 @@ def normalize_ticker(symbol: str, asset_type: str = "auto", strict: bool = True)
       - Crypto: "BTC/USD" -> "BTC-USD", "ETH/USD" -> "ETH-USD"
       - Forex: "EUR/USD" -> "EURUSD=X"
     - If asset_type is 'crypto' or auto-detected as crypto pair, format with hyphen (e.g. "BTC-USD").
-    - If asset_type is 'forex' or auto-detected as valid currency pair, append '=X'.
+      - If asset_type is 'forex' or auto-detected as valid currency pair, append '=X'.
     - If asset_type is 'stock', validates that symbol is not a forex pair or crypto pair.
     - Rejects identical base and quote currencies (e.g. "USDUSD", "EUR/EUR", "BTCBTC").
     - Rejects unknown currency codes in forex mode when strict=True (e.g. "ABC/XYZ").
@@ -229,7 +241,7 @@ def normalize_ticker(symbol: str, asset_type: str = "auto", strict: bool = True)
         raise ValueError("Symbol cannot be empty.")
 
     clean = symbol.strip().upper()
-    a_type = asset_type.lower() if asset_type else "auto"
+    a_type = validate_asset_type(asset_type)
 
     # 1. Explicit crypto handling: converts slashes to hyphen, preserves existing hyphens
     if a_type == "crypto":
@@ -493,8 +505,9 @@ def classify_asset(symbol: str, asset_type: str = "auto") -> str:
 
     Works seamlessly whether symbol is raw ('BTC/EUR', 'ETH-BTC', 'EURUSD=X', 'BTCUSDT') or normalized.
     """
-    if asset_type and asset_type.lower() != "auto":
-        return asset_type.lower()
+    kind = validate_asset_type(asset_type)
+    if kind != "auto":
+        return kind
 
     # Normalize first to detect unseparated cryptos like BTCUSDT, DOGEUSD, SHIBUSDT
     norm = normalize_ticker(symbol, asset_type="auto")
@@ -610,7 +623,7 @@ def resolve_asset_currencies(
             return clean, quote_curr
 
     # If explicitly or auto-classified as stock, treat entire ticker as base and USD as quote
-    a_type = asset_type.lower() if asset_type else "auto"
+    a_type = validate_asset_type(asset_type)
     if a_type == "stock" or (a_type == "auto" and classify_asset(clean, "auto") == "stock"):
         return clean, "USD"
 
@@ -903,9 +916,9 @@ class MarketDataLoader:
         effective_interval = timeframe if timeframe is not None else interval
         norm_interval = normalize_interval(effective_interval)
         self.symbol: str = symbol
-        self.asset_type: str = asset_type
+        self.asset_type: str = validate_asset_type(asset_type)
         self.closed_only: bool = closed_only
-        self.ticker: str = normalize_ticker(symbol, asset_type=asset_type)
+        self.ticker: str = normalize_ticker(symbol, asset_type=self.asset_type)
         # Yahoo Finance restricts 1m data to the last 7-8 days (2m is supported up to 60d).
         # Auto-adjust period to '7d' if default '60d' is passed with 1m.
         self.period: str = "7d" if (norm_interval == "1m" and period == "60d") else period
