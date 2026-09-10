@@ -81,6 +81,25 @@ _CURRENCY_CODES = {
     "SAR",
     "MYR",
     "RON",
+    "TWD",  # Taiwan New Dollar (Issue 1)
+    "ARS",  # Argentine Peso
+    "PEN",  # Peruvian Sol
+    "PKR",  # Pakistani Rupee
+    "EGP",  # Egyptian Pound
+    "VND",  # Vietnamese Dong
+    "NGN",  # Nigerian Naira
+    "KWD",  # Kuwaiti Dinar
+    "QAR",  # Qatari Riyal
+    "OMR",  # Omani Rial
+    "BHD",  # Bahraini Dinar
+    "JOD",  # Jordanian Dinar
+    "UAH",  # Ukrainian Hryvnia
+    "KZT",  # Kazakhstani Tenge
+    "MAD",  # Moroccan Dirham
+    "BGN",  # Bulgarian Lev
+    "HRK",  # Croatian Kuna
+    "RSD",  # Serbian Dinar
+    "ISK",  # Icelandic Krona
 }
 
 _KNOWN_CRYPTO_SYMBOLS: set[str] = {
@@ -201,17 +220,27 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
       - Forex: "EUR/USD" -> "EURUSD=X"
     - If asset_type is 'crypto' or auto-detected as crypto pair, format with hyphen (e.g. "BTC-USD").
     - If asset_type is 'forex' or auto-detected as valid currency pair, append '=X'.
+    - If asset_type is 'stock', validates that symbol is not a forex pair or crypto pair.
+    - Rejects identical base and quote currencies (e.g. "USDUSD", "EUR/EUR").
     - If already formatted with suffix (=X, =F, -USD, ^) or standard stock ticker, preserve.
     """
-    clean = symbol.strip().upper()
+    if not symbol or not symbol.strip():
+        raise ValueError("Symbol cannot be empty.")
 
-    # Explicit crypto handling: converts slashes to hyphen, preserves existing hyphens
-    if asset_type.lower() == "crypto":
+    clean = symbol.strip().upper()
+    a_type = asset_type.lower() if asset_type else "auto"
+
+    # 1. Explicit crypto handling: converts slashes to hyphen, preserves existing hyphens
+    if a_type == "crypto":
         if "/" in clean:
             parts = clean.split("/")
             if len(parts) != 2 or not parts[0] or not parts[1]:
                 raise ValueError(
                     f"Invalid crypto ticker format: '{symbol}'. Expected format like 'BTC/USD' or 'BTC-USD'."
+                )
+            if parts[0] == parts[1]:
+                raise ValueError(
+                    f"Base and quote symbols cannot be identical: '{parts[0]}/{parts[1]}'."
                 )
             return f"{parts[0]}-{parts[1]}"
         if "-" in clean:
@@ -220,13 +249,134 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
                 raise ValueError(
                     f"Invalid crypto ticker format: '{symbol}'. Expected format like 'BTC-USD'."
                 )
+            if parts[0] == parts[1]:
+                raise ValueError(
+                    f"Base and quote symbols cannot be identical: '{parts[0]}/{parts[1]}'."
+                )
             return clean
         for quote in _KNOWN_CRYPTO_QUOTES:
             if clean.endswith(quote) and len(clean) > len(quote):
                 return f"{clean[: -len(quote)]}-{quote}"
         return clean
 
-    # Slashes in auto or forex mode
+    # 2. Explicit forex handling: rejects crypto symbols and ensures valid currency pair format
+    if a_type == "forex":
+        if "/" in clean:
+            parts = clean.split("/")
+            if len(parts) != 2 or not parts[0] or not parts[1]:
+                raise ValueError(
+                    f"Invalid forex ticker format: '{symbol}'. Slashes must separate two currency codes."
+                )
+            base, quote = parts[0], parts[1]
+            if (
+                base in _KNOWN_CRYPTO_SYMBOLS
+                or quote in _KNOWN_CRYPTO_SYMBOLS
+                or quote in ("USDT", "USDC")
+            ):
+                raise ValueError(
+                    f"Cannot normalize crypto pair '{symbol}' when asset_type='forex'."
+                )
+            if base == quote:
+                raise ValueError(
+                    f"Base and quote currencies cannot be identical: '{base}/{quote}'."
+                )
+            return f"{base}{quote}=X"
+
+        if "-" in clean:
+            parts = clean.split("-")
+            if len(parts) != 2 or not parts[0] or not parts[1]:
+                raise ValueError(f"Invalid forex ticker format: '{symbol}'.")
+            base, quote = parts[0], parts[1]
+            if (
+                base in _KNOWN_CRYPTO_SYMBOLS
+                or quote in _KNOWN_CRYPTO_SYMBOLS
+                or quote in ("USDT", "USDC")
+            ):
+                raise ValueError(
+                    f"Cannot normalize crypto pair '{symbol}' when asset_type='forex'."
+                )
+            if base == quote:
+                raise ValueError(
+                    f"Base and quote currencies cannot be identical: '{base}/{quote}'."
+                )
+            return f"{base}{quote}=X"
+
+        if clean.endswith("=X"):
+            raw_pair = clean[:-2]
+            if len(raw_pair) == 6 and raw_pair.isalpha():
+                base, quote = raw_pair[:3], raw_pair[3:]
+                if (
+                    base in _KNOWN_CRYPTO_SYMBOLS
+                    or quote in _KNOWN_CRYPTO_SYMBOLS
+                    or quote in ("USDT", "USDC")
+                ):
+                    raise ValueError(
+                        f"Cannot normalize crypto pair '{symbol}' when asset_type='forex'."
+                    )
+                if base == quote:
+                    raise ValueError(
+                        f"Base and quote currencies cannot be identical: '{base}/{quote}'."
+                    )
+            return clean
+
+        if len(clean) == 6 and clean.isalpha():
+            base, quote = clean[:3], clean[3:]
+            if (
+                base in _KNOWN_CRYPTO_SYMBOLS
+                or quote in _KNOWN_CRYPTO_SYMBOLS
+                or quote in ("USDT", "USDC")
+            ):
+                raise ValueError(
+                    f"Cannot normalize crypto pair '{symbol}' when asset_type='forex'."
+                )
+            if base == quote:
+                raise ValueError(
+                    f"Base and quote currencies cannot be identical: '{base}/{quote}'."
+                )
+            return f"{clean}=X"
+
+        for quote in _KNOWN_CRYPTO_QUOTES:
+            if clean.endswith(quote) and len(clean) > len(quote):
+                base = clean[: -len(quote)]
+                if base in _KNOWN_CRYPTO_SYMBOLS:
+                    raise ValueError(
+                        f"Cannot normalize crypto pair '{symbol}' when asset_type='forex'."
+                    )
+
+        return f"{clean}=X"
+
+    # 3. Explicit stock handling: rejects currency pairs, crypto pairs, and forex =X suffixes
+    if a_type == "stock":
+        if clean.endswith("=X"):
+            raise ValueError(f"Cannot normalize forex ticker '{symbol}' when asset_type='stock'.")
+        if "/" in clean:
+            parts = clean.split("/")
+            if len(parts) == 2 and parts[0] and parts[1]:
+                base, quote = parts[0], parts[1]
+                if (base in _CURRENCY_CODES and quote in _CURRENCY_CODES) or (
+                    base == quote and base in _CURRENCY_CODES
+                ):
+                    raise ValueError(
+                        f"Cannot normalize forex currency pair '{symbol}' when asset_type='stock'."
+                    )
+                if base in _KNOWN_CRYPTO_SYMBOLS or quote in _KNOWN_CRYPTO_SYMBOLS:
+                    raise ValueError(
+                        f"Cannot normalize crypto pair '{symbol}' when asset_type='stock'."
+                    )
+                if len(base) <= 5 and len(quote) <= 2:
+                    return f"{base}-{quote}"
+            raise ValueError(
+                f"Invalid stock ticker format: '{symbol}'. Slashes are not supported for stocks."
+            )
+        if len(clean) == 6 and clean.isalpha():
+            base, quote = clean[:3], clean[3:]
+            if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
+                raise ValueError(
+                    f"Cannot normalize forex currency pair '{symbol}' when asset_type='stock'."
+                )
+        return clean
+
+    # 4. Auto detection mode
     if "/" in clean:
         parts = clean.split("/")
         if len(parts) != 2 or not parts[0] or not parts[1]:
@@ -234,6 +384,8 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
                 f"Invalid ticker format: '{symbol}'. Slashes must separate exactly two symbols (e.g. 'EUR/USD' or 'BTC/USD')."
             )
         base, quote = parts[0], parts[1]
+        if base == quote and (base in _CURRENCY_CODES or base in _KNOWN_CRYPTO_SYMBOLS):
+            raise ValueError(f"Base and quote currencies cannot be identical: '{base}/{quote}'.")
         if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
             return f"{base}{quote}=X"
         if (
@@ -244,46 +396,56 @@ def normalize_ticker(symbol: str, asset_type: str = "auto") -> str:
             or quote in ("USDT", "USDC")
         ):
             return f"{base}-{quote}"
-        if len(base) == 3 and len(quote) == 3:
-            clean = f"{base}{quote}"
+        if len(base) <= 5 and len(quote) <= 2:
+            return f"{base}-{quote}"
+        if len(base) == 3 and len(quote) == 3 and base.isalpha() and quote.isalpha():
+            return f"{base}{quote}=X"
 
-    if asset_type.lower() == "forex":
-        if "-" in clean:
-            parts = clean.split("-")
-            if len(parts) == 2 and parts[0] in _CURRENCY_CODES and parts[1] in _CURRENCY_CODES:
-                return f"{parts[0]}{parts[1]}=X"
-        return clean if clean.endswith("=X") else f"{clean}=X"
+    if "-" in clean:
+        parts = clean.split("-")
+        if len(parts) == 2 and parts[0] in _CURRENCY_CODES and parts[1] in _CURRENCY_CODES:
+            if parts[0] == parts[1]:
+                raise ValueError(
+                    f"Base and quote currencies cannot be identical: '{parts[0]}/{parts[1]}'."
+                )
+            return f"{parts[0]}{parts[1]}=X"
+        return clean
 
-    if asset_type.lower() == "auto":
-        # Check if hyphen separates two ISO currency codes (e.g. EUR-USD -> EURUSD=X)
-        if "-" in clean:
-            parts = clean.split("-")
-            if len(parts) == 2 and parts[0] in _CURRENCY_CODES and parts[1] in _CURRENCY_CODES:
-                return f"{parts[0]}{parts[1]}=X"
+    if clean.endswith("=X"):
+        raw_pair = clean[:-2]
+        if len(raw_pair) == 6 and raw_pair.isalpha():
+            base, quote = raw_pair[:3], raw_pair[3:]
+            if base == quote:
+                raise ValueError(
+                    f"Base and quote currencies cannot be identical: '{base}/{quote}'."
+                )
+        return clean
 
-        # Check if already has a suffix or special prefix
-        if clean.endswith("=X") or clean.endswith("=F") or clean.startswith("^") or "-" in clean:
-            return clean
+    if clean.endswith("=F") or clean.startswith("^"):
+        return clean
 
-        # Check unseparated crypto ticker first (e.g. BTCUSDT, DOGEUSD, BTCUSDC, SHIBUSDT, BTCGBP)
-        for quote in _KNOWN_CRYPTO_QUOTES:
-            if clean.endswith(quote) and len(clean) > len(quote):
-                base = clean[: -len(quote)]
-                if base in _KNOWN_CRYPTO_SYMBOLS:
-                    return f"{base}-{quote}"
-
-        # If it matches known currency pair or valid 6-letter currency code pair
-        if clean in _COMMON_FOREX_PAIRS:
-            return f"{clean}=X"
-
-        if len(clean) == 6 and clean.isalpha():
-            base, quote = clean[:3], clean[3:]
-            if base in _KNOWN_CRYPTO_SYMBOLS and (
-                quote in _CURRENCY_CODES or quote in ("USDT", "USDC")
-            ):
+    for quote in _KNOWN_CRYPTO_QUOTES:
+        if clean.endswith(quote) and len(clean) > len(quote):
+            base = clean[: -len(quote)]
+            if base in _KNOWN_CRYPTO_SYMBOLS:
                 return f"{base}-{quote}"
-            if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
-                return f"{clean}=X"
+
+    if clean in _COMMON_FOREX_PAIRS:
+        base, quote = clean[:3], clean[3:]
+        if base == quote:
+            raise ValueError(f"Base and quote currencies cannot be identical: '{base}/{quote}'.")
+        return f"{clean}=X"
+
+    if len(clean) == 6 and clean.isalpha():
+        base, quote = clean[:3], clean[3:]
+        if base == quote:
+            raise ValueError(f"Base and quote currencies cannot be identical: '{base}/{quote}'.")
+        if base in _KNOWN_CRYPTO_SYMBOLS and (
+            quote in _CURRENCY_CODES or quote in ("USDT", "USDC")
+        ):
+            return f"{base}-{quote}"
+        if base in _CURRENCY_CODES and quote in _CURRENCY_CODES:
+            return f"{clean}=X"
 
     return clean
 
@@ -360,6 +522,9 @@ def resolve_asset_currencies(
       'VOD.L' -> ('VOD.L', 'GBp')
       'AAPL' -> ('AAPL', 'USD')
     """
+    if not symbol or not symbol.strip():
+        raise ValueError("Symbol cannot be empty.")
+
     clean = symbol.strip().upper()
 
     # If instrument metadata specifies currency, respect it directly
@@ -368,17 +533,31 @@ def resolve_asset_currencies(
         if clean.endswith("=X"):
             clean_fx = clean[:-2]
             if len(clean_fx) == 6:
+                if clean_fx[:3] == clean_fx[3:]:
+                    raise ValueError(
+                        f"Base and quote currencies cannot be identical: '{clean_fx[:3]}/{clean_fx[3:]}'."
+                    )
                 return clean_fx[:3], meta_q
         sep = "-" if "-" in clean else ("/" if "/" in clean else None)
         if sep:
             parts = clean.split(sep)
             if len(parts) == 2:
+                if parts[0] == parts[1] and (
+                    parts[0] in _CURRENCY_CODES or parts[0] in _KNOWN_CRYPTO_SYMBOLS
+                ):
+                    raise ValueError(
+                        f"Base and quote currencies cannot be identical: '{parts[0]}/{parts[1]}'."
+                    )
                 return parts[0], meta_q
         return clean, meta_q
 
     if clean.endswith("=X"):
         clean_fx = clean[:-2]
         if len(clean_fx) == 6:
+            if clean_fx[:3] == clean_fx[3:]:
+                raise ValueError(
+                    f"Base and quote currencies cannot be identical: '{clean_fx[:3]}/{clean_fx[3:]}'."
+                )
             return clean_fx[:3], clean_fx[3:]
 
     # Check exchange suffix for stocks (e.g. .DE -> EUR, .L -> GBp, .TO -> CAD)
@@ -402,6 +581,10 @@ def resolve_asset_currencies(
         parts = clean.split(sep)
         if len(parts) == 2:
             base, quote = parts[0], parts[1]
+            if base == quote and (base in _CURRENCY_CODES or base in _KNOWN_CRYPTO_SYMBOLS):
+                raise ValueError(
+                    f"Base and quote currencies cannot be identical: '{base}/{quote}'."
+                )
             if (
                 base in _KNOWN_CRYPTO_SYMBOLS
                 or quote in _KNOWN_CRYPTO_SYMBOLS
@@ -421,6 +604,8 @@ def resolve_asset_currencies(
 
     if len(clean) == 6 and clean.isalpha():
         base, quote = clean[:3], clean[3:]
+        if base == quote and (base in _CURRENCY_CODES or base in _KNOWN_CRYPTO_SYMBOLS):
+            raise ValueError(f"Base and quote currencies cannot be identical: '{base}/{quote}'.")
         if (base in _CURRENCY_CODES and quote in _CURRENCY_CODES) or (
             base in _KNOWN_CRYPTO_SYMBOLS and quote in _KNOWN_CRYPTO_SYMBOLS
         ):
