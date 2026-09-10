@@ -1385,11 +1385,26 @@ class MarketDataLoader:
                             else ts.tz_localize("UTC").tz_convert(tz_name)
                         )
                         d = ts_loc.date()
-                        tz_name, _, close_t = _get_market_session_hours(clean_sym, d)
+                        if self.interval == "1wk":
+                            if clean_sym.endswith(".TA"):
+                                days_ahead = (
+                                    (3 - d.weekday()) if d.weekday() <= 3 else (3 - d.weekday() + 7)
+                                )
+                            else:
+                                days_ahead = (
+                                    (4 - d.weekday()) if d.weekday() <= 4 else (4 - d.weekday() + 7)
+                                )
+                            end_d = d + datetime.timedelta(days=days_ahead)
+                        elif self.interval == "5d":
+                            end_d = d + datetime.timedelta(days=4)
+                        else:
+                            end_d = d
+
+                        tz_name, _, close_t = _get_market_session_hours(clean_sym, end_d)
                         s_close = pd.Timestamp(
-                            year=d.year,
-                            month=d.month,
-                            day=d.day,
+                            year=end_d.year,
+                            month=end_d.month,
+                            day=end_d.day,
                             hour=close_t.hour,
                             minute=close_t.minute,
                             tz=tz_name,

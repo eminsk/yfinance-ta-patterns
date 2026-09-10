@@ -285,7 +285,8 @@ Evaluates technical confluence (trend, momentum, volume, volatility) and builds 
 ```python
 from yfinance_ta_patterns import MarketDataLoader, AIPatternScorer
 
-data = MarketDataLoader("AAPL", period="60d", interval="1d").get_data()
+# Use period="2y" (or >= 200 daily candles) to ensure complete EMA200 indicator warm-up
+data = MarketDataLoader("AAPL", period="2y", interval="1d").get_data()
 
 scorer = AIPatternScorer(data)
 scored_signals = scorer.score_all_active(min_confidence=0.60)

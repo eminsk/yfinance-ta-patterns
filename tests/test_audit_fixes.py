@@ -363,9 +363,9 @@ def test_ema200_warmup_nan_handling() -> None:
     """Follow-up Audit: EMA200 is NaN for datasets <200 bars and handled safely."""
     df = pd.DataFrame(
         {
-            "Open": [10.0] * 50,
-            "High": [11.0] * 50,
-            "Low": [9.0] * 50,
+            "Open": [10.0 + i for i in range(50)],
+            "High": [11.0 + i for i in range(50)],
+            "Low": [9.0 + i for i in range(50)],
             "Close": [10.0 + i for i in range(50)],
             "Volume": [1000.0] * 50,
         },

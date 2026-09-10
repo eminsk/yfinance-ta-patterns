@@ -10,6 +10,8 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
+from ..data import validate_ohlc
+
 
 class SignalGrade(StrEnum):
     """Categorical evaluation grade for pattern quality."""
@@ -289,7 +291,8 @@ class AIPatternScorer:
         if not np.all(np.isfinite(ohlc_values)):
             raise ValueError("DataFrame contains NaN or infinite values in OHLC")
 
-        self.df = data.copy()
+        # Strict validation of OHLC structure and geometry
+        self.df = validate_ohlc(data.copy(), strict=True)
         self._calculate_technical_indicators()
 
     def _calculate_technical_indicators(self) -> None:
@@ -311,14 +314,19 @@ class AIPatternScorer:
         self.df["_RSI14"] = calc_wilder_rsi(close, period=14)
 
         # Relative Volume (RVOL 20 - strictly historical, excludes current candle from baseline)
-        if "Volume" in self.df.columns and self.df["Volume"].sum() > 0:
+        if "Volume" in self.df.columns:
             vol = self.df["Volume"].astype(float)
-            prev_vol = vol.shift(1).copy()
-            if len(prev_vol) > 0:
-                prev_vol.iloc[0] = vol.iloc[0]
-            prev_vol = prev_vol.ffill().fillna(vol)
-            avg_vol = prev_vol.rolling(window=min(20, len(self.df)), min_periods=1).mean()
-            self.df["_RVOL"] = (vol / avg_vol.replace(0, np.nan)).fillna(1.0)
+            if not np.isfinite(vol).all() or (vol < 0).any():
+                raise ValueError("Invalid Volume values: volume must be finite and non-negative")
+            if (vol > 0).any():
+                prev_vol = vol.shift(1).copy()
+                if len(prev_vol) > 0:
+                    prev_vol.iloc[0] = vol.iloc[0]
+                prev_vol = prev_vol.ffill().fillna(vol)
+                avg_vol = prev_vol.rolling(window=min(20, len(self.df)), min_periods=1).mean()
+                self.df["_RVOL"] = (vol / avg_vol.replace(0, np.nan)).fillna(1.0)
+            else:
+                self.df["_RVOL"] = 1.0
         else:
             self.df["_RVOL"] = 1.0
 
@@ -434,19 +442,23 @@ class AIPatternScorer:
                 confluence_factors.append("Market Regime: Neutral consolidation")
 
         # Factor 2: Volume Confirmation (RVOL)
-        if rvol >= 1.5:
-            confidence += 0.15
-            confluence_factors.append(
-                f"Volume Surge: Relative volume {rvol:.2f}x signals strong institutional interest"
-            )
-        elif rvol >= 1.1:
-            confidence += 0.05
-            confluence_factors.append(f"Volume Confirmation: Above average volume ({rvol:.2f}x)")
-        elif rvol < 0.75:
-            confidence -= 0.10
-            risk_factors.append(
-                f"Low Volume Warning: Subdued volume ({rvol:.2f}x) suggests lack of conviction"
-            )
+        has_volume = "Volume" in self.df.columns and (self.df["Volume"] > 0).any()
+        if has_volume:
+            if rvol >= 1.5:
+                confidence += 0.15
+                confluence_factors.append(
+                    f"Volume Surge: Relative volume {rvol:.2f}x signals strong institutional interest"
+                )
+            elif rvol >= 1.1:
+                confidence += 0.05
+                confluence_factors.append(
+                    f"Volume Confirmation: Above average volume ({rvol:.2f}x)"
+                )
+            elif rvol < 0.75:
+                confidence -= 0.10
+                risk_factors.append(
+                    f"Low Volume Warning: Subdued volume ({rvol:.2f}x) suggests lack of conviction"
+                )
 
         # Factor 3: Momentum & Exhaustion (RSI 14)
         if not np.isnan(raw_rsi):

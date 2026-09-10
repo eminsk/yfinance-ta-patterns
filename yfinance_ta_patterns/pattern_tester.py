@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import warnings
 from dataclasses import dataclass
 from typing import Any, cast
@@ -72,6 +73,62 @@ FOREX_PERIODS_PER_YEAR: dict[str, float] = {
     "3mo": 4.0,
 }
 
+# Tokyo Stock Exchange (.T): 245 trading days/year
+# 09:00-11:30 (150m) + 12:30-15:30 (180m from 2024-11-05) = 330m/day
+TOKYO_PERIODS_PER_YEAR_POST_2024: dict[str, float] = {
+    "1m": 245.0 * 330.0,  # 80,850.0
+    "2m": 245.0 * 165.0,  # 40,425.0
+    "5m": 245.0 * 66.0,  # 16,170.0
+    "15m": 245.0 * 22.0,  # 5,390.0
+    "30m": 245.0 * 11.0,  # 2,695.0
+    "60m": 245.0 * 6.0,  # 1,470.0
+    "1h": 245.0 * 6.0,  # 1,470.0
+    "90m": 245.0 * 4.0,  # 980.0
+    "4h": 245.0 * 2.0,  # 490.0
+    "1d": 245.0,
+    "5d": 245.0 / 5.0,  # 49.0
+    "1wk": 52.0,
+    "1mo": 12.0,
+    "3mo": 4.0,
+}
+
+# Prior to 2024-11-05: 09:00-11:30 (150m) + 12:30-15:00 (150m) = 300m/day
+TOKYO_PERIODS_PER_YEAR_PRE_2024: dict[str, float] = {
+    "1m": 245.0 * 300.0,  # 73,500.0
+    "2m": 245.0 * 150.0,  # 36,750.0
+    "5m": 245.0 * 60.0,  # 14,700.0
+    "15m": 245.0 * 20.0,  # 4,900.0
+    "30m": 245.0 * 10.0,  # 2,450.0
+    "60m": 245.0 * 5.0,  # 1,225.0
+    "1h": 245.0 * 5.0,  # 1,225.0
+    "90m": 245.0 * 4.0,  # 980.0
+    "4h": 245.0 * 2.0,  # 490.0
+    "1d": 245.0,
+    "5d": 245.0 / 5.0,  # 49.0
+    "1wk": 52.0,
+    "1mo": 12.0,
+    "3mo": 4.0,
+}
+
+# Hong Kong Stock Exchange (.HK): 250 trading days/year
+# 09:30-12:00 (150m) + 13:00-16:00 (180m) = 330m/day
+HONG_KONG_PERIODS_PER_YEAR: dict[str, float] = {
+    "1m": 250.0 * 330.0,  # 82,500.0
+    "2m": 250.0 * 165.0,  # 41,250.0
+    "5m": 250.0 * 66.0,  # 16,500.0
+    "15m": 250.0 * 22.0,  # 5,500.0
+    "30m": 250.0 * 11.0,  # 2,750.0
+    "60m": 250.0 * 6.0,  # 1,500.0
+    "1h": 250.0 * 6.0,  # 1,500.0
+    "90m": 250.0 * 4.0,  # 1,000.0
+    "4h": 250.0 * 2.0,  # 500.0
+    "1d": 250.0,
+    "5d": 250.0 / 5.0,  # 50.0
+    "1wk": 52.0,
+    "1mo": 12.0,
+    "3mo": 4.0,
+}
+
 # Default baseline FX exchange rates to USD for major cross currencies
 DEFAULT_FX_USD_RATES: dict[str, float] = {
     "EURUSD": 1.08,
@@ -103,6 +160,7 @@ def resolve_periods_per_year(
     symbol: str = "",
     asset_type: str = "auto",
     periods_per_year: float | None = None,
+    as_of_date: datetime.date | None = None,
 ) -> float:
     """Resolve asset-aware annualization factor for Sharpe Ratio calculation."""
     if periods_per_year is not None:
@@ -126,6 +184,16 @@ def resolve_periods_per_year(
             return CRYPTO_PERIODS_PER_YEAR.get(tf, 365.0)
         elif detected == "forex":
             return FOREX_PERIODS_PER_YEAR.get(tf, 260.0)
+
+    # Asian exchanges
+    if clean_sym.endswith(".T"):
+        ref_date = as_of_date or datetime.date.today()
+        if ref_date < datetime.date(2024, 11, 5):
+            return TOKYO_PERIODS_PER_YEAR_PRE_2024.get(tf, 245.0)
+        return TOKYO_PERIODS_PER_YEAR_POST_2024.get(tf, 245.0)
+
+    if clean_sym.endswith(".HK"):
+        return HONG_KONG_PERIODS_PER_YEAR.get(tf, 250.0)
 
     # Equities / stocks
     # LSE (.L, .IL) or European exchanges (.DE, .PA, etc.) have 8.5h trading sessions
@@ -409,8 +477,16 @@ class PatternRankingTester:
         if periods_per_year is not None:
             self._periods_per_year: float = float(periods_per_year)
         else:
+            as_of = None
+            if hasattr(self._data.index, "max") and len(self._data) > 0:
+                last_ts = self._data.index.max()
+                if hasattr(last_ts, "date"):
+                    as_of = last_ts.date()
             self._periods_per_year = resolve_periods_per_year(
-                self._timeframe, self._symbol, asset_type=self._asset_type
+                self._timeframe,
+                self._symbol,
+                asset_type=self._asset_type,
+                as_of_date=as_of,
             )
 
         self.equity_curve: list[float] = [initial_capital]
