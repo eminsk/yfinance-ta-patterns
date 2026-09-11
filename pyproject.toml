@@ -1,6 +1,6 @@
 [project]
 name = "yfinance-ta-patterns"
-version = "0.3.22"
+version = "0.3.23"
 description = "Institutional-grade market candlestick pattern scanner with multi-asset backtesting, AI confluence scoring, and LLM market intelligence."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -35,7 +35,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "yfinance>=0.2.66",
+    "yfinance>=0.2.50",
     "pandas>=2.2.0",
     "pytz>=2024.1",
     "numpy>=1.26",

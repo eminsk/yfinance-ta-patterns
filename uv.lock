@@ -1153,7 +1153,7 @@ wheels = [
 
 [[package]]
 name = "yfinance-ta-patterns"
-version = "0.3.22"
+version = "0.3.23"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
@@ -1197,6 +1197,6 @@ requires-dist = [
     { name = "ta-lib", marker = "extra == 'all'", specifier = ">=0.6.8" },
     { name = "ta-lib", marker = "extra == 'talib'", specifier = ">=0.6.8" },
     { name = "types-pytz", marker = "extra == 'dev'", specifier = ">=2024.1" },
-    { name = "yfinance", specifier = ">=0.2.66" },
+    { name = "yfinance", specifier = ">=0.2.50" },
 ]
 provides-extras = ["talib", "repair", "all", "dev"]
