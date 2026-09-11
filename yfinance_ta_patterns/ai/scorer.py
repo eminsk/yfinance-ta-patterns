@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
-from enum import StrEnum
 from numbers import Integral
 from typing import Any, cast
 
@@ -11,6 +11,18 @@ import numpy as np
 import pandas as pd
 
 from ..data import validate_ohlc
+
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+
+    class StrEnum(str, Enum):  # type: ignore[no-redef]
+        """Fallback StrEnum for Python < 3.11."""
+        pass
+
+
+_DATACLASS_SLOTS_FROZEN = {"slots": True, "frozen": True} if sys.version_info >= (3, 10) else {"frozen": True}
 
 
 class SignalGrade(StrEnum):
@@ -23,7 +35,7 @@ class SignalGrade(StrEnum):
     FALSE_SIGNAL = "FALSE"  # < 0.40
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(**_DATACLASS_SLOTS_FROZEN)
 class TradeSetup:
     """Actionable trade setup parameters based on ATR and pattern invalidation."""
 
@@ -52,7 +64,7 @@ class TradeSetup:
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(**_DATACLASS_SLOTS_FROZEN)
 class PatternConfidenceResult:
     """Comprehensive AI evaluation of a detected candlestick pattern.
 

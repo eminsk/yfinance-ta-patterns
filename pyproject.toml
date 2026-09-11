@@ -1,9 +1,9 @@
 [project]
 name = "yfinance-ta-patterns"
-version = "0.3.23"
+version = "0.3.24"
 description = "Institutional-grade market candlestick pattern scanner with multi-asset backtesting, AI confluence scoring, and LLM market intelligence."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.8"
 license = "MIT"
 keywords = [
     "yfinance",
@@ -19,6 +19,7 @@ keywords = [
     "free-threaded",
     "no-gil",
     "pep-703",
+    "windows-7",
 ]
 authors = [
     { name = "eminsk", email = "M_N_Nik@yahoo.com" },
@@ -28,6 +29,10 @@ classifiers = [
     "Intended Audience :: Financial and Insurance Industry",
     "Topic :: Office/Business :: Financial :: Investment",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
@@ -36,29 +41,31 @@ classifiers = [
 ]
 dependencies = [
     "yfinance>=0.2.50",
-    "pandas>=2.2.0",
-    "pytz>=2024.1",
-    "numpy>=1.26",
+    "pandas>=1.3.0",
+    "pytz>=2022.5",
+    "numpy>=1.20",
+    "typing-extensions>=4.0; python_version < '3.11'",
+    "multitasking<0.0.12; python_version < '3.9'",
 ]
 
 [project.optional-dependencies]
 talib = [
-    "ta-lib>=0.6.8",
+    "ta-lib>=0.4.19",
 ]
 repair = [
-    "scikit-learn>=1.4.0",
+    "scikit-learn>=1.0.0",
 ]
 all = [
-    "ta-lib>=0.6.8",
-    "scikit-learn>=1.4.0",
+    "ta-lib>=0.4.19",
+    "scikit-learn>=1.0.0",
 ]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=4.0",
     "ruff>=0.8.0",
     "mypy>=1.11.0",
-    "pandas-stubs>=2.2.0",
-    "types-pytz>=2024.1",
+    "pandas-stubs>=2.0.0",
+    "types-pytz>=2022.5",
 ]
 
 [project.scripts]
@@ -97,7 +104,7 @@ filterwarnings = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py38"
 extend-exclude = [
     "release-assets",
     "release-upload",

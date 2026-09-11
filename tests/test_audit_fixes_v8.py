@@ -241,10 +241,8 @@ def test_repair_without_sklearn_emits_user_warning() -> None:
     """Issue 6: fetch(repair=True) emits UserWarning when HAS_SKLEARN is False."""
     loader = MarketDataLoader(symbol="AAPL", interval="1d", repair=True)
 
-    with (
-        patch("yfinance_ta_patterns.data.HAS_SKLEARN", False),
-        patch("yfinance_ta_patterns.data.yf.download") as mock_dl,
-    ):
+    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", False), \
+         patch("yfinance_ta_patterns.data.yf.download") as mock_dl:
         mock_dl.return_value = pd.DataFrame(
             {"Open": [100.0], "High": [105.0], "Low": [95.0], "Close": [102.0], "Volume": [1000]},
             index=pd.date_range("2024-01-01", periods=1, freq="1d", tz="UTC"),

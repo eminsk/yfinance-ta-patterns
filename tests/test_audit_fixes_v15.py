@@ -237,10 +237,8 @@ def test_crypto_ticker_normalization() -> None:
 def test_market_data_loader_fetch_empty_data_raises_value_error() -> None:
     """fetch() must raise a descriptive ValueError when yfinance returns empty data."""
     loader = MarketDataLoader("INVALID_SYMBOL_12345_XYZ")
-    with (
-        patch("yfinance.download", return_value=pd.DataFrame()),
-        pytest.raises(ValueError, match="No market data found on Yahoo Finance for ticker"),
-    ):
+    with patch("yfinance.download", return_value=pd.DataFrame()), \
+         pytest.raises(ValueError, match="No market data found on Yahoo Finance for ticker"):
         loader.fetch()
 
 

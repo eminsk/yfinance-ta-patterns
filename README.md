@@ -8,7 +8,7 @@
 
 High-performance Python library and CLI that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate multi-factor confluence scores (deterministic quantitative confluence heuristic, not uncalibrated win-rate probability), trade setups, and LLM-ready market briefs.
 
-Compatible with **Python 3.12, 3.13, 3.14, and Python 3.15 (Release Candidate & Preview)**.
+Compatible with **Python 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, and Python 3.15 (including Free-Threaded No-GIL builds and legacy Windows 7 support)**.
 
 ---
 
