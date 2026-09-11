@@ -23,7 +23,7 @@ class ForexDataLoader(MarketDataLoader):
         start: str | None = None,
         end: str | None = None,
         auto_adjust: bool = False,
-        repair: bool = True,
+        repair: bool | None = None,
         timeframe: str | None = None,
         closed_only: bool = True,
         **kwargs: Any,

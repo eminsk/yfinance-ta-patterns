@@ -160,7 +160,7 @@ def test_auto_adjust_false_for_candles() -> None:
     """Issue 9: MarketDataLoader defaults auto_adjust to False to protect candle shapes."""
     loader = MarketDataLoader("AAPL")
     assert loader.auto_adjust is False
-    assert loader.repair is True
+    assert loader.repair is None
 
 
 def test_ohlc_validation() -> None:

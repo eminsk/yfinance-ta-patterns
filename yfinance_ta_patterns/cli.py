@@ -130,6 +130,20 @@ def get_parser() -> argparse.ArgumentParser:
         default=False,
         help="Adjust OHLC prices for splits and dividends (total-return analysis). Default is raw unadjusted prices.",
     )
+    repair_group = parser.add_mutually_exclusive_group()
+    repair_group.add_argument(
+        "--repair",
+        dest="repair",
+        action="store_true",
+        default=None,
+        help="Explicitly enable yfinance price anomaly repair (requires scikit-learn).",
+    )
+    repair_group.add_argument(
+        "--no-repair",
+        dest="repair",
+        action="store_false",
+        help="Explicitly disable yfinance price anomaly repair.",
+    )
     parser.add_argument(
         "--execution",
         choices=["next_open", "close"],
@@ -178,6 +192,9 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
     return get_parser().parse_args(args)
 
 
+build_parser = get_parser
+
+
 def run_cli(args: argparse.Namespace) -> int:
     """Run CLI logic with parsed arguments."""
     interval = normalize_timeframe(args.timeframe)
@@ -212,6 +229,7 @@ def run_cli(args: argparse.Namespace) -> int:
         start=start_arg,
         end=end_arg,
         auto_adjust=args.auto_adjust,
+        repair=args.repair,
     )
     data = loader.get_data()
     period = loader.period

@@ -930,7 +930,7 @@ class MarketDataLoader:
         start: str | None = None,
         end: str | None = None,
         auto_adjust: bool = False,
-        repair: bool = True,
+        repair: bool | None = None,
         timeframe: str | None = None,
         closed_only: bool = True,
     ) -> None:
@@ -949,6 +949,8 @@ class MarketDataLoader:
                 If True, adjusts all OHLC prices for corporate actions (splits and dividends),
                 producing a total-return series suitable for total-return quantitative backtesting.
             repair: If True, attempts price anomaly correction via yfinance (requires scikit-learn).
+                If None (default), enables repair only if scikit-learn is installed without warning.
+                If False, repair is disabled.
             timeframe: Alias keyword for interval.
             closed_only: If True, filters out unclosed (forming) candles based on market session.
         """
@@ -968,7 +970,7 @@ class MarketDataLoader:
         self.start_date: str | None = start
         self.end_date: str | None = end
         self.auto_adjust: bool = auto_adjust
-        self.repair: bool = repair
+        self.repair: bool | None = repair
         self._download_interval: str = self._resolve_download_interval(norm_interval)
         self._resample_rule: str | None = "4h" if norm_interval == "4h" else None
 
@@ -983,16 +985,22 @@ class MarketDataLoader:
         """Fetch raw market data via yfinance."""
         start_val = self.start or self.start_date
         end_val = self.end or self.end_date
-        if self.repair and not HAS_SKLEARN:
-            warnings.warn(
-                "Data repair was requested (repair=True), but 'scikit-learn' is not installed. "
-                "Disabling yfinance data repair. Install scikit-learn via 'pip install scikit-learn' to enable repair.",
-                UserWarning,
-                stacklevel=2,
-            )
+        if self.repair is True:
+            if not HAS_SKLEARN:
+                warnings.warn(
+                    "Data repair was requested (repair=True), but 'scikit-learn' is not installed. "
+                    "Disabling yfinance data repair. Install scikit-learn via 'pip install scikit-learn' to enable repair.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                repair_opt = False
+            else:
+                repair_opt = True
+        elif self.repair is False:
             repair_opt = False
         else:
-            repair_opt = self.repair
+            # self.repair is None: silently enable repair if scikit-learn is available, otherwise False without warning
+            repair_opt = HAS_SKLEARN
 
         if start_val or end_val:
             data = yf.download(

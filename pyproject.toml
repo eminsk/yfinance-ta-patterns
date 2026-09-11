@@ -1,6 +1,6 @@
 [project]
 name = "yfinance-ta-patterns"
-version = "0.3.21"
+version = "0.3.22"
 description = "Institutional-grade market candlestick pattern scanner with multi-asset backtesting, AI confluence scoring, and LLM market intelligence."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -45,8 +45,12 @@ dependencies = [
 talib = [
     "ta-lib>=0.6.8",
 ]
+repair = [
+    "scikit-learn>=1.4.0",
+]
 all = [
     "ta-lib>=0.6.8",
+    "scikit-learn>=1.4.0",
 ]
 dev = [
     "pytest>=8.0",
@@ -81,6 +85,7 @@ yfinance_ta_patterns = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning",
