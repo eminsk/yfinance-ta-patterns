@@ -68,14 +68,18 @@ uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/
 # Python 3.14 (Standard GIL):
 uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp314-cp314-win_amd64.whl
 
+# Python 3.13t (Free-Threaded No-GIL):
+uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp313-cp313t-win_amd64.whl
+
+# Python 3.13 (Standard GIL):
+uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp313-cp313-win_amd64.whl
+
 # Python 3.15t (Free-Threaded No-GIL Preview):
+uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/pandas-3.0.5-cp315-cp315t-win_amd64.whl
 uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp315-cp315t-win_amd64.whl
 
 # Python 3.15 (Standard GIL Preview):
 uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp315-cp315-win_amd64.whl
-
-# Python 3.13 (Standard GIL):
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp313-cp313-win_amd64.whl
 
 # Python 3.12 (Standard GIL):
 uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.5/ta_lib-0.7.1-cp312-cp312-win_amd64.whl
@@ -109,11 +113,11 @@ uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/
 
 | Python Version | Execution Mode | Installation Status | Recommendation |
 |:---:|:---:|:---:|---|
-| **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | **Recommended No-GIL release**. All dependencies (`numpy`, `pandas`, `cffi`) provide official wheels on PyPI. |
-| **Python 3.15t** | **Free-Threaded (No-GIL)** | ✅ **Supported** | Next-generation No-GIL preview. Fully functional with cached/built wheels. |
+| **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | **Recommended No-GIL release**. All dependencies (`numpy`, `pandas`, `cffi`, `scikit-learn`) provide official wheels on PyPI. |
+| **Python 3.13t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | **Fully supported**. Pre-built native `ta-lib` wheel (`cp313t`) available; seamless execution with `yfinance>=0.2.50`. |
+| **Python 3.15t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | Next-generation No-GIL preview. Fully functional with pre-built `pandas` and `ta-lib` wheels. |
 | **Python 3.13** | **Standard (GIL)** | ✅ **100% Supported** | Current stable Python release. Full support for native TA-Lib and pre-built wheels. |
 | **Python 3.12** | **Standard (GIL)** | ✅ **100% Supported** | Long-Term Support release with instant sub-second wheel installation. |
-| **Python 3.13t** | **Experimental No-GIL** | ❌ *Blocked Upstream* | Blocked by upstream `cffi` (`RuntimeError: CFFI does not support 3.13t`). **Use 3.14t for No-GIL instead.** |
 
 ---
 
