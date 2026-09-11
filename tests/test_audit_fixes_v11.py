@@ -196,6 +196,11 @@ def test_unseparated_crypto_identical_symbols(identical_crypto: str) -> None:
     with pytest.raises(ValueError, match=r"Base and quote symbols cannot be identical"):
         resolve_asset_currencies(identical_crypto)
 
+    # metadata_currency takes an early-return path of its own in
+    # resolve_asset_currencies and must not be able to bypass this guard.
+    with pytest.raises(ValueError, match=r"Base and quote symbols cannot be identical"):
+        resolve_asset_currencies(identical_crypto, metadata_currency="EUR")
+
 
 def test_unseparated_crypto_valid_symbols() -> None:
     assert normalize_ticker("BTCUSD", asset_type="crypto") == "BTC-USD"

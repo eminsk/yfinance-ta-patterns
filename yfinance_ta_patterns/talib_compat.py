@@ -97,6 +97,38 @@ def _to_arrays(open_, high, low, close):
     return o, h, lo, c
 
 
+def _prior_trend_down(close: np.ndarray, lookback: int = 5) -> np.ndarray:
+    """Boolean mask: True where price declined over the `lookback` bars strictly
+    preceding each index (close `lookback` bars back vs. close of the bar right
+    before it). Never reads the candle at the index itself, so this is safe to use
+    as a same-bar reversal-context filter with zero lookahead.
+
+    This is a lightweight proxy for TA-Lib's internal prior-trend heuristic used to
+    gate Hammer / Hanging Man / Inverted Hammer / Shooting Star. It will not match
+    native TA-Lib bit-for-bit, but -- unlike shape alone -- it stops the same candle
+    shape from registering as both a bullish and a bearish pattern regardless of
+    what happened before it (see cdl_hammer / cdl_hangingman).
+    """
+    n = len(close)
+    trend = np.zeros(n, dtype=bool)
+    if n <= lookback:
+        return trend
+    trend[lookback:] = close[: n - lookback] > close[lookback - 1 : n - 1]
+    return trend
+
+
+def _prior_trend_up(close: np.ndarray, lookback: int = 5) -> np.ndarray:
+    """Boolean mask: True where price advanced over the `lookback` bars strictly
+    preceding each index. See `_prior_trend_down` for the comparison/lookahead notes.
+    """
+    n = len(close)
+    trend = np.zeros(n, dtype=bool)
+    if n <= lookback:
+        return trend
+    trend[lookback:] = close[: n - lookback] < close[lookback - 1 : n - 1]
+    return trend
+
+
 # --- Vectorized Pattern Implementations ---
 
 
@@ -110,50 +142,58 @@ def cdl_doji(open_, high, low, close):
     return res
 
 
-def cdl_hammer(open_, high, low, close):
+def cdl_hammer(open_, high, low, close, trend_lookback: int = 5):
+    """Bullish reversal: long lower shadow + small body near the top, after a decline."""
     o, h, lo, c = _to_arrays(open_, high, low, close)
     body = np.abs(c - o)
     hl = h - lo
     lower_shadow = np.minimum(o, c) - lo
     upper_shadow = h - np.maximum(o, c)
     res = np.zeros(len(o), dtype=np.int32)
-    mask = (hl > 0) & (lower_shadow >= 2.0 * body) & (upper_shadow <= 0.25 * hl) & (body > 0)
+    shape = (hl > 0) & (lower_shadow >= 2.0 * body) & (upper_shadow <= 0.25 * hl) & (body > 0)
+    mask = shape & _prior_trend_down(c, trend_lookback)
     res[mask] = 100
     return res
 
 
-def cdl_invertedhammer(open_, high, low, close):
+def cdl_invertedhammer(open_, high, low, close, trend_lookback: int = 5):
+    """Bullish reversal: long upper shadow + small body near the bottom, after a decline."""
     o, h, lo, c = _to_arrays(open_, high, low, close)
     body = np.abs(c - o)
     hl = h - lo
     lower_shadow = np.minimum(o, c) - lo
     upper_shadow = h - np.maximum(o, c)
     res = np.zeros(len(o), dtype=np.int32)
-    mask = (hl > 0) & (upper_shadow >= 2.0 * body) & (lower_shadow <= 0.25 * hl) & (body > 0)
+    shape = (hl > 0) & (upper_shadow >= 2.0 * body) & (lower_shadow <= 0.25 * hl) & (body > 0)
+    mask = shape & _prior_trend_down(c, trend_lookback)
     res[mask] = 100
     return res
 
 
-def cdl_shootingstar(open_, high, low, close):
+def cdl_shootingstar(open_, high, low, close, trend_lookback: int = 5):
+    """Bearish reversal: long upper shadow + small body near the bottom, after an advance."""
     o, h, lo, c = _to_arrays(open_, high, low, close)
     body = np.abs(c - o)
     hl = h - lo
     lower_shadow = np.minimum(o, c) - lo
     upper_shadow = h - np.maximum(o, c)
     res = np.zeros(len(o), dtype=np.int32)
-    mask = (hl > 0) & (upper_shadow >= 2.0 * body) & (lower_shadow <= 0.25 * hl) & (body > 0)
+    shape = (hl > 0) & (upper_shadow >= 2.0 * body) & (lower_shadow <= 0.25 * hl) & (body > 0)
+    mask = shape & _prior_trend_up(c, trend_lookback)
     res[mask] = -100
     return res
 
 
-def cdl_hangingman(open_, high, low, close):
+def cdl_hangingman(open_, high, low, close, trend_lookback: int = 5):
+    """Bearish reversal: long lower shadow + small body near the top, after an advance."""
     o, h, lo, c = _to_arrays(open_, high, low, close)
     body = np.abs(c - o)
     hl = h - lo
     lower_shadow = np.minimum(o, c) - lo
     upper_shadow = h - np.maximum(o, c)
     res = np.zeros(len(o), dtype=np.int32)
-    mask = (hl > 0) & (lower_shadow >= 2.0 * body) & (upper_shadow <= 0.25 * hl) & (body > 0)
+    shape = (hl > 0) & (lower_shadow >= 2.0 * body) & (upper_shadow <= 0.25 * hl) & (body > 0)
+    mask = shape & _prior_trend_up(c, trend_lookback)
     res[mask] = -100
     return res
 

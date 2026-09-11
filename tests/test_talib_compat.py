@@ -45,16 +45,43 @@ def test_fallback_cdl_doji(sample_data):
     assert res[0] == 100
 
 
-def test_fallback_cdl_hammer():
+def test_fallback_cdl_hammer_insufficient_history_no_signal():
+    # A single isolated bar has no prior bars to judge a trend from, so with no
+    # trend context available Hammer must stay silent rather than guess (matches
+    # TA-Lib's own "unstable period" semantics: no signal until lookback is met).
     wrapper = TALibWrapper(force_fallback=True)
-    # Hammer candle: open=100, close=102 (small body 2), low=90 (lower shadow 10 >= 2*body), high=102.5 (small upper shadow)
     res = wrapper.CDLHAMMER(
         np.array([100.0]),
         np.array([102.5]),
         np.array([90.0]),
         np.array([102.0]),
     )
-    assert res[0] == 100
+    assert res[0] == 0
+
+
+def test_fallback_cdl_hammer_hangingman_respect_prior_trend():
+    # Same hammer-shaped candle (open=100, close=102, low=90, high=102.5) must read
+    # as a bullish Hammer after a decline, and as a bearish Hanging Man after an
+    # advance -- never both at once for the same bar (that was the bug: the shape
+    # alone used to fire CDLHAMMER=+100 and CDLHANGINGMAN=-100 simultaneously,
+    # regardless of what price had done beforehand).
+    wrapper = TALibWrapper(force_fallback=True)
+    hammer_bar = (100.0, 102.5, 90.0, 102.0)  # open, high, low, close
+
+    def build(prior_closes):
+        o = np.array([*prior_closes, hammer_bar[0]])
+        h = np.array([*prior_closes, hammer_bar[1]])
+        lo = np.array([*prior_closes, hammer_bar[2]])
+        c = np.array([*prior_closes, hammer_bar[3]])
+        return o, h, lo, c
+
+    o, h, lo, c = build([110.0, 108.0, 106.0, 104.0, 102.5])  # decline into the bar
+    assert wrapper.CDLHAMMER(o, h, lo, c)[-1] == 100
+    assert wrapper.CDLHANGINGMAN(o, h, lo, c)[-1] == 0
+
+    o, h, lo, c = build([94.0, 96.0, 98.0, 100.0, 101.5])  # advance into the bar
+    assert wrapper.CDLHAMMER(o, h, lo, c)[-1] == 0
+    assert wrapper.CDLHANGINGMAN(o, h, lo, c)[-1] == -100
 
 
 def test_fallback_cdl_engulfing():

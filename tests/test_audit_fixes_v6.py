@@ -14,7 +14,12 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from yfinance_ta_patterns.data import MarketDataLoader, normalize_ticker
+from yfinance_ta_patterns.data import (
+    MarketDataLoader,
+    classify_asset,
+    normalize_ticker,
+    resolve_asset_currencies,
+)
 from yfinance_ta_patterns.pattern_tester import PatternRankingTester
 
 
@@ -254,3 +259,21 @@ def test_crypto_valid_slash_ticker_normalizes() -> None:
     """Valid crypto slash ticker formats convert correctly."""
     assert normalize_ticker("BTC/USD", asset_type="crypto") == "BTC-USD"
     assert normalize_ticker("ETH/USD", asset_type="crypto") == "ETH-USD"
+
+
+@pytest.mark.parametrize("bad_ticker", ["-USD", "BTC-", "-", "USD-"])
+def test_malformed_hyphen_ticker_raises_in_auto_mode(bad_ticker: str) -> None:
+    """A leading/trailing hyphen with an empty base or quote must raise in asset_type='auto'
+    too, not just in the explicit 'crypto'/'forex' modes covered above -- 'auto' is the
+    default used by MarketDataLoader/PatternRankingTester/classify_asset whenever the
+    caller doesn't pin down an asset_type, so this is the path real callers hit. Before this
+    fix, normalize_ticker('auto') silently passed these through unchanged, which made
+    classify_asset guess 'crypto' and resolve_asset_currencies return an empty base or quote
+    currency (e.g. resolve_asset_currencies('-USD') == ('', 'USD')).
+    """
+    with pytest.raises(ValueError, match="Invalid ticker format"):
+        normalize_ticker(bad_ticker, asset_type="auto")
+    with pytest.raises(ValueError, match="Invalid ticker format"):
+        classify_asset(bad_ticker, asset_type="auto")
+    with pytest.raises(ValueError, match="Invalid ticker format"):
+        resolve_asset_currencies(bad_ticker, asset_type="auto")

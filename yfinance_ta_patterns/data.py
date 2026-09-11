@@ -441,6 +441,11 @@ def normalize_ticker(symbol: str, asset_type: str = "auto", strict: bool = True)
 
     if "-" in clean:
         parts = clean.split("-")
+        if len(parts) == 2 and (not parts[0] or not parts[1]):
+            raise ValueError(
+                f"Invalid ticker format: '{symbol}'. A hyphen must separate two non-empty "
+                "symbols (e.g. 'BTC-USD')."
+            )
         if len(parts) == 2 and parts[0] in _CURRENCY_CODES and parts[1] in _CURRENCY_CODES:
             if parts[0] == parts[1]:
                 raise ValueError(
@@ -606,6 +611,19 @@ def resolve_asset_currencies(
                         f"Base and quote currencies cannot be identical: '{parts[0]}/{parts[1]}'."
                     )
                 return parts[0], meta_q
+        # Unseparated symbol (e.g. 'BTCBTC'): same identical-halves guard as the
+        # no-metadata path below -- metadata_currency must not bypass it.
+        if len(clean) % 2 == 0:
+            half = len(clean) // 2
+            if clean[:half] == clean[half:]:
+                if clean[:half] in _CURRENCY_CODES:
+                    raise ValueError(
+                        f"Base and quote currencies cannot be identical: '{clean[:half]}/{clean[half:]}'."
+                    )
+                if clean[:half] in _KNOWN_CRYPTO_SYMBOLS:
+                    raise ValueError(
+                        f"Base and quote symbols cannot be identical: '{clean[:half]}/{clean[half:]}'."
+                    )
         return clean, meta_q
 
     if clean.endswith("=X"):
