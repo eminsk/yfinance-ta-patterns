@@ -10,6 +10,7 @@ except PackageNotFoundError:  # pragma: no cover - during editable installs
     __version__ = "0.3.26"
 
 import sys
+
 if sys.version_info < (3, 9):
     from ._compat_hook import install_compat_hook
     install_compat_hook()
