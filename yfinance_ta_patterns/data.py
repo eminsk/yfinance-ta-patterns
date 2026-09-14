@@ -9,7 +9,9 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 import pytz
-import yfinance as yf
+
+# yfinance is loaded lazily on demand in _fetch_yfinance
+yf: Any = None
 
 try:
     import sklearn  # noqa: F401
@@ -1001,6 +1003,10 @@ class MarketDataLoader:
         else:
             # self.repair is None: silently enable repair if scikit-learn is available, otherwise False without warning
             repair_opt = HAS_SKLEARN
+
+        global yf
+        if yf is None:
+            import yfinance as yf
 
         if start_val or end_val:
             data = yf.download(

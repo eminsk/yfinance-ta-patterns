@@ -146,12 +146,6 @@ jobs:
           cd test_pypy
           uv python pin ${{ matrix.pypy-version }}
           uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
-          uv run python -c "import numpy; print('=== numpy OK ===', numpy.__version__)"
-          uv run python -c "import talib; print('=== talib OK ===', talib.__version__)"
-          uv run python -c "import pandas; print('=== pandas OK ===', pandas.__version__)"
-          uv run python -c "import rich; print('=== rich OK ===')"
-          uv run python -c "import yfinance; print('=== yfinance OK ===', yfinance.__version__)"
-          uv run python -c "import yfinance_ta_patterns; print('=== yftp OK ===', yfinance_ta_patterns.__version__)"
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Linux ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
 
