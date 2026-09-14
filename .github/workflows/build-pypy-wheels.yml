@@ -43,22 +43,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential patchelf libcurl4-openssl-dev
 
-      - name: Build and install TA-Lib C library
+      - name: Install TA-Lib C library (v0.7.1)
         run: |
-          curl -fsSL -o ta-lib-0.4.0-src.tar.gz https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.30/ta-lib-0.4.0-src.tar.gz
-          tar -xzf ta-lib-0.4.0-src.tar.gz
-          cd ta-lib
-          ./configure --prefix=/usr
-          make
-          sudo make install
-          sudo ln -sf /usr/lib/libta_lib.so /usr/lib/libta-lib.so || true
-          sudo ln -sf /usr/lib/libta_lib.a /usr/lib/libta-lib.a || true
-          sudo ln -sf /usr/lib64/libta_lib.so /usr/lib64/libta-lib.so || true
-          sudo ln -sf /usr/lib64/libta_lib.a /usr/lib64/libta-lib.a || true
-          sudo ln -sf /usr/local/lib/libta_lib.so /usr/local/lib/libta-lib.so || true
-          sudo ln -sf /usr/local/lib/libta_lib.a /usr/local/lib/libta-lib.a || true
+          curl -fsSL -o ta-lib.deb https://github.com/TA-Lib/ta-lib/releases/download/v0.7.1/ta-lib_0.7.1_amd64.deb
+          sudo dpkg -i ta-lib.deb
+          sudo cp -r /usr/include/ta-lib/* /usr/include/ || true
           sudo ldconfig
-          cd ..
 
       - name: Install Python build tools
         run: |
@@ -74,7 +64,7 @@ jobs:
       - name: Build ta-lib wheel
         env:
           TA_LIBRARY_PATH: /usr/lib:/usr/local/lib
-          TA_INCLUDE_PATH: /usr/include:/usr/local/include
+          TA_INCLUDE_PATH: /usr/include:/usr/local/include:/usr/include/ta-lib
         run: |
           mkdir -p raw_wheels dist
           python -m pip wheel "ta-lib==${{ matrix.talib-version }}" --no-deps --no-build-isolation -w raw_wheels/
