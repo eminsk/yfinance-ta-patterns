@@ -1,10 +1,10 @@
 [project]
 name = "yfinance-ta-patterns"
-version = "0.3.26"
+version = "0.3.27"
 description = "Institutional-grade market candlestick pattern scanner with multi-asset backtesting, AI confluence scoring, and LLM market intelligence."
 readme = "README.md"
 requires-python = ">=3.8"
-license = { text = "MIT" }
+license = "MIT"
 keywords = [
     "yfinance",
     "technical-analysis",

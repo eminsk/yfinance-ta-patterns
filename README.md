@@ -49,20 +49,26 @@ Universal runtime compatibility across **CPython 3.8 to 3.15 (including Free-Thr
 #### Option A: Using `uv` (Fastest & Recommended)
 
 ```bash
-# 1. Standard Python (with GIL: 3.8 – 3.14):
-uv add yfinance-ta-patterns
+# 1. Full institutional setup with all extras (TA-Lib + Scikit-Learn repair + AI):
+uv add "yfinance-ta-patterns[all]" --no-config
 
-# 2. Free-Threaded (No-GIL / PEP 703: 3.14t, 3.15t):
+# 2. Standard install (pure-Python fallback, zero C compiler required):
+uv add yfinance-ta-patterns --no-config
+
+# 3. Free-Threaded (No-GIL / PEP 703: 3.14t, 3.15t):
 uv python pin 3.14t
-uv add yfinance-ta-patterns
+uv add "yfinance-ta-patterns[all]" --no-config
 
-# 3. High-Performance PyPy JIT (PyPy 3.8, 3.9, 3.10, 3.11):
+# 4. High-Performance PyPy JIT (PyPy 3.8, 3.9, 3.10, 3.11):
 uv python pin pypy-3.8
-uv add yfinance-ta-patterns
+uv add "yfinance-ta-patterns[all]" --no-config
 
-# 4. Instant execution without installing into environment:
+# 5. Instant execution without installing into environment:
 uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h --ai
 ```
+
+> [!TIP]
+> **Why `--no-config`?** Passing `--no-config` tells `uv` to ignore any local or parent `uv.toml` settings (such as local wheel registries or find-links overrides), ensuring a clean, isolated, and reproducible installation directly from PyPI in any project directory.
 
 #### Option B: Using Standard `pip`
 
