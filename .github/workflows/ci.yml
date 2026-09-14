@@ -103,9 +103,9 @@ jobs:
           uv init --no-workspace test_pypy --python 3.11
           cd test_pypy
           uv python pin pypy-3.11
-          uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
-          uv run python -c "import dateutil.tz.win; dateutil.tz.win.tzwinbase.load_name = lambda s, o: 'UTC'; import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON PyPy 3.11 ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
-          uv run python -c "import dateutil.tz.win; dateutil.tz.win.tzwinbase.load_name = lambda s, o: 'UTC'; from yfinance_ta_patterns.cli import main; print('PyPy CLI ready')"
+          uv add "yfinance-ta-patterns[all]==0.3.30" tzdata --find-links ../release_wheels
+          uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON PyPy 3.11 ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
+          uv run python -m yfinance_ta_patterns.cli --version
 
   verify-base-38:
     name: Verify base on ${{ matrix.os }} (py3.8)
