@@ -52,8 +52,8 @@ jobs:
 
       - name: Install Python build tools
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install "numpy<2.0.0" cython build wheel auditwheel meson-python ninja
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install numpy cython build wheel auditwheel meson-python ninja
 
       - name: Build ta-lib wheel
         run: |
@@ -116,8 +116,8 @@ jobs:
 
       - name: Install Python build tools
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install "numpy<2.0.0" cython build wheel delocate meson-python ninja
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install numpy cython build wheel delocate meson-python ninja
 
       - name: Build ta-lib wheel
         run: |
