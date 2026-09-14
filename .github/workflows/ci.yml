@@ -71,7 +71,7 @@ jobs:
 
       - name: Download 3.15 wheels from release
         run: |
-          gh release download v0.3.30 -D release_wheels -p "*cp315*"
+          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*cp315*"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -94,7 +94,7 @@ jobs:
 
       - name: Download PyPy wheels from release
         run: |
-          gh release download v0.3.30 -D release_wheels -p "*pp311*"
+          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*pp311*"
         env:
           GH_TOKEN: ${{ github.token }}
 
