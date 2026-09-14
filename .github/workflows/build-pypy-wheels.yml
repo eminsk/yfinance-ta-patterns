@@ -149,8 +149,8 @@ jobs:
       - name: Install Python build tools
         run: |
           if [ "${{ matrix.pypy-version }}" = "pypy3.8" ]; then
-            python -m pip install "pip<24.1" wheel
-            python -m pip install "cython<3.0.0" "numpy<2" "setuptools<65"
+            python -m pip install "pip<24.1" setuptools wheel
+            python -m pip install "cython<3.0.0" "numpy<2"
           elif [ "${{ matrix.pypy-version }}" = "pypy3.9" ]; then
             python -m pip install --upgrade pip setuptools wheel
             python -m pip install cython "numpy<2"
