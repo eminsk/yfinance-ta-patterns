@@ -19,12 +19,16 @@ jobs:
         include:
           - pypy-version: "pypy3.11"
             pandas-version: "3.0.5"
+            talib-version: "0.7.1"
           - pypy-version: "pypy3.10"
             pandas-version: "2.2.3"
+            talib-version: "0.7.1"
           - pypy-version: "pypy3.9"
             pandas-version: "2.2.3"
+            talib-version: "0.7.1"
           - pypy-version: "pypy3.8"
             pandas-version: "2.0.3"
+            talib-version: "0.6.4"
 
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +51,12 @@ jobs:
           ./configure --prefix=/usr
           make
           sudo make install
+          sudo ln -sf /usr/lib/libta_lib.so* /usr/lib/libta-lib.so
+          sudo ln -sf /usr/lib/libta_lib.a /usr/lib/libta-lib.a
+          sudo ln -sf /usr/lib64/libta_lib.so* /usr/lib64/libta-lib.so || true
+          sudo ln -sf /usr/lib64/libta_lib.a /usr/lib64/libta-lib.a || true
+          sudo ln -sf /usr/local/lib/libta_lib.so* /usr/local/lib/libta-lib.so || true
+          sudo ln -sf /usr/local/lib/libta_lib.a /usr/local/lib/libta-lib.a || true
           sudo ldconfig
           cd ..
 
@@ -58,7 +68,7 @@ jobs:
       - name: Build ta-lib wheel
         run: |
           mkdir -p raw_wheels dist
-          python -m pip wheel ta-lib==0.7.1 --no-deps --no-build-isolation -w raw_wheels/
+          python -m pip wheel "ta-lib==${{ matrix.talib-version }}" --no-deps --no-build-isolation -w raw_wheels/
           auditwheel repair raw_wheels/ta_lib*.whl -w dist/
 
       - name: Build pandas wheel
@@ -97,10 +107,10 @@ jobs:
         include:
           - pypy-version: "pypy3.11"
             pandas-version: "3.0.5"
+            talib-version: "0.7.1"
           - pypy-version: "pypy3.10"
             pandas-version: "2.2.3"
-          - pypy-version: "pypy3.9"
-            pandas-version: "2.2.3"
+            talib-version: "0.7.1"
 
     steps:
       - uses: actions/checkout@v4
@@ -122,7 +132,7 @@ jobs:
       - name: Build ta-lib wheel
         run: |
           mkdir -p raw_wheels dist
-          python -m pip wheel ta-lib==0.7.1 --no-deps --no-build-isolation -w raw_wheels/
+          python -m pip wheel "ta-lib==${{ matrix.talib-version }}" --no-deps --no-build-isolation -w raw_wheels/
           delocate-wheel -w dist/ -v raw_wheels/ta_lib*.whl
 
       - name: Build pandas wheel
