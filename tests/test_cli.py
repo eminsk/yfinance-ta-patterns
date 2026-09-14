@@ -90,3 +90,26 @@ def test_run_cli_ai_analyst_flow(capsys, mock_ohlcv_df):
         assert exit_code == 0
         captured = capsys.readouterr()
         assert "AI Technical Intelligence Brief" in captured.out
+
+
+def test_resolve_symbols():
+    from yfinance_ta_patterns.cli import resolve_symbols
+    from yfinance_ta_patterns.forex_data_loader import FOREX_56_PAIRS
+
+    assert len(resolve_symbols(None)) == 56
+    assert len(resolve_symbols("ALL")) == 56
+    assert len(resolve_symbols("FOREX")) == 56
+    assert resolve_symbols("EURUSD") == ["EURUSD"]
+    assert resolve_symbols("EURUSD,GBPUSD,USDJPY") == ["EURUSD", "GBPUSD", "USDJPY"]
+    assert resolve_symbols(None, all_pairs_flag=True) == list(FOREX_56_PAIRS)
+
+
+def test_run_cli_multi_symbol_flow(capsys, mock_ohlcv_df):
+    with patch("yfinance_ta_patterns.cli.MarketDataLoader.get_data", return_value=mock_ohlcv_df):
+        args = parse_args(["--symbol", "EURUSD,GBPUSD", "--timeframe", "1h", "--ai"])
+        exit_code = run_cli(args)
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "СКАНИРОВАНИЕ 2 ВАЛЮТНЫХ ПАР" in captured.out
+        assert "Просканировано: 2 активных пар" in captured.out
+

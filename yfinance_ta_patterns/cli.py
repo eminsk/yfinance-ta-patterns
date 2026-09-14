@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sys
 from collections.abc import Sequence
 from typing import Any
@@ -13,6 +14,7 @@ from . import __version__
 from .ai.analyst import AIMarketAnalyst
 from .ai.scorer import AIPatternScorer, PatternConfidenceResult
 from .data import MarketDataLoader, normalize_interval
+from .forex_data_loader import FOREX_56_PAIRS
 from .pattern_analyzer import PatternAnalyzer
 from .talib_compat import HAS_NATIVE_TALIB
 
@@ -52,6 +54,30 @@ def normalize_timeframe(timeframe: str) -> str:
     return interval
 
 
+def resolve_symbols(symbol_arg: str | None, all_pairs_flag: bool = False) -> list[str]:
+    """Resolve target symbols from CLI arguments.
+
+    If symbol_arg is None, empty, 'ALL', 'FOREX', 'PAIRS', or all_pairs_flag is True,
+    returns all 56 major Forex currency pairs.
+    If symbol_arg contains comma-separated values (e.g. 'EURUSD,GBPUSD'), returns the list.
+    Otherwise returns [symbol_arg].
+    """
+    if all_pairs_flag:
+        return list(FOREX_56_PAIRS)
+    if not symbol_arg or symbol_arg.strip().upper() in (
+        "ALL",
+        "FOREX",
+        "PAIRS",
+        "ALL_PAIRS",
+        "ALL-PAIRS",
+        "*",
+    ):
+        return list(FOREX_56_PAIRS)
+    if "," in symbol_arg:
+        return [s.strip() for s in symbol_arg.split(",") if s.strip()]
+    return [symbol_arg.strip()]
+
+
 def get_parser() -> argparse.ArgumentParser:
     """Build CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -78,8 +104,29 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--symbol",
-        default="EURUSD",
-        help="Ticker symbol (e.g. EURUSD, AAPL, BTC-USD, NVDA, GC=F).",
+        default=None,
+        help=(
+            "Ticker symbol (e.g. EURUSD, AAPL, BTC-USD, NVDA, GC=F) or comma-separated list. "
+            "If omitted or set to 'ALL'/'FOREX', scans all 56 major Forex currency pairs automatically."
+        ),
+    )
+    parser.add_argument(
+        "--symbols",
+        dest="symbol_alias",
+        help="Alias for --symbol (supports comma-separated list of symbols or 'ALL'/'FOREX').",
+    )
+    parser.add_argument(
+        "--all-pairs",
+        "--forex",
+        dest="all_pairs",
+        action="store_true",
+        help="Scan all 56 major Forex currency pairs (equivalent to omitting --symbol).",
+    )
+    parser.add_argument(
+        "--lookback-bars",
+        type=int,
+        default=None,
+        help="Number of recent bars to scan in multi-symbol mode (default: 2 for live scanning; 0 for all bars).",
     )
     parser.add_argument("--period", default="60d", help="History period, e.g. 60d, 1y, max")
     parser.add_argument(
@@ -90,7 +137,7 @@ def get_parser() -> argparse.ArgumentParser:
             "or raw yfinance interval (1m, 5m, 15m, 1h, 4h, 1d...)."
         ),
     )
-    group = parser.add_mutually_exclusive_group(required=True)
+    group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument(
         "--pattern",
         help="Single candlestick pattern, e.g. HAMMER (CDL prefix optional).",
@@ -98,7 +145,8 @@ def get_parser() -> argparse.ArgumentParser:
     group.add_argument(
         "--all-patterns",
         action="store_true",
-        help="Scan and show signals for all TA-Lib candlestick patterns.",
+        default=False,
+        help="Scan and show signals for all TA-Lib candlestick patterns (default).",
     )
     parser.add_argument(
         "--date",
@@ -121,8 +169,8 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--min-confidence",
         type=float,
-        default=0.0,
-        help="Minimum AI multi-factor confluence score threshold (0.0 to 1.0, e.g. 0.65; deterministic heuristic, not win probability).",
+        default=None,
+        help="Minimum AI multi-factor confluence score threshold (0.0 to 1.0, e.g. 0.65; default: 0.55 for multi-pair, 0.0 for single symbol).",
     )
     parser.add_argument(
         "--auto-adjust",
@@ -197,7 +245,31 @@ build_parser = get_parser
 
 def run_cli(args: argparse.Namespace) -> int:
     """Run CLI logic with parsed arguments."""
+    if sys.platform == "win32":
+        with contextlib.suppress(Exception):
+            import ctypes
+
+            ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+            ctypes.windll.kernel32.SetConsoleCP(65001)
+    if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+        with contextlib.suppress(Exception):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+        with contextlib.suppress(Exception):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     interval = normalize_timeframe(args.timeframe)
+
+    if not args.pattern and not args.all_patterns:
+        args.all_patterns = True
+
+    symbol_input = args.symbol or getattr(args, "symbol_alias", None)
+    symbols = resolve_symbols(symbol_input, getattr(args, "all_pairs", False))
+
+    if args.min_confidence is None:
+        min_confidence = 0.55 if len(symbols) > 1 else 0.0
+    else:
+        min_confidence = float(args.min_confidence)
 
     if args.date and (args.start_date or args.end_date):
         raise ValueError("Use either --date or --start-date/--end-date, not both.")
@@ -222,8 +294,245 @@ def run_cli(args: argparse.Namespace) -> int:
         start_arg = (target_dt - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")
         end_arg = (target_dt + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
+    use_ai = args.ai or args.ai_analyst or args.prompt or (len(symbols) > 1 and not args.pattern)
+
+    # ---------------------------------------------------------
+    # MULTI-SYMBOL / FOREX PORTFOLIO SCANNING MODE
+    # ---------------------------------------------------------
+    if len(symbols) > 1:
+        print("=" * 95)
+        print(
+            f"🌍 СКАНИРОВАНИЕ {len(symbols)} ВАЛЮТНЫХ ПАР FOREX (Таймфрейм: {interval}, Период: {args.period})"
+        )
+        print(
+            "Поиск самых выгодных точек входа на основе AI Confluence Scoring (Trend + RSI + Volume + ATR)"
+        )
+        print("=" * 95)
+
+        all_signals_records: list[dict[str, Any]] = []
+        active_pairs_count = 0
+        lookback = args.lookback_bars if args.lookback_bars is not None else 2
+
+        for idx, sym in enumerate(symbols, 1):
+            clean_sym = sym.replace("=X", "")
+            if sys.stdout and hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
+                print(f"[{idx:2d}/{len(symbols)}] Опрос {clean_sym:<7} ...", end="\r", flush=True)
+
+            try:
+                loader = MarketDataLoader(
+                    sym,
+                    period=args.period,
+                    interval=interval,
+                    start=start_arg,
+                    end=end_arg,
+                    auto_adjust=args.auto_adjust,
+                    repair=args.repair,
+                )
+                df = loader.get_data()
+                if df.empty or len(df) < 20:
+                    continue
+
+                active_pairs_count += 1
+                analyzer = PatternAnalyzer(df)
+                scorer = AIPatternScorer(df) if use_ai else None
+
+                if args.date or args.start_date or args.end_date or lookback <= 0:
+                    recent_timestamps = df.index
+                else:
+                    recent_timestamps = df.index[-lookback:] if len(df) >= lookback else df.index
+
+                patterns_to_scan = (
+                    [args.pattern] if args.pattern else sorted(analyzer.pattern_functions)
+                )
+
+                for pat in patterns_to_scan:
+                    try:
+                        sig_series = analyzer.get_signals(
+                            pat,
+                            date=args.date,
+                            start_date=args.start_date,
+                            end_date=args.end_date,
+                        )
+                    except NotImplementedError:
+                        continue
+
+                    if sig_series.empty:
+                        continue
+
+                    for ts in recent_timestamps:
+                        if ts not in sig_series.index:
+                            continue
+                        signal_val = sig_series.loc[ts]
+                        if signal_val == 0:
+                            continue
+
+                        clean_pat = pat.replace("CDL", "")
+                        if scorer:
+                            res = scorer.score_signal(pat, ts, signal_val)
+                            score = res.confidence_score
+                            if score >= min_confidence:
+                                setup = res.trade_setup
+                                grade_label = (
+                                    res.grade.value
+                                    if hasattr(res.grade, "value")
+                                    else str(res.grade)
+                                )
+                                direction = (
+                                    setup.direction
+                                    if setup
+                                    else ("BUY" if signal_val > 0 else "SELL")
+                                )
+                                entry = setup.entry_price if setup else float(df.loc[ts, "Close"])
+                                sl = setup.stop_loss if setup else 0.0
+                                tp1 = setup.take_profit_1 if setup else 0.0
+                                tp2 = setup.take_profit_2 if setup else 0.0
+                                rr = setup.risk_reward_ratio if setup else 1.5
+
+                                all_signals_records.append(
+                                    {
+                                        "Symbol": clean_sym,
+                                        "RawSymbol": sym,
+                                        "Time": (
+                                            ts.strftime("%d.%m %H:%M")
+                                            if hasattr(ts, "strftime")
+                                            else str(ts)
+                                        ),
+                                        "Direction": "🟢 BUY" if direction == "BUY" else "🔴 SELL",
+                                        "Pattern": clean_pat,
+                                        "Confluence": f"{score * 100:.1f}%",
+                                        "Grade": grade_label,
+                                        "Entry": entry,
+                                        "StopLoss": sl,
+                                        "TakeProfit_1": tp1,
+                                        "TakeProfit_2": tp2,
+                                        "RR": f"1:{rr:.1f}",
+                                        "Trend": res.trend_regime,
+                                        "RSI": round(res.rsi, 1),
+                                        "Score_Raw": score,
+                                        "RR_Raw": rr,
+                                        "df": df,
+                                        "result": res,
+                                    }
+                                )
+                        else:
+                            all_signals_records.append(
+                                {
+                                    "Symbol": clean_sym,
+                                    "RawSymbol": sym,
+                                    "Time": (
+                                        ts.strftime("%d.%m %H:%M")
+                                        if hasattr(ts, "strftime")
+                                        else str(ts)
+                                    ),
+                                    "Direction": "🟢 BUY" if signal_val > 0 else "🔴 SELL",
+                                    "Pattern": clean_pat,
+                                    "Price": float(df.loc[ts, "Close"]),
+                                    "df": df,
+                                }
+                            )
+            except Exception:
+                continue
+
+        if sys.stdout and hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
+            print(" " * 60, end="\r")
+        print(f"✔ Просканировано: {active_pairs_count} активных пар из {len(symbols)}")
+
+        if not all_signals_records:
+            bars_info = (
+                f"за последние {lookback} бара(ов)" if lookback > 0 else "за выбранный период"
+            )
+            print(
+                f"\n⚠️ {bars_info.capitalize()} надежных сетапов с уверенностью >= {min_confidence*100:.0f}% не найдено."
+            )
+            print(
+                "Рынок находится в фазе консолидации / флэта. Попробуйте сменить таймфрейм на 15m или 1h."
+            )
+            return 0
+
+        if not use_ai:
+            classic_df = pd.DataFrame(all_signals_records)[
+                ["Time", "Symbol", "Direction", "Pattern", "Price"]
+            ]
+            print("\n" + "=" * 80)
+            print(f"📊 НАЙДЕННЫЕ СИГНАЛЫ ({len(classic_df)} паттернов):")
+            print("=" * 80)
+            print(classic_df.to_string(index=False))
+            return 0
+
+        signals_df = pd.DataFrame(all_signals_records).sort_values(
+            by=["Score_Raw", "RR_Raw"], ascending=[False, False]
+        )
+
+        if args.format == "json":
+            import json
+
+            export_data = [
+                {k: v for k, v in row.items() if k not in ("df", "result")}
+                for row in signals_df.to_dict(orient="records")
+            ]
+            print(json.dumps(export_data, indent=2, ensure_ascii=False))
+            return 0
+
+        print("\n" + "=" * 105)
+        print(
+            f"📊 РЕЙТИНГ НАЙДЕННЫХ ВОЗМОЖНОСТЕЙ ({len(signals_df)} сигналов, отсортированы по качеству входа):"
+        )
+        print("=" * 105)
+
+        display_cols = [
+            "Time",
+            "Symbol",
+            "Direction",
+            "Pattern",
+            "Confluence",
+            "Grade",
+            "Entry",
+            "StopLoss",
+            "TakeProfit_1",
+            "RR",
+            "Trend",
+            "RSI",
+        ]
+        print(signals_df[display_cols].to_string(index=False))
+
+        best = signals_df.iloc[0]
+
+        print("\n" + "🔥" * 38)
+        print(f"  🏆 НАИБОЛЕЕ ВЫГОДНАЯ ПАРА ДЛЯ ВХОДА ПРЯМО СЕЙЧАС: {best['Symbol']}")
+        print("🔥" * 38)
+        print(f"  • Направление сделки:   {best['Direction']} (Паттерн: {best['Pattern']})")
+        print(f"  • Качество слияния:     {best['Confluence']} [Грейд: {best['Grade']}]")
+        print(f"  • Подтверждение тренда: {best['Trend']}")
+        print(f"  • Индекс силы RSI(14):  {best['RSI']}")
+        print(f"  • Точка входа (Entry):  {best['Entry']}")
+        print(f"  • Стоп-лосс (StopLoss): {best['StopLoss']}")
+        print(f"  • Тейк-профит 1 (TP1):  {best['TakeProfit_1']} (Риск/Прибыль {best['RR']})")
+        print(f"  • Тейк-профит 2 (TP2):  {best['TakeProfit_2']}")
+        print(f"  • Свеча сигнала:        {best['Time']}")
+        print("=" * 76)
+
+        if args.ai_analyst:
+            print("\n" + "=" * 76)
+            print(f"📋 AI TECHNICAL INTELLIGENCE BRIEF ДЛЯ ТОП-ПАРЫ: {best['Symbol']}")
+            print("=" * 76 + "\n")
+            analyst = AIMarketAnalyst(best["df"], [best["result"]])
+            print(analyst.generate_brief(best["Symbol"], interval))
+
+        if args.prompt:
+            print("\n" + "=" * 76)
+            print(f"🤖 LLM PROMPT ДЛЯ ТОП-ПАРЫ: {best['Symbol']}")
+            print("=" * 76 + "\n")
+            analyst = AIMarketAnalyst(best["df"], [best["result"]])
+            print(analyst.to_llm_prompt(best["Symbol"], interval))
+
+        return 0
+
+    # ---------------------------------------------------------
+    # SINGLE-SYMBOL MODE (100% Backwards Compatible)
+    # ---------------------------------------------------------
+    symbol = symbols[0]
     loader = MarketDataLoader(
-        args.symbol,
+        symbol,
         period=args.period,
         interval=interval,
         start=start_arg,
@@ -236,7 +545,7 @@ def run_cli(args: argparse.Namespace) -> int:
 
     if data.empty:
         print(
-            f"Error: No data retrieved for symbol '{args.symbol}' ({period}, {interval}).",
+            f"Error: No data retrieved for symbol '{symbol}' ({period}, {interval}).",
             file=sys.stderr,
         )
         return 1
@@ -254,7 +563,6 @@ def run_cli(args: argparse.Namespace) -> int:
             f"Notice: Native TA-Lib binary not found. Scanning {len(analyzer.pattern_functions)} pure-Python fallback patterns.",
             file=sys.stderr,
         )
-    use_ai = args.ai or args.ai_analyst or args.prompt
 
     all_scored_results: list[PatternConfidenceResult] = []
     classic_signals: dict[str, Any] = {}
@@ -274,7 +582,7 @@ def run_cli(args: argparse.Namespace) -> int:
         clean_name = pat.replace("CDL", "")
         if scorer:
             scored = scorer.score_all_signals(
-                signals, clean_name, min_confidence=args.min_confidence
+                signals, clean_name, min_confidence=min_confidence
             )
             all_scored_results.extend(scored)
         else:
@@ -297,30 +605,30 @@ def run_cli(args: argparse.Namespace) -> int:
     # 1. LLM Prompt Output
     if args.prompt:
         analyst = AIMarketAnalyst(analyst_data, all_scored_results)
-        print(analyst.to_llm_prompt(args.symbol, interval))
+        print(analyst.to_llm_prompt(symbol, interval))
         return 0
 
     # 2. AI Analyst Brief
     if args.ai_analyst:
         analyst = AIMarketAnalyst(analyst_data, all_scored_results)
         if args.format == "json":
-            print(analyst.to_json(args.symbol, interval))
+            print(analyst.to_json(symbol, interval))
         else:
-            print(analyst.generate_brief(args.symbol, interval))
+            print(analyst.generate_brief(symbol, interval))
         return 0
 
     # 3. AI Mode Output
     if args.ai:
         if not all_scored_results:
-            print(f"No AI-scored signals found for {args.symbol} matching criteria{range_info}.")
+            print(f"No AI-scored signals found for {symbol} matching criteria{range_info}.")
             return 0
 
         if args.format == "json":
             analyst = AIMarketAnalyst(analyst_data, all_scored_results)
-            print(analyst.to_json(args.symbol, interval))
+            print(analyst.to_json(symbol, interval))
             return 0
 
-        print(f"=== AI Pattern Intelligence: {args.symbol} ({interval}, {period}){range_info} ===")
+        print(f"=== AI Pattern Intelligence: {symbol} ({interval}, {period}){range_info} ===")
         for res in all_scored_results:
             conf_score = f"{res.confidence * 100:.1f}/100"
             print(
@@ -354,7 +662,7 @@ def run_cli(args: argparse.Namespace) -> int:
             print(f"No signals for any pattern on period {period} timeframe {interval}{range_info}")
         return 0
 
-    print(f"Scanning patterns for {args.symbol} ({interval}, {period}){range_info}...")
+    print(f"Scanning patterns for {symbol} ({interval}, {period}){range_info}...")
     for pat_name, sig in classic_signals.items():
         print(f"{pat_name}:")
         print(sig.to_string())

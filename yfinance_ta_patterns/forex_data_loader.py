@@ -6,6 +6,14 @@ from typing import Any
 
 from .data import MarketDataLoader
 
+FOREX_MAJOR_CURRENCIES: tuple[str, ...] = ("EUR", "GBP", "USD", "AUD", "CAD", "CHF", "JPY", "NZD")
+FOREX_56_PAIRS: tuple[str, ...] = tuple(
+    f"{a}{b}=X"
+    for a in FOREX_MAJOR_CURRENCIES
+    for b in FOREX_MAJOR_CURRENCIES
+    if a != b
+)
+
 
 class ForexDataLoader(MarketDataLoader):
     """Data loader specifically targeted for Currency / Forex pairs.

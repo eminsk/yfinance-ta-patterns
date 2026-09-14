@@ -239,16 +239,22 @@ uv run examples/live_signals_scanner.py
 ### 2. Run CLI
 
 ```bash
-# Detect a single pattern with classic output
+# 1. Multi-Currency Portfolio Scanner (automatically scans all 56 Forex pairs without specifying --symbol):
+yftp --timeframe 5m --period 30d --all-patterns --ai-analyst
+
+# 2. Or explicitly scan all 56 pairs with custom confluence threshold:
+yftp --all-pairs --timeframe 1h --period 60d --ai --min-confidence 0.60
+
+# 3. Scan a custom comma-separated portfolio of symbols:
+yftp --symbol EURUSD,GBPUSD,USDJPY --timeframe 15m --ai
+
+# 4. Single symbol AI-scored analysis with Executive Brief:
+yftp --symbol GBPUSD --timeframe 5m --period 30d --all-patterns --ai-analyst
+
+# 5. Detect a single pattern with classic output:
 yftp --pattern HAMMER --symbol AAPL --timeframe 1h --period 60d
 
-# Scan all patterns on crypto with AI Confluence Scoring
-yftp --all-patterns --symbol BTC-USD --timeframe 4h --period 60d --ai --min-confidence 0.65
-
-# Generate an Executive AI Analyst Brief in Markdown
-yftp --all-patterns --symbol NVDA --timeframe 15m --period 10d --ai-analyst --format markdown
-
-# Generate an LLM-ready prompt template for GPT-4o / Claude
+# 6. Generate an LLM-ready prompt template for GPT-4o / Claude:
 yftp --all-patterns --symbol EURUSD --timeframe 1h --period 60d --prompt
 ```
 
