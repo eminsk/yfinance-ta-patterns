@@ -104,10 +104,8 @@ jobs:
           cd test_pypy
           uv python pin pypy-3.11
           uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
-          @"
-          import dateutil.tz.win
-          dateutil.tz.win.tzwinbase.load_name = lambda s, o: 'UTC'
-          "@ | Out-File -Encoding ascii .venv/Lib/site-packages/sitecustomize.py
+          echo "import dateutil.tz.win" > .venv/Lib/site-packages/sitecustomize.py
+          echo "dateutil.tz.win.tzwinbase.load_name = lambda s, o: 'UTC'" >> .venv/Lib/site-packages/sitecustomize.py
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON PyPy 3.11 ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
 
