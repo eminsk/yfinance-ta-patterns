@@ -139,6 +139,8 @@ jobs:
 
       - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
         shell: bash
+        env:
+          PYTHONFAULTHANDLER: "1"
         run: |
           uv init --no-workspace test_pypy --python ${{ matrix.pypy-version }}
           cd test_pypy
@@ -148,6 +150,7 @@ jobs:
           uv run python -c "import talib; print('=== talib OK ===', talib.__version__)"
           uv run python -c "import pandas; print('=== pandas OK ===', pandas.__version__)"
           uv run python -c "import rich; print('=== rich OK ===')"
+          uv run python -c "import yfinance; print('=== yfinance OK ===', yfinance.__version__)"
           uv run python -c "import yfinance_ta_patterns; print('=== yftp OK ===', yfinance_ta_patterns.__version__)"
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Linux ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
@@ -173,8 +176,6 @@ jobs:
 
       - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
         shell: bash
-        env:
-          MACOSX_DEPLOYMENT_TARGET: "11.0"
         run: |
           uv init --no-workspace test_pypy --python ${{ matrix.pypy-version }}
           cd test_pypy
@@ -184,6 +185,7 @@ jobs:
           uv run python -c "import talib; print('=== talib OK ===', talib.__version__)"
           uv run python -c "import pandas; print('=== pandas OK ===', pandas.__version__)"
           uv run python -c "import rich; print('=== rich OK ===')"
+          uv run python -c "import yfinance; print('=== yfinance OK ===', yfinance.__version__)"
           uv run python -c "import yfinance_ta_patterns; print('=== yftp OK ===', yfinance_ta_patterns.__version__)"
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON macOS ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
