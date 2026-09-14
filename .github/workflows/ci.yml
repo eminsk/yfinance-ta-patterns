@@ -99,6 +99,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
+        env:
+          PYTHONPATH: "."
         run: |
           uv init --no-workspace test_pypy --python 3.11
           cd test_pypy
