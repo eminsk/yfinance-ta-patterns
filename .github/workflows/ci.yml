@@ -71,7 +71,7 @@ jobs:
 
       - name: Download 3.15 wheels from release
         run: |
-          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*cp315*"
+          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*cp315*" -p "*yfinance_ta_patterns*"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -98,7 +98,7 @@ jobs:
 
       - name: Download PyPy wheels from release
         run: |
-          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*win*"
+          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*win*" -p "*yfinance_ta_patterns*"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -133,7 +133,7 @@ jobs:
 
       - name: Download PyPy wheels from release
         run: |
-          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*linux*"
+          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*linux*" -p "*yfinance_ta_patterns*"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -169,7 +169,7 @@ jobs:
 
       - name: Download PyPy wheels from release
         run: |
-          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*macosx*"
+          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*macosx*" -p "*yfinance_ta_patterns*"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -205,7 +205,7 @@ jobs:
 
       - name: Download 3.8 wheels from release
         run: |
-          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*ta_lib*cp38*" || true
+          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*ta_lib*cp38*" -p "*yfinance_ta_patterns*" || true
         env:
           GH_TOKEN: ${{ github.token }}
 

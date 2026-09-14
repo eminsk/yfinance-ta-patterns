@@ -140,13 +140,14 @@ jobs:
 
       - name: Install Python build tools
         run: |
+          python -m pip install --upgrade pip
           if [ "${{ matrix.pypy-version }}" = "pypy3.8" ]; then
             python -m pip install "cython<3.0.0" "numpy<2" "setuptools<65" wheel
           elif [ "${{ matrix.pypy-version }}" = "pypy3.9" ]; then
-            python -m pip install --upgrade pip setuptools wheel
+            python -m pip install setuptools wheel
             python -m pip install cython "numpy<2"
           else
-            python -m pip install --upgrade pip setuptools wheel
+            python -m pip install setuptools wheel
             python -m pip install cython numpy
           fi
           python -m pip install build delocate meson-python ninja versioneer
@@ -187,10 +188,22 @@ jobs:
           python -m pip wheel cffi --no-deps -w raw_wheels/ || true
           delocate-wheel --require-archs arm64 -w dist/ -v raw_wheels/cffi*.whl || cp raw_wheels/cffi*.whl dist/ || true
 
+      - name: Build numpy wheel
+        run: |
+          if [ "${{ matrix.pypy-version }}" != "pypy3.11" ]; then
+            python -m pip wheel "numpy<2" --no-deps -w raw_wheels/ || true
+            delocate-wheel --require-archs arm64 -w dist/ -v raw_wheels/numpy*.whl || cp raw_wheels/numpy*.whl dist/ || true
+          fi
+
       - name: List built wheels
         run: |
+          find ~/Library/Caches/pip/wheels -name "numpy*.whl" -exec cp {} dist/ \; || true
+          find ~/Library/Caches/pip/wheels -name "pandas*.whl" -exec cp {} dist/ \; || true
           for f in dist/TA_Lib*.whl; do
             [ -f "$f" ] && mv "$f" "$(echo "$f" | sed 's/TA_Lib/ta_lib/')"
+          done
+          for f in dist/*universal2*.whl; do
+            [ -f "$f" ] && mv "$f" "$(echo "$f" | sed 's/macosx_[0-9_]*_universal2/macosx_26_0_arm64/')"
           done
           ls -la dist/
 
