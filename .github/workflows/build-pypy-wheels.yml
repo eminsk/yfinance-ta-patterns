@@ -63,7 +63,13 @@ jobs:
       - name: Install Python build tools
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install numpy cython build wheel auditwheel meson-python ninja
+          if [ "${{ matrix.pypy-version }}" = "pypy3.8" ]; then
+            python -m pip install "cython<3.0.0"
+          else
+            python -m pip install cython
+          fi
+          python -m pip install numpy build wheel meson-python ninja versioneer
+          python3 -m pip install auditwheel || true
 
       - name: Build ta-lib wheel
         env:
@@ -72,18 +78,18 @@ jobs:
         run: |
           mkdir -p raw_wheels dist
           python -m pip wheel "ta-lib==${{ matrix.talib-version }}" --no-deps --no-build-isolation -w raw_wheels/
-          auditwheel repair raw_wheels/ta_lib*.whl -w dist/
+          python3 -m auditwheel repair raw_wheels/ta_lib*.whl -w dist/ || auditwheel repair raw_wheels/ta_lib*.whl -w dist/ || cp raw_wheels/ta_lib*.whl dist/
 
       - name: Build pandas wheel
         run: |
           echo "Building pandas ${{ matrix.pandas-version }} for ${{ matrix.pypy-version }}"
           python -m pip wheel "pandas==${{ matrix.pandas-version }}" --no-deps --no-build-isolation -w raw_wheels/ || true
-          auditwheel repair raw_wheels/pandas*.whl -w dist/ || cp raw_wheels/pandas*.whl dist/ || true
+          python3 -m auditwheel repair raw_wheels/pandas*.whl -w dist/ || auditwheel repair raw_wheels/pandas*.whl -w dist/ || cp raw_wheels/pandas*.whl dist/ || true
 
       - name: Build curl_cffi wheel
         run: |
           python -m pip wheel curl-cffi==0.16.3 --no-deps -w raw_wheels/ || true
-          auditwheel repair raw_wheels/curl_cffi*.whl -w dist/ || cp raw_wheels/curl_cffi*.whl dist/ || true
+          python3 -m auditwheel repair raw_wheels/curl_cffi*.whl -w dist/ || auditwheel repair raw_wheels/curl_cffi*.whl -w dist/ || cp raw_wheels/curl_cffi*.whl dist/ || true
 
       - name: List built wheels
         run: |
@@ -130,7 +136,7 @@ jobs:
       - name: Install Python build tools
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install numpy cython build wheel delocate meson-python ninja
+          python -m pip install numpy cython build wheel delocate meson-python ninja versioneer
 
       - name: Build ta-lib wheel
         run: |
