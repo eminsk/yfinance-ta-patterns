@@ -73,6 +73,9 @@ jobs:
         run: |
           mkdir -p raw_wheels dist
           python -m pip wheel "ta-lib==${{ matrix.talib-version }}" --no-deps --no-build-isolation -w raw_wheels/
+          for w in raw_wheels/TA_Lib*.whl; do
+            [ -f "$w" ] && mv "$w" "$(echo "$w" | sed 's/TA_Lib/ta_lib/')"
+          done
           /usr/bin/python3 -m auditwheel repair raw_wheels/ta_lib*.whl -w dist/ || pipx run auditwheel repair raw_wheels/ta_lib*.whl -w dist/ || cp raw_wheels/ta_lib*.whl dist/
 
       - name: Build pandas wheel
