@@ -107,9 +107,12 @@ jobs:
           Copy-Item -Recurse -Force release_wheels C:\release_wheels
           $testDir = "C:\test_pypy"
           Remove-Item -Recurse -Force $testDir -ErrorAction SilentlyContinue
+          uv python install ${{ matrix.pypy-version }}
           $pypyExe = uv python find ${{ matrix.pypy-version }}
           $pypyDir = Split-Path $pypyExe
-          $env:PYTHONHOME = $pypyDir
+          if ("${{ matrix.pypy-version }}" -eq "pypy-3.8") {
+            $env:PYTHONHOME = $pypyDir
+          }
           uv init --no-workspace $testDir --python ${{ matrix.pypy-version }}
           Set-Location $testDir
           uv python pin ${{ matrix.pypy-version }}
