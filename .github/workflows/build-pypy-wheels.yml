@@ -149,7 +149,7 @@ jobs:
       - name: Install Python build tools
         run: |
           if [ "${{ matrix.pypy-version }}" = "pypy3.8" ]; then
-            python -m pip install "pip<24.1" setuptools wheel
+            python -m pip install --upgrade "pip>=23.3,<24.1" setuptools wheel
             python -m pip install "cython<3.0.0" "numpy<2"
           elif [ "${{ matrix.pypy-version }}" = "pypy3.9" ]; then
             python -m pip install --upgrade pip setuptools wheel
@@ -181,7 +181,12 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: "11.0"
         run: |
           echo "Building pandas ${{ matrix.pandas-version }} for ${{ matrix.pypy-version }}"
-          python -m pip wheel "pandas==${{ matrix.pandas-version }}" --no-deps --no-build-isolation -w raw_wheels/ || true
+          mkdir -p /tmp/pandas_src
+          python -m pip download --no-deps "pandas==${{ matrix.pandas-version }}" -d /tmp/pandas_src
+          tar -xzf /tmp/pandas_src/pandas-*.tar.gz -C /tmp/pandas_src/
+          cd /tmp/pandas_src/pandas-*
+          python -m build --wheel --no-isolation -o "$GITHUB_WORKSPACE/raw_wheels/" || python -m pip wheel . --no-deps --no-build-isolation -w "$GITHUB_WORKSPACE/raw_wheels/" || true
+          cd "$GITHUB_WORKSPACE"
           delocate-wheel --require-archs arm64 -w dist/ -v raw_wheels/pandas*.whl || cp raw_wheels/pandas*.whl dist/ || true
 
       - name: Build curl_cffi wheel

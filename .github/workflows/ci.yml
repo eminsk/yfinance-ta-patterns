@@ -79,7 +79,7 @@ jobs:
         run: |
           uv init --no-workspace test_315 --python 3.15t
           cd test_315
-          uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
+          uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
           uv run python -c "import talib, pandas, numpy, rich, sklearn, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Windows 3.15t ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run yftp --version
 
@@ -113,7 +113,7 @@ jobs:
           uv init --no-workspace $testDir
           Set-Location $testDir
           uv python pin ${{ matrix.pypy-version }}
-          uv add "yfinance-ta-patterns[all]==0.3.30" --find-links C:\release_wheels
+          uv add "C:\release_wheels\yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links C:\release_wheels
           try { uv run python -c "import dateutil.tz.win as w; p = w.__file__; open(p, 'w').write(open(p).read().replace('self._tzres._handle', 'int(self._tzres._handle)'))" } catch {}
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Windows ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
@@ -145,7 +145,7 @@ jobs:
           uv init --no-workspace test_pypy --python ${{ matrix.pypy-version }}
           cd test_pypy
           uv python pin ${{ matrix.pypy-version }}
-          uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
+          uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
           uv run python -c "import numpy; print('=== numpy OK ===', numpy.__version__)"
           uv run python -c "import talib; print('=== talib OK ===', talib.__version__)"
           uv run python -c "import pandas; print('=== pandas OK ===', pandas.__version__)"
@@ -180,7 +180,7 @@ jobs:
           uv init --no-workspace test_pypy --python ${{ matrix.pypy-version }}
           cd test_pypy
           uv python pin ${{ matrix.pypy-version }}
-          uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
+          uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
           uv run python -c "import numpy; print('=== numpy OK ===', numpy.__version__)"
           uv run python -c "import talib; print('=== talib OK ===', talib.__version__)"
           uv run python -c "import pandas; print('=== pandas OK ===', pandas.__version__)"
@@ -214,6 +214,6 @@ jobs:
         run: |
           uv init --no-workspace test_py38 --python 3.8
           cd test_py38
-          uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
+          uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON ${{ matrix.os }} (py3.8) ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run yftp --version

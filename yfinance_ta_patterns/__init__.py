@@ -11,7 +11,7 @@ except PackageNotFoundError:  # pragma: no cover - during editable installs
 
 import sys
 
-if sys.version_info < (3, 9):
+if sys.version_info < (3, 9) and sys.implementation.name != "pypy":
     from ._compat_hook import install_compat_hook
     install_compat_hook()
 
