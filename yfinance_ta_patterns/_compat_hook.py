@@ -100,9 +100,9 @@ class _CompatMetaPathFinder(importlib.abc.MetaPathFinder):
 
 
 def install_compat_hook():
-    """Install the import hook if running on Python < 3.9."""
+    """Install the import hook if running on CPython < 3.9."""
     global _INSTALLED
-    if _INSTALLED or sys.version_info >= (3, 9):
+    if _INSTALLED or sys.version_info >= (3, 9) or sys.implementation.name == "pypy":
         return
     _INSTALLED = True
     sys.meta_path.insert(0, _CompatMetaPathFinder())
