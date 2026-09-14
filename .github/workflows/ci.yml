@@ -108,6 +108,64 @@ jobs:
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON PyPy 3.11 ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
 
+  verify-linux-pypy:
+    name: Verify [all] on ubuntu-latest (${{ matrix.pypy-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pypy-version: ["pypy-3.11", "pypy-3.10", "pypy-3.9"]
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+
+      - name: Download PyPy wheels from release
+        run: |
+          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*pp*"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
+        shell: bash
+        run: |
+          uv init --no-workspace test_pypy --python ${{ matrix.pypy-version }}
+          cd test_pypy
+          uv python pin ${{ matrix.pypy-version }}
+          uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
+          uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Linux ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
+          uv run python -m yfinance_ta_patterns.cli --version
+
+  verify-macos-pypy:
+    name: Verify [all] on macos-latest (${{ matrix.pypy-version }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pypy-version: ["pypy-3.11", "pypy-3.10"]
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+
+      - name: Download PyPy wheels from release
+        run: |
+          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*pp*"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
+        shell: bash
+        run: |
+          uv init --no-workspace test_pypy --python ${{ matrix.pypy-version }}
+          cd test_pypy
+          uv python pin ${{ matrix.pypy-version }}
+          uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
+          uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON macOS ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
+          uv run python -m yfinance_ta_patterns.cli --version
+
   verify-base-38:
     name: Verify base on ${{ matrix.os }} (py3.8)
     runs-on: ${{ matrix.os }}

@@ -81,6 +81,11 @@ jobs:
           python3 -m auditwheel repair raw_wheels/ta_lib*.whl -w dist/ || auditwheel repair raw_wheels/ta_lib*.whl -w dist/ || cp raw_wheels/ta_lib*.whl dist/
 
       - name: Build pandas wheel
+        env:
+          CC: gcc
+          CXX: g++
+          LDSHARED: "gcc -shared"
+          LDCXXSHARED: "g++ -shared"
         run: |
           echo "Building pandas ${{ matrix.pandas-version }} for ${{ matrix.pypy-version }}"
           python -m pip wheel "pandas==${{ matrix.pandas-version }}" --no-deps --no-build-isolation -w raw_wheels/ || true
