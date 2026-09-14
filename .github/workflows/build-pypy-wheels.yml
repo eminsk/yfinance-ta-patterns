@@ -253,6 +253,9 @@ jobs:
             /usr/bin/python3 -m auditwheel repair raw_wheels/ta_lib*.whl -w dist/ || cp raw_wheels/ta_lib*.whl dist/
           else
             python -m pip install delocate
+            for w in raw_wheels/*universal2*.whl; do
+              [ -f "$w" ] && mv "$w" "${w/universal2/arm64}"
+            done
             delocate-wheel --require-archs arm64 -w dist/ -v raw_wheels/*.whl || cp raw_wheels/*.whl dist/
           fi
 

@@ -70,21 +70,33 @@ class _FutureAnnotationsPatchLoader(importlib.abc.Loader):
         self.original_loader.exec_module(module)
 
 
+_FINDING: set[str] = set()
+
+
 class _CompatMetaPathFinder(importlib.abc.MetaPathFinder):
     # Target yfinance modules known to contain PEP 604 annotations breaking Python 3.8
     def find_spec(self, fullname, path, target=None):
+        if fullname in _FINDING:
+            return None
         if not (fullname == "yfinance" or fullname.startswith("yfinance.")):
             return None
 
-        for finder in sys.meta_path:
-            if finder is self:
-                continue
-            if hasattr(finder, "find_spec"):
-                spec = finder.find_spec(fullname, path, target)
-                if spec and spec.loader and hasattr(spec.loader, "get_source"):
-                    spec.loader = _FutureAnnotationsPatchLoader(spec.loader)
-                    return spec
-        return None
+        _FINDING.add(fullname)
+        try:
+            for finder in sys.meta_path:
+                if finder is self:
+                    continue
+                if hasattr(finder, "find_spec"):
+                    try:
+                        spec = finder.find_spec(fullname, path, target)
+                        if spec and spec.loader and hasattr(spec.loader, "get_source"):
+                            spec.loader = _FutureAnnotationsPatchLoader(spec.loader)
+                            return spec
+                    except Exception:
+                        continue
+            return None
+        finally:
+            _FINDING.discard(fullname)
 
 
 def install_compat_hook():

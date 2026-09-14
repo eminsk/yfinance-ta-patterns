@@ -109,11 +109,8 @@ jobs:
           Remove-Item -Recurse -Force $testDir -ErrorAction SilentlyContinue
           uv python install ${{ matrix.pypy-version }}
           $pypyExe = uv python find ${{ matrix.pypy-version }}
-          $pypyDir = Split-Path $pypyExe
-          if ("${{ matrix.pypy-version }}" -eq "pypy-3.8") {
-            $env:PYTHONHOME = $pypyDir
-          }
-          uv init --no-workspace $testDir --python ${{ matrix.pypy-version }}
+          & $pypyExe -m venv "$testDir\.venv"
+          uv init --no-workspace $testDir
           Set-Location $testDir
           uv python pin ${{ matrix.pypy-version }}
           uv add "yfinance-ta-patterns[all]==0.3.30" --find-links C:\release_wheels
@@ -151,6 +148,8 @@ jobs:
           uv run python -c "import talib; print('=== talib OK ===', talib.__version__)"
           uv run python -c "import pandas; print('=== pandas OK ===', pandas.__version__)"
           uv run python -c "import rich; print('=== rich OK ===')"
+          uv run python -c "import yfinance; print('=== yfinance OK ===', yfinance.__version__)"
+          uv run python -c "from yfinance_ta_patterns.data import MarketDataLoader; print('=== MarketDataLoader OK ===')"
           uv run python -c "import yfinance_ta_patterns; print('=== yftp OK ===', yfinance_ta_patterns.__version__)"
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Linux ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
