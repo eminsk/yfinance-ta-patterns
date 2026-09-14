@@ -115,6 +115,12 @@ jobs:
           - pypy-version: "pypy3.10"
             pandas-version: "2.2.3"
             talib-version: "0.7.1"
+          - pypy-version: "pypy3.9"
+            pandas-version: "2.2.3"
+            talib-version: "0.7.1"
+          - pypy-version: "pypy3.8"
+            pandas-version: "2.0.3"
+            talib-version: "0.6.4"
 
     steps:
       - uses: actions/checkout@v4
@@ -131,13 +137,18 @@ jobs:
       - name: Install Python build tools
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install numpy cython build wheel delocate meson-python ninja versioneer
+          if [ "${{ matrix.pypy-version }}" = "pypy3.8" ]; then
+            python -m pip install "cython<3.0.0"
+          else
+            python -m pip install cython
+          fi
+          python -m pip install numpy build wheel delocate meson-python ninja versioneer
 
       - name: Build ta-lib wheel
         run: |
           mkdir -p raw_wheels dist
           python -m pip wheel "ta-lib==${{ matrix.talib-version }}" --no-deps --no-build-isolation -w raw_wheels/
-          delocate-wheel -w dist/ -v raw_wheels/ta_lib*.whl
+          delocate-wheel -w dist/ -v raw_wheels/ta_lib*.whl || cp raw_wheels/ta_lib*.whl dist/
 
       - name: Build pandas wheel
         run: |
@@ -159,6 +170,57 @@ jobs:
         with:
           name: wheels-macos-${{ matrix.pypy-version }}
           path: dist/*.whl
+
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload v0.3.30 dist/*.whl --clobber -R eminsk/yfinance-ta-patterns || true
+
+  build-cpython38:
+    name: CPython 3.8 TA-Lib (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential patchelf python3-pip python3-venv pipx
+          curl -fsSL -o ta-lib.deb https://github.com/TA-Lib/ta-lib/releases/download/v0.7.1/ta-lib_0.7.1_amd64.deb
+          sudo dpkg -i ta-lib.deb
+          sudo cp -r /usr/include/ta-lib/* /usr/include/ || true
+          sudo ldconfig
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ta-lib
+
+      - name: Build ta-lib wheel
+        run: |
+          python -m pip install --upgrade pip setuptools wheel "cython<3.0.0" numpy
+          mkdir -p raw_wheels dist
+          python -m pip wheel "ta-lib==0.6.4" --no-deps --no-build-isolation -w raw_wheels/
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            /usr/bin/python3 -m pip install --break-system-packages auditwheel || pipx install auditwheel || true
+            /usr/bin/python3 -m auditwheel repair raw_wheels/ta_lib*.whl -w dist/ || cp raw_wheels/ta_lib*.whl dist/
+          else
+            python -m pip install delocate
+            delocate-wheel -w dist/ -v raw_wheels/ta_lib*.whl || cp raw_wheels/ta_lib*.whl dist/
+          fi
 
       - name: Upload to GitHub Release
         env:
