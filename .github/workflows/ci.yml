@@ -150,7 +150,29 @@ jobs:
           uv run python -c "import pandas; print('=== pandas OK ===', pandas.__version__)"
           uv run python -c "import rich; print('=== rich OK ===')"
           uv run python -c "import yfinance; print('=== yfinance OK ===', yfinance.__version__)"
-          uv run python -X faulthandler -c "print('DEBUG 1: import sys'); import sys; print('DEBUG 2: sys.version', sys.version); import yfinance_ta_patterns; print('DEBUG 3: yftp OK'); from yfinance_ta_patterns.data import MarketDataLoader; print('=== MarketDataLoader OK ===')"
+          uv run python -X faulthandler -c "
+import sys
+print('Step 1: import datetime', flush=True); import datetime
+print('Step 2: import warnings', flush=True); import warnings
+print('Step 3: import typing', flush=True); from typing import Any, cast
+print('Step 4: import numpy', flush=True); import numpy as np
+print('Step 5: import pandas', flush=True); import pandas as pd
+print('Step 6: import pytz', flush=True); import pytz
+print('Step 7: import yfinance', flush=True); import yfinance as yf
+print('Step 8: test yfinance internals', flush=True)
+try:
+    import yfinance.base
+    print('yfinance.base OK', flush=True)
+except Exception as e:
+    print('yfinance.base error:', e, flush=True)
+print('Step 9: import yfinance_ta_patterns.ai', flush=True)
+import yfinance_ta_patterns.ai
+print('Step 10: import yfinance_ta_patterns.data', flush=True)
+import yfinance_ta_patterns.data
+print('Step 11: import yfinance_ta_patterns', flush=True)
+import yfinance_ta_patterns
+print('=== ALL MODULES OK ===', flush=True)
+"
           uv run python -c "import yfinance_ta_patterns; print('=== yftp OK ===', yfinance_ta_patterns.__version__)"
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Linux ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
