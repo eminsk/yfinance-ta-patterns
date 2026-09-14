@@ -161,7 +161,7 @@ jobs:
         run: |
           mkdir -p raw_wheels dist
           python -m pip wheel "ta-lib==${{ matrix.talib-version }}" --no-deps --no-build-isolation -w raw_wheels/
-          delocate-wheel -w dist/ -v raw_wheels/ta_lib*.whl || cp raw_wheels/ta_lib*.whl dist/
+          delocate-wheel --require-archs arm64 -w dist/ -v raw_wheels/*.whl || cp raw_wheels/*.whl dist/
 
       - name: Build pandas wheel
         env:
@@ -173,19 +173,19 @@ jobs:
         run: |
           echo "Building pandas ${{ matrix.pandas-version }} for ${{ matrix.pypy-version }}"
           python -m pip wheel "pandas==${{ matrix.pandas-version }}" --no-deps --no-build-isolation -w raw_wheels/ || true
-          delocate-wheel -w dist/ -v raw_wheels/pandas*.whl || cp raw_wheels/pandas*.whl dist/ || true
+          delocate-wheel --require-archs arm64 -w dist/ -v raw_wheels/pandas*.whl || cp raw_wheels/pandas*.whl dist/ || true
 
       - name: Build curl_cffi wheel
         run: |
           export MACOSX_DEPLOYMENT_TARGET=11.0
           python -m pip wheel "curl-cffi==${{ matrix.curlcffi-version }}" --no-deps -w raw_wheels/ || true
-          delocate-wheel -w dist/ -v raw_wheels/curl_cffi*.whl || cp raw_wheels/curl_cffi*.whl dist/ || true
+          delocate-wheel --require-archs arm64 -w dist/ -v raw_wheels/curl_cffi*.whl || cp raw_wheels/curl_cffi*.whl dist/ || true
 
       - name: Build cffi wheel
         run: |
           export MACOSX_DEPLOYMENT_TARGET=11.0
           python -m pip wheel cffi --no-deps -w raw_wheels/ || true
-          delocate-wheel -w dist/ -v raw_wheels/cffi*.whl || cp raw_wheels/cffi*.whl dist/ || true
+          delocate-wheel --require-archs arm64 -w dist/ -v raw_wheels/cffi*.whl || cp raw_wheels/cffi*.whl dist/ || true
 
       - name: List built wheels
         run: |
@@ -253,7 +253,7 @@ jobs:
             /usr/bin/python3 -m auditwheel repair raw_wheels/ta_lib*.whl -w dist/ || cp raw_wheels/ta_lib*.whl dist/
           else
             python -m pip install delocate
-            delocate-wheel -w dist/ -v raw_wheels/ta_lib*.whl || cp raw_wheels/ta_lib*.whl dist/
+            delocate-wheel --require-archs arm64 -w dist/ -v raw_wheels/*.whl || cp raw_wheels/*.whl dist/
           fi
 
       - name: Upload to GitHub Release
