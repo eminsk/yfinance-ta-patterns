@@ -721,19 +721,19 @@ TIMEFRAME_MAP: dict[str, str] = {
     "MN1": "1mo",
 }
 
-INTERVAL_DELTAS: dict[str, pd.Timedelta] = {
-    "1m": pd.Timedelta(minutes=1),
-    "2m": pd.Timedelta(minutes=2),
-    "5m": pd.Timedelta(minutes=5),
-    "15m": pd.Timedelta(minutes=15),
-    "30m": pd.Timedelta(minutes=30),
-    "60m": pd.Timedelta(hours=1),
-    "1h": pd.Timedelta(hours=1),
-    "90m": pd.Timedelta(minutes=90),
-    "4h": pd.Timedelta(hours=4),
-    "1d": pd.Timedelta("1D"),
-    "5d": pd.Timedelta("5D"),
-    "1wk": pd.Timedelta("7D"),
+INTERVAL_DELTAS: dict[str, datetime.timedelta] = {
+    "1m": datetime.timedelta(minutes=1),
+    "2m": datetime.timedelta(minutes=2),
+    "5m": datetime.timedelta(minutes=5),
+    "15m": datetime.timedelta(minutes=15),
+    "30m": datetime.timedelta(minutes=30),
+    "60m": datetime.timedelta(hours=1),
+    "1h": datetime.timedelta(hours=1),
+    "90m": datetime.timedelta(minutes=90),
+    "4h": datetime.timedelta(hours=4),
+    "1d": datetime.timedelta(days=1),
+    "5d": datetime.timedelta(days=5),
+    "1wk": datetime.timedelta(days=7),
 }
 
 
