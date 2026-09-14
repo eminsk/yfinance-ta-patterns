@@ -38,13 +38,13 @@ jobs:
         run: pytest -v
 
   verify-platforms:
-    name: Verify on ${{ matrix.os }} (py${{ matrix.python-version }})
+    name: Verify [all] on ${{ matrix.os }} (py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.12", "3.13", "3.14"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -58,4 +58,72 @@ jobs:
           cd test_project
           uv add "yfinance-ta-patterns[all]==0.3.30"
           uv run python -c "import talib, pandas, numpy, rich, sklearn, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON ${{ matrix.os }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
+          uv run yftp --version
+
+  verify-windows-315t:
+    name: Verify [all] on windows-latest (py3.15t No-GIL)
+    runs-on: windows-latest
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+
+      - name: Download 3.15 wheels from release
+        run: |
+          gh release download v0.3.30 -D release_wheels -p "*cp315*"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Test uv add yfinance-ta-patterns[all] with 3.15 wheels
+        run: |
+          uv init --no-workspace test_315 --python 3.15t
+          cd test_315
+          uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
+          uv run python -c "import talib, pandas, numpy, rich, sklearn, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Windows 3.15t ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
+          uv run yftp --version
+
+  verify-windows-pypy311:
+    name: Verify [all] on windows-latest (PyPy 3.11)
+    runs-on: windows-latest
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+
+      - name: Download PyPy wheels from release
+        run: |
+          gh release download v0.3.30 -D release_wheels -p "*pp311*"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
+        run: |
+          uv init --no-workspace test_pypy --python pypy3.11
+          cd test_pypy
+          uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
+          uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON PyPy 3.11 ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
+          uv run yftp --version
+
+  verify-base-38:
+    name: Verify base on ${{ matrix.os }} (py3.8)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+
+      - name: Test uv add yfinance-ta-patterns from PyPI
+        shell: bash
+        run: |
+          uv init --no-workspace test_py38 --python 3.8
+          cd test_py38
+          uv add "yfinance-ta-patterns==0.3.30"
+          uv run python -c "import pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON ${{ matrix.os }} (py3.8) ==='); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run yftp --version
