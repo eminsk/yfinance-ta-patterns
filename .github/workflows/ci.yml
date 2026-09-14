@@ -100,7 +100,7 @@ jobs:
 
       - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
         run: |
-          uv init --no-workspace test_pypy
+          uv init --no-workspace test_pypy --python 3.11
           cd test_pypy
           uv python pin pypy-3.11
           uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
