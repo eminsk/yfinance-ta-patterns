@@ -170,8 +170,15 @@ jobs:
 
       - name: Build curl_cffi wheel
         run: |
+          export MACOSX_DEPLOYMENT_TARGET=11.0
           python -m pip wheel "curl-cffi==${{ matrix.curlcffi-version }}" --no-deps -w raw_wheels/ || true
           delocate-wheel -w dist/ -v raw_wheels/curl_cffi*.whl || cp raw_wheels/curl_cffi*.whl dist/ || true
+
+      - name: Build cffi wheel
+        run: |
+          export MACOSX_DEPLOYMENT_TARGET=11.0
+          python -m pip wheel cffi --no-deps -w raw_wheels/ || true
+          delocate-wheel -w dist/ -v raw_wheels/cffi*.whl || cp raw_wheels/cffi*.whl dist/ || true
 
       - name: List built wheels
         run: |

@@ -103,13 +103,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
-        env:
-          UV_PYTHON_INSTALL_DIR: ${{ runner.temp }}/uv-python
         run: |
-          uv init --no-workspace test_pypy --python ${{ matrix.pypy-version }}
-          cd test_pypy
+          Copy-Item -Recurse -Force release_wheels C:\release_wheels
+          $testDir = "C:\test_pypy"
+          Remove-Item -Recurse -Force $testDir -ErrorAction SilentlyContinue
+          uv init --no-workspace $testDir --python ${{ matrix.pypy-version }}
+          Set-Location $testDir
           uv python pin ${{ matrix.pypy-version }}
-          uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
+          uv add "yfinance-ta-patterns[all]==0.3.30" --find-links C:\release_wheels
           try { uv run python -c "import dateutil.tz.win as w; p = w.__file__; open(p, 'w').write(open(p).read().replace('self._tzres._handle', 'int(self._tzres._handle)'))" } catch {}
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Windows ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
@@ -164,6 +165,8 @@ jobs:
 
       - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
         shell: bash
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
         run: |
           uv init --no-workspace test_pypy --python ${{ matrix.pypy-version }}
           cd test_pypy
@@ -187,9 +190,7 @@ jobs:
 
       - name: Download 3.8 wheels from release
         run: |
-          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*cp38*" || true
-          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*manylinux*" || true
-          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*macosx*" || true
+          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*ta_lib*cp38*" || true
         env:
           GH_TOKEN: ${{ github.token }}
 
