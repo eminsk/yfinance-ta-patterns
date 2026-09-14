@@ -219,7 +219,9 @@ jobs:
             echo "Building pandas 2.0.3 wheel for macOS PyPy 3.8..."
             uv python install pypy-3.8
             pypyExe=$(uv python find pypy-3.8)
+            "$pypyExe" -m ensurepip || true
             "$pypyExe" -m pip install --upgrade "pip>=23.3,<24.1" setuptools wheel "cython<3.0.0" build delocate || true
+
             "$pypyExe" -m pip install --find-links release_wheels "numpy<2" || true
             mkdir -p /tmp/pandas_src /tmp/raw_wheels
             "$pypyExe" -m pip download --no-deps "pandas==2.0.3" -d /tmp/pandas_src

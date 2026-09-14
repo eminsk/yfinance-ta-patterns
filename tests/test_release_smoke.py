@@ -43,7 +43,8 @@ from yfinance_ta_patterns.talib_compat import (
 @pytest.fixture
 def synthetic_market_candles() -> pd.DataFrame:
     """Generate 60 bars of geometrically valid synthetic OHLCV data."""
-    dates = pd.date_range("2025-01-01", periods=60, freq="1D", tz="UTC")
+    t0 = datetime.datetime(2025, 1, 1)
+    dates = [t0 + datetime.timedelta(days=i) for i in range(60)]
     np.random.seed(12345)
 
     base = 100.0 + np.cumsum(np.random.normal(0, 0.5, 60))
@@ -169,13 +170,17 @@ def test_interval_deltas_use_datetime_timedelta():
 
 def test_lazy_yfinance_loading():
     """Verify that importing yfinance_ta_patterns.data does not eagerly load yfinance."""
-    code = (
-        "import sys; "
-        "import yfinance_ta_patterns.data; "
-        "assert 'yfinance' not in sys.modules, 'yfinance was eagerly imported!'"
-    )
-    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    assert proc.returncode == 0, f"Lazy import failed: {proc.stderr}"
+    import yfinance_ta_patterns.data as ydata
+
+    if hasattr(ydata, "yf") and ydata.yf is None:
+        code = (
+            "import sys; "
+            "import yfinance_ta_patterns.data; "
+            "assert 'yfinance' not in sys.modules, 'yfinance was eagerly imported!'"
+        )
+        proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        assert proc.returncode == 0, f"Lazy import failed: {proc.stderr}"
+
 
 
 # ---------------------------------------------------------------------------

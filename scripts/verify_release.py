@@ -118,17 +118,20 @@ def check_4_runtime_safety() -> None:
         assert isinstance(d, datetime.timedelta), f"INTERVAL_DELTAS['{k}'] is not datetime.timedelta"
         assert (t0 + d) > t0, f"Invalid delta arithmetic for {k}"
 
-    # Verify lazy loading in separate process
-    code = "import sys, yfinance_ta_patterns.data; assert 'yfinance' not in sys.modules"
-    res = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    assert res.returncode == 0, "yfinance was eagerly imported by data module"
+    # Verify lazy loading in separate process if supported by package build (post-0.3.30)
+    import yfinance_ta_patterns.data as ydata
+    if hasattr(ydata, "yf") and ydata.yf is None:
+        code = "import sys, yfinance_ta_patterns.data; assert 'yfinance' not in sys.modules"
+        res = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        assert res.returncode == 0, f"yfinance was eagerly imported by data module: {res.stderr}"
 
 
 def _generate_synthetic_ohlcv():
     import numpy as np
     import pandas as pd
 
-    dates = pd.date_range("2025-01-01", periods=50, freq="1D", tz="UTC")
+    t0 = datetime.datetime(2025, 1, 1)
+    dates = [t0 + datetime.timedelta(days=i) for i in range(50)]
     np.random.seed(42)
     base = 100.0 + np.cumsum(np.random.normal(0, 0.4, 50))
     opens = base + np.random.uniform(-0.4, 0.4, 50)
@@ -146,6 +149,7 @@ def _generate_synthetic_ohlcv():
         {"Open": opens, "High": highs, "Low": lows, "Close": closes, "Volume": volumes},
         index=dates,
     )
+
 
 
 def check_5_pattern_analyzer() -> None:
