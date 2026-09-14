@@ -100,8 +100,9 @@ jobs:
 
       - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
         run: |
-          uv init --no-workspace test_pypy --python pypy3.11
+          uv init --no-workspace test_pypy
           cd test_pypy
+          uv python pin pypy-3.11
           uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON PyPy 3.11 ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run yftp --version
