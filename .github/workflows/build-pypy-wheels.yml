@@ -41,7 +41,7 @@ jobs:
 
       - name: Build and install TA-Lib C library
         run: |
-          curl -fsSL --retry 5 --retry-connrefused -o ta-lib-0.4.0-src.tar.gz https://github.com/ta-lib/ta-lib/releases/download/v0.4.0/ta-lib-0.4.0-src.tar.gz
+          curl -fsSL -o ta-lib-0.4.0-src.tar.gz https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.30/ta-lib-0.4.0-src.tar.gz
           tar -xzf ta-lib-0.4.0-src.tar.gz
           cd ta-lib
           ./configure --prefix=/usr
