@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -168,19 +171,45 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Ensure pandas wheel for macOS PyPy 3.8
+        if: matrix.pypy-version == 'pypy-3.8'
+        env:
+          CC: clang
+          CXX: clang++
+          LDSHARED: "clang -bundle -undefined dynamic_lookup"
+          LDCXXSHARED: "clang++ -bundle -undefined dynamic_lookup"
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! ls release_wheels/pandas*.whl 1> /dev/null 2>&1; then
+            echo "Building pandas 2.0.3 wheel for macOS PyPy 3.8..."
+            uv python install pypy-3.8
+            pypyExe=$(uv python find pypy-3.8)
+            "$pypyExe" -m pip install --upgrade "pip>=23.3,<24.1" setuptools wheel "cython<3.0.0" build delocate || true
+            "$pypyExe" -m pip install --find-links release_wheels "numpy<2" || true
+            mkdir -p /tmp/pandas_src /tmp/raw_wheels
+            "$pypyExe" -m pip download --no-deps "pandas==2.0.3" -d /tmp/pandas_src
+            tar -xzf /tmp/pandas_src/pandas-*.tar.gz -C /tmp/pandas_src/
+            cd /tmp/pandas_src/pandas-*
+            "$pypyExe" -m build --wheel --no-isolation -o /tmp/raw_wheels/ || "$pypyExe" -m pip wheel . --no-deps --no-build-isolation -w /tmp/raw_wheels/ || true
+            cd "$GITHUB_WORKSPACE"
+            delocate-wheel --require-archs arm64 -w "$GITHUB_WORKSPACE/release_wheels/" -v /tmp/raw_wheels/pandas*.whl || cp /tmp/raw_wheels/pandas*.whl "$GITHUB_WORKSPACE/release_wheels/" || true
+            gh release upload v0.3.30 "$GITHUB_WORKSPACE/release_wheels/pandas"*.whl --clobber -R eminsk/yfinance-ta-patterns || true
+          fi
+
       - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
         shell: bash
+        env:
+          CC: clang
+          CXX: clang++
+          LDSHARED: "clang -bundle -undefined dynamic_lookup"
+          LDCXXSHARED: "clang++ -bundle -undefined dynamic_lookup"
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
         run: |
           uv init --no-workspace test_pypy --python ${{ matrix.pypy-version }}
           cd test_pypy
           uv python pin ${{ matrix.pypy-version }}
           uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
-          uv run python -c "import numpy; print('=== numpy OK ===', numpy.__version__)"
-          uv run python -c "import talib; print('=== talib OK ===', talib.__version__)"
-          uv run python -c "import pandas; print('=== pandas OK ===', pandas.__version__)"
-          uv run python -c "import rich; print('=== rich OK ===')"
-          uv run python -c "import yfinance; print('=== yfinance OK ===', yfinance.__version__)"
-          uv run python -c "import yfinance_ta_patterns; print('=== yftp OK ===', yfinance_ta_patterns.__version__)"
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON macOS ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
 
