@@ -144,12 +144,13 @@ jobs:
           cd test_pypy
           uv python pin ${{ matrix.pypy-version }}
           uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
+          export PYTHONFAULTHANDLER=1
           uv run python -c "import numpy; print('=== numpy OK ===', numpy.__version__)"
           uv run python -c "import talib; print('=== talib OK ===', talib.__version__)"
           uv run python -c "import pandas; print('=== pandas OK ===', pandas.__version__)"
           uv run python -c "import rich; print('=== rich OK ===')"
           uv run python -c "import yfinance; print('=== yfinance OK ===', yfinance.__version__)"
-          uv run python -c "from yfinance_ta_patterns.data import MarketDataLoader; print('=== MarketDataLoader OK ===')"
+          uv run python -X faulthandler -c "print('DEBUG 1: import sys'); import sys; print('DEBUG 2: sys.version', sys.version); import yfinance_ta_patterns; print('DEBUG 3: yftp OK'); from yfinance_ta_patterns.data import MarketDataLoader; print('=== MarketDataLoader OK ===')"
           uv run python -c "import yfinance_ta_patterns; print('=== yftp OK ===', yfinance_ta_patterns.__version__)"
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Linux ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
