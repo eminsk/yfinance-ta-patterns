@@ -1,0 +1,152 @@
+name: Build PyPy Wheels
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'build-wheels-*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux-pypy:
+    name: Linux PyPy (${{ matrix.pypy-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pypy-version: "pypy3.11"
+            pandas-version: "3.0.5"
+          - pypy-version: "pypy3.10"
+            pandas-version: "2.2.3"
+          - pypy-version: "pypy3.9"
+            pandas-version: "2.2.3"
+          - pypy-version: "pypy3.8"
+            pandas-version: "2.0.3"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PyPy ${{ matrix.pypy-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.pypy-version }}
+
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential patchelf libcurl4-openssl-dev
+
+      - name: Build and install TA-Lib C library
+        run: |
+          curl -fsSL -o ta-lib-0.4.0-src.tar.gz https://github.com/ta-lib/ta-lib/releases/download/v0.4.0/ta-lib-0.4.0-src.tar.gz
+          tar -xzf ta-lib-0.4.0-src.tar.gz
+          cd ta-lib
+          ./configure --prefix=/usr
+          make -j$(nproc)
+          sudo make install
+          cd ..
+
+      - name: Install Python build tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy<2.0.0" cython build wheel auditwheel meson-python ninja
+
+      - name: Build ta-lib wheel
+        run: |
+          mkdir -p raw_wheels dist
+          python -m pip wheel ta-lib==0.7.1 --no-deps -w raw_wheels/
+          auditwheel repair raw_wheels/ta_lib*.whl -w dist/
+
+      - name: Build pandas wheel
+        run: |
+          echo "Building pandas ${{ matrix.pandas-version }} for ${{ matrix.pypy-version }}"
+          python -m pip wheel "pandas==${{ matrix.pandas-version }}" --no-deps -w raw_wheels/ || true
+          auditwheel repair raw_wheels/pandas*.whl -w dist/ || cp raw_wheels/pandas*.whl dist/ || true
+
+      - name: Build curl_cffi wheel
+        run: |
+          python -m pip wheel curl-cffi==0.16.3 --no-deps -w raw_wheels/ || true
+          auditwheel repair raw_wheels/curl_cffi*.whl -w dist/ || cp raw_wheels/curl_cffi*.whl dist/ || true
+
+      - name: List built wheels
+        run: |
+          ls -la dist/
+
+      - name: Upload wheel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.pypy-version }}
+          path: dist/*.whl
+
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload v0.3.30 dist/*.whl --clobber -R eminsk/yfinance-ta-patterns || true
+
+  build-macos-pypy:
+    name: macOS ARM64 PyPy (${{ matrix.pypy-version }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pypy-version: "pypy3.11"
+            pandas-version: "3.0.5"
+          - pypy-version: "pypy3.10"
+            pandas-version: "2.2.3"
+          - pypy-version: "pypy3.9"
+            pandas-version: "2.2.3"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install TA-Lib via Homebrew
+        run: |
+          brew install ta-lib
+
+      - name: Set up PyPy ${{ matrix.pypy-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.pypy-version }}
+
+      - name: Install Python build tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy<2.0.0" cython build wheel delocate meson-python ninja
+
+      - name: Build ta-lib wheel
+        run: |
+          mkdir -p raw_wheels dist
+          python -m pip wheel ta-lib==0.7.1 --no-deps -w raw_wheels/
+          delocate-wheel -w dist/ -v raw_wheels/ta_lib*.whl
+
+      - name: Build pandas wheel
+        run: |
+          echo "Building pandas ${{ matrix.pandas-version }} for ${{ matrix.pypy-version }}"
+          python -m pip wheel "pandas==${{ matrix.pandas-version }}" --no-deps -w raw_wheels/ || true
+          delocate-wheel -w dist/ -v raw_wheels/pandas*.whl || cp raw_wheels/pandas*.whl dist/ || true
+
+      - name: Build curl_cffi wheel
+        run: |
+          python -m pip wheel curl-cffi==0.16.3 --no-deps -w raw_wheels/ || true
+          delocate-wheel -w dist/ -v raw_wheels/curl_cffi*.whl || cp raw_wheels/curl_cffi*.whl dist/ || true
+
+      - name: List built wheels
+        run: |
+          ls -la dist/
+
+      - name: Upload wheel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.pypy-version }}
+          path: dist/*.whl
+
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload v0.3.30 dist/*.whl --clobber -R eminsk/yfinance-ta-patterns || true
