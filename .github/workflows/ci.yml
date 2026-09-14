@@ -40,6 +40,10 @@ jobs:
       - name: Run tests (pytest)
         run: pytest -v
 
+      - name: Run release verification script
+        run: python scripts/verify_release.py
+
+
   verify-platforms:
     name: Verify [all] on ${{ matrix.os }} (py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
@@ -49,6 +53,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
+      - uses: actions/checkout@v4
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -62,11 +68,15 @@ jobs:
           uv add "yfinance-ta-patterns[all]==0.3.30"
           uv run python -c "import talib, pandas, numpy, rich, sklearn, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON ${{ matrix.os }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run yftp --version
+          uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
+
 
   verify-windows-315t:
     name: Verify [all] on windows-latest (py3.15t No-GIL)
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -89,6 +99,7 @@ jobs:
           uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
           uv run python -c "import talib, pandas, numpy, rich, sklearn, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Windows 3.15t ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run yftp --version
+          uv run python "$env:GITHUB_WORKSPACE\scripts\verify_release.py"
 
   verify-windows-pypy:
     name: Verify [all] on windows-latest (${{ matrix.pypy-version }})
@@ -98,6 +109,8 @@ jobs:
       matrix:
         pypy-version: ["pypy-3.11", "pypy-3.10", "pypy-3.9", "pypy-3.8"]
     steps:
+      - uses: actions/checkout@v4
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -128,6 +141,8 @@ jobs:
           try { uv run python -c "import dateutil.tz.win as w; p = w.__file__; open(p, 'w').write(open(p).read().replace('self._tzres._handle', 'int(self._tzres._handle)'))" } catch {}
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Windows ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
+          uv run python "$env:GITHUB_WORKSPACE\scripts\verify_release.py"
+
 
   verify-linux-pypy:
     name: Verify [all] on ubuntu-latest (${{ matrix.pypy-version }})
@@ -137,6 +152,8 @@ jobs:
       matrix:
         pypy-version: ["pypy-3.11", "pypy-3.10", "pypy-3.9", "pypy-3.8"]
     steps:
+      - uses: actions/checkout@v4
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -162,6 +179,7 @@ jobs:
           uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Linux ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
+          uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
 
   verify-macos-pypy:
     name: Verify [all] on macos-latest (${{ matrix.pypy-version }})
@@ -171,6 +189,8 @@ jobs:
       matrix:
         pypy-version: ["pypy-3.11", "pypy-3.10", "pypy-3.9", "pypy-3.8"]
     steps:
+      - uses: actions/checkout@v4
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -226,6 +246,8 @@ jobs:
           uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON macOS ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
+          uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
+
 
   verify-38-all:
     name: Verify [all] on ${{ matrix.os }} (py3.8)
@@ -235,6 +257,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
+      - uses: actions/checkout@v4
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -254,3 +278,5 @@ jobs:
           uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON ${{ matrix.os }} (py3.8) ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run yftp --version
+          uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
+
