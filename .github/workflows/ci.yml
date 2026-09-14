@@ -36,3 +36,26 @@ jobs:
 
       - name: Run tests (pytest)
         run: pytest -v
+
+  verify-platforms:
+    name: Verify on ${{ matrix.os }} (py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+
+      - name: Test uv add yfinance-ta-patterns[all] from PyPI
+        shell: bash
+        run: |
+          uv init --no-workspace test_project --python ${{ matrix.python-version }}
+          cd test_project
+          uv add "yfinance-ta-patterns[all]==0.3.30"
+          uv run python -c "import talib, pandas, numpy, rich, sklearn, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON ${{ matrix.os }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
+          uv run yftp --version
