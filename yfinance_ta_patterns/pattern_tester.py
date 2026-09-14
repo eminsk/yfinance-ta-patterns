@@ -489,11 +489,40 @@ class PatternRankingTester:
         self._fx_history: dict[str, pd.Series] | pd.DataFrame | None = fx_history
         self._strict_fx: bool = strict_fx
         self._used_approx_fx: bool = False
-        self._max_fx_staleness: pd.Timedelta | None = (
-            pd.Timedelta(max_fx_staleness)
-            if isinstance(max_fx_staleness, str)
-            else max_fx_staleness
+
+        def _parse_staleness(val: Any) -> datetime.timedelta | pd.Timedelta | None:
+
+            if val is None:
+                return None
+            if isinstance(val, (datetime.timedelta, pd.Timedelta)):
+                return val
+            if isinstance(val, str):
+                s = val.strip()
+                if s.upper().endswith("D"):
+                    try:
+                        return datetime.timedelta(days=float(s[:-1]))
+                    except ValueError:
+                        pass
+                elif s.upper().endswith("H"):
+                    try:
+                        return datetime.timedelta(hours=float(s[:-1]))
+                    except ValueError:
+                        pass
+                elif s.upper().endswith("M"):
+                    try:
+                        return datetime.timedelta(minutes=float(s[:-1]))
+                    except ValueError:
+                        pass
+                try:
+                    return pd.Timedelta(s)
+                except Exception:
+                    return datetime.timedelta(days=7)
+            return val
+
+        self._max_fx_staleness: datetime.timedelta | pd.Timedelta | None = _parse_staleness(
+            max_fx_staleness
         )
+
         self._asset_type: str = validate_asset_type(asset_type)
         self._sharpe_mode: str = sharpe_mode
         self._holding_period: int | None = holding_period
