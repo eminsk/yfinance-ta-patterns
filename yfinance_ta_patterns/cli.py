@@ -266,10 +266,11 @@ def run_cli(args: argparse.Namespace) -> int:
     symbol_input = args.symbol or getattr(args, "symbol_alias", None)
     symbols = resolve_symbols(symbol_input, getattr(args, "all_pairs", False))
 
-    if args.min_confidence is None:
-        min_confidence = 0.55 if len(symbols) > 1 else 0.0
-    else:
-        min_confidence = float(args.min_confidence)
+    min_confidence: float = (
+        float(args.min_confidence)
+        if args.min_confidence is not None
+        else (0.55 if len(symbols) > 1 else 0.0)
+    )
 
     if args.date and (args.start_date or args.end_date):
         raise ValueError("Use either --date or --start-date/--end-date, not both.")
@@ -369,7 +370,7 @@ def run_cli(args: argparse.Namespace) -> int:
                         clean_pat = pat.replace("CDL", "")
                         if scorer:
                             res = scorer.score_signal(pat, ts, signal_val)
-                            score = res.confidence_score
+                            score = res.confidence
                             if score >= min_confidence:
                                 setup = res.trade_setup
                                 grade_label = (
