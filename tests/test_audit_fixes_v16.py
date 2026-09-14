@@ -158,3 +158,21 @@ def test_multithreaded_pattern_analysis_no_gil() -> None:
     assert len(results) == 30
     for r in results:
         assert isinstance(r, int)
+
+
+# ==============================================================================
+# 4. Out-of-the-box Rich terminal UI library availability test
+# ==============================================================================
+def test_rich_dependency_available() -> None:
+    """Verify rich terminal UI library is available out-of-the-box for console rendering."""
+    import rich
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console()
+    table = Table(title="Test Table")
+    table.add_column("Col")
+    table.add_row("Val")
+    assert console is not None
+    assert table is not None
+
