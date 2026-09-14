@@ -74,7 +74,11 @@ jobs:
 
       - name: Download 3.15 wheels from release
         run: |
-          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*cp315*" -p "*yfinance_ta_patterns*"
+          for ($i = 1; $i -le 3; $i++) {
+            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*cp315*" -p "*yfinance_ta_patterns*"
+            if ($LASTEXITCODE -eq 0) { break }
+            Start-Sleep -Seconds 3
+          }
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -101,7 +105,11 @@ jobs:
 
       - name: Download PyPy wheels from release
         run: |
-          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*win*" -p "*yfinance_ta_patterns*"
+          for ($i = 1; $i -le 3; $i++) {
+            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*win*" -p "*yfinance_ta_patterns*"
+            if ($LASTEXITCODE -eq 0) { break }
+            Start-Sleep -Seconds 3
+          }
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -135,8 +143,11 @@ jobs:
           enable-cache: false
 
       - name: Download PyPy wheels from release
+        shell: bash
         run: |
-          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*linux*" -p "*yfinance_ta_patterns*"
+          for i in 1 2 3; do
+            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*linux*" -p "*yfinance_ta_patterns*" && break || sleep 3
+          done
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -166,8 +177,11 @@ jobs:
           enable-cache: false
 
       - name: Download PyPy wheels from release
+        shell: bash
         run: |
-          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*macosx*" -p "*yfinance_ta_patterns*"
+          for i in 1 2 3; do
+            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*macosx*" -p "*yfinance_ta_patterns*" && break || sleep 3
+          done
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -181,7 +195,7 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: "11.0"
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! ls release_wheels/pandas*.whl 1> /dev/null 2>&1; then
+          if ! ls release_wheels/pandas*pp38*.whl 1> /dev/null 2>&1; then
             echo "Building pandas 2.0.3 wheel for macOS PyPy 3.8..."
             uv python install pypy-3.8
             pypyExe=$(uv python find pypy-3.8)
@@ -194,7 +208,7 @@ jobs:
             "$pypyExe" -m build --wheel --no-isolation -o /tmp/raw_wheels/ || "$pypyExe" -m pip wheel . --no-deps --no-build-isolation -w /tmp/raw_wheels/ || true
             cd "$GITHUB_WORKSPACE"
             delocate-wheel --require-archs arm64 -w "$GITHUB_WORKSPACE/release_wheels/" -v /tmp/raw_wheels/pandas*.whl || cp /tmp/raw_wheels/pandas*.whl "$GITHUB_WORKSPACE/release_wheels/" || true
-            gh release upload v0.3.30 "$GITHUB_WORKSPACE/release_wheels/pandas"*.whl --clobber -R eminsk/yfinance-ta-patterns || true
+            gh release upload v0.3.30 "$GITHUB_WORKSPACE/release_wheels/pandas"*pp38*.whl --clobber -R eminsk/yfinance-ta-patterns || true
           fi
 
       - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
