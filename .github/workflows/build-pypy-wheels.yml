@@ -41,7 +41,7 @@ jobs:
       - name: Install system build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential patchelf libcurl4-openssl-dev
+          sudo apt-get install -y build-essential patchelf libcurl4-openssl-dev python3-pip python3-venv pipx
 
       - name: Install TA-Lib C library (v0.7.1)
         run: |
@@ -59,7 +59,7 @@ jobs:
             python -m pip install cython
           fi
           python -m pip install numpy build wheel meson-python ninja versioneer
-          python3 -m pip install auditwheel || true
+          /usr/bin/python3 -m pip install --break-system-packages auditwheel || pipx install auditwheel || true
 
       - name: Build ta-lib wheel
         env:
@@ -68,7 +68,7 @@ jobs:
         run: |
           mkdir -p raw_wheels dist
           python -m pip wheel "ta-lib==${{ matrix.talib-version }}" --no-deps --no-build-isolation -w raw_wheels/
-          python3 -m auditwheel repair raw_wheels/ta_lib*.whl -w dist/ || auditwheel repair raw_wheels/ta_lib*.whl -w dist/ || cp raw_wheels/ta_lib*.whl dist/
+          /usr/bin/python3 -m auditwheel repair raw_wheels/ta_lib*.whl -w dist/ || pipx run auditwheel repair raw_wheels/ta_lib*.whl -w dist/ || cp raw_wheels/ta_lib*.whl dist/
 
       - name: Build pandas wheel
         env:
@@ -79,12 +79,12 @@ jobs:
         run: |
           echo "Building pandas ${{ matrix.pandas-version }} for ${{ matrix.pypy-version }}"
           python -m pip wheel "pandas==${{ matrix.pandas-version }}" --no-deps --no-build-isolation -w raw_wheels/ || true
-          python3 -m auditwheel repair raw_wheels/pandas*.whl -w dist/ || auditwheel repair raw_wheels/pandas*.whl -w dist/ || cp raw_wheels/pandas*.whl dist/ || true
+          /usr/bin/python3 -m auditwheel repair raw_wheels/pandas*.whl -w dist/ || pipx run auditwheel repair raw_wheels/pandas*.whl -w dist/ || cp raw_wheels/pandas*.whl dist/ || true
 
       - name: Build curl_cffi wheel
         run: |
           python -m pip wheel curl-cffi==0.16.3 --no-deps -w raw_wheels/ || true
-          python3 -m auditwheel repair raw_wheels/curl_cffi*.whl -w dist/ || auditwheel repair raw_wheels/curl_cffi*.whl -w dist/ || cp raw_wheels/curl_cffi*.whl dist/ || true
+          /usr/bin/python3 -m auditwheel repair raw_wheels/curl_cffi*.whl -w dist/ || pipx run auditwheel repair raw_wheels/curl_cffi*.whl -w dist/ || cp raw_wheels/curl_cffi*.whl dist/ || true
 
       - name: List built wheels
         run: |
