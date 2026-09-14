@@ -86,6 +86,8 @@ jobs:
   verify-windows-pypy:
     name: Verify [all] on windows-latest (${{ matrix.pypy-version }})
     runs-on: windows-latest
+    env:
+      UV_PYTHON_INSTALL_DIR: ${{ runner.temp }}/uv-python
     strategy:
       fail-fast: false
       matrix:
@@ -108,7 +110,7 @@ jobs:
           cd test_pypy
           uv python pin ${{ matrix.pypy-version }}
           uv add "yfinance-ta-patterns[all]==0.3.30" --find-links ../release_wheels
-          uv run python -c "import dateutil.tz.win as w; p = w.__file__; open(p, 'w').write(open(p).read().replace('self._tzres._handle', 'int(self._tzres._handle)'))"
+          uv run python -c "try: import dateutil.tz.win as w; p = w.__file__; open(p, 'w').write(open(p).read().replace('self._tzres._handle', 'int(self._tzres._handle)'))`nexcept Exception: pass"
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Windows ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
 
@@ -186,6 +188,8 @@ jobs:
       - name: Download 3.8 wheels from release
         run: |
           gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*cp38*" || true
+          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*manylinux*" || true
+          gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*macosx*" || true
         env:
           GH_TOKEN: ${{ github.token }}
 

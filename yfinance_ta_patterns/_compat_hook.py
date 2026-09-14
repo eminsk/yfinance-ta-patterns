@@ -18,9 +18,36 @@ class _FutureAnnotationsPatchLoader(importlib.abc.Loader):
     def __init__(self, original_loader):
         self.original_loader = original_loader
 
+    def __getattr__(self, name):
+        return getattr(self.original_loader, name)
+
     def create_module(self, spec):
         if hasattr(self.original_loader, "create_module"):
             return self.original_loader.create_module(spec)
+        return None
+
+    def get_source(self, fullname):
+        if hasattr(self.original_loader, "get_source"):
+            return self.original_loader.get_source(fullname)
+        return None
+
+    def get_filename(self, fullname):
+        if hasattr(self.original_loader, "get_filename"):
+            return self.original_loader.get_filename(fullname)
+        return None
+
+    def get_code(self, fullname):
+        try:
+            source = self.get_source(fullname)
+            if source is not None:
+                if "from __future__ import annotations" not in source:
+                    source = "from __future__ import annotations\n" + source
+                filename = self.get_filename(fullname) or "<string>"
+                return compile(source, filename, "exec")
+        except Exception:
+            pass
+        if hasattr(self.original_loader, "get_code"):
+            return self.original_loader.get_code(fullname)
         return None
 
     def exec_module(self, module):
@@ -44,11 +71,9 @@ class _FutureAnnotationsPatchLoader(importlib.abc.Loader):
 
 
 class _CompatMetaPathFinder(importlib.abc.MetaPathFinder):
-    # Target modules known to contain PEP 604 annotations breaking Python 3.8
-    TARGET_PREFIXES = ("yfinance",)
-
+    # Target yfinance modules known to contain PEP 604 annotations breaking Python 3.8
     def find_spec(self, fullname, path, target=None):
-        if not fullname.startswith(self.TARGET_PREFIXES):
+        if not (fullname == "yfinance" or fullname.startswith("yfinance.")):
             return None
 
         for finder in sys.meta_path:
