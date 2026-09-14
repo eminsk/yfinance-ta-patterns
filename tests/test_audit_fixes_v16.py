@@ -173,6 +173,7 @@ def test_rich_dependency_available() -> None:
     table = Table(title="Test Table")
     table.add_column("Col")
     table.add_row("Val")
+    assert rich is not None
     assert console is not None
     assert table is not None
 
