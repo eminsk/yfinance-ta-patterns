@@ -290,6 +290,19 @@ class PatternResult:
     fx_source: str = "same_currency"
 
 
+def _safe_get_time(times: Any, idx: int | None) -> Any:
+    """Safely retrieve timestamp from index without crashing on PyPy/Cython tslibs limitations."""
+    if idx is None or times is None:
+        return None
+    try:
+      n = len(times)
+      if -n <= idx < n:
+        return times[idx]
+    except (AttributeError, Exception):
+      return None
+    return None
+
+
 class PatternRankingTester:
     """Test all candlestick patterns and rank them by performance.
 
@@ -548,12 +561,16 @@ class PatternRankingTester:
             as_of = None
             d_range = None
             if hasattr(self._data.index, "max") and len(self._data) > 0:
-                first_ts = self._data.index.min()
-                last_ts = self._data.index.max()
-                if hasattr(last_ts, "date"):
-                    as_of = last_ts.date()
-                if hasattr(first_ts, "date") and hasattr(last_ts, "date"):
-                    d_range = (first_ts.date(), last_ts.date())
+                try:
+                    first_ts = self._data.index.min()
+                    last_ts = self._data.index.max()
+                    if hasattr(last_ts, "date"):
+                        as_of = last_ts.date()
+                    if hasattr(first_ts, "date") and hasattr(last_ts, "date"):
+                        d_range = (first_ts.date(), last_ts.date())
+                except (AttributeError, Exception):
+                    as_of = None
+                    d_range = None
             self._periods_per_year = resolve_periods_per_year(
                 self._timeframe,
                 self._symbol,
@@ -964,9 +981,11 @@ class PatternRankingTester:
         # Filter by news if requested
         if filter_news and self._news_dates:
             for i in range(len(signals)):
-                date_str = self._data.index[i].strftime("%Y-%m-%d")
-                if date_str in self._news_dates:
-                    signals[i] = 0
+                idx_time = _safe_get_time(self._data.index, i)
+                if idx_time is not None:
+                    date_str = idx_time.strftime("%Y-%m-%d") if hasattr(idx_time, "strftime") else str(idx_time)[:10]
+                    if date_str in self._news_dates:
+                        signals[i] = 0
 
         # Calculate trades
         trades = self._calculate_trades(signals)
@@ -1030,8 +1049,9 @@ class PatternRankingTester:
                     raw_unrealized = units * (curr_p - entry_p)
                 else:
                     raw_unrealized = units * (entry_p - curr_p)
+                exit_time_val = _safe_get_time(times, b) if self._fx_history is not None else None
                 unrealized = self._convert_pnl_to_account_currency(
-                    raw_unrealized, curr_p, exit_time=times[b]
+                    raw_unrealized, curr_p, exit_time=exit_time_val
                 )
                 bar_equity[b] = cash + unrealized
             else:
@@ -1173,8 +1193,8 @@ class PatternRankingTester:
         for i in range(loop_limit):
             exec_price = opens[i + 1] if is_next_open else closes[i]
             exec_idx = (i + 1) if is_next_open else i
-            entry_time_curr = times[exec_idx]
-            if not isinstance(entry_time_curr, pd.Timestamp):
+            entry_time_curr = _safe_get_time(times, exec_idx)
+            if entry_time_curr is not None and not isinstance(entry_time_curr, pd.Timestamp):
                 try:
                     entry_time_curr = pd.to_datetime(entry_time_curr)
                 except Exception:
@@ -1195,15 +1215,16 @@ class PatternRankingTester:
                     eff_exit = exec_price + self._slippage
                     raw_pnl = (-position) * (entry_price - eff_exit)
                     direction = "SHORT"
+                exit_time_val = _safe_get_time(times, exec_idx) if self._fx_history is not None else None
                 conv_pnl, fx_rate, fx_src = self._convert_pnl_with_source(
-                    raw_pnl, exec_price, exit_time=times[exec_idx]
+                    raw_pnl, exec_price, exit_time=exit_time_val
                 )
                 pnl = conv_pnl - self._commission
                 trades.append(
                     {
                         "entry_idx": entry_idx,
-                        "entry_time": times[entry_idx],
-                        "exit_time": times[exec_idx],
+                        "entry_time": _safe_get_time(times, entry_idx),
+                        "exit_time": _safe_get_time(times, exec_idx),
                         "exit_idx": exec_idx,
                         "direction": direction,
                         "position": abs(position),
@@ -1228,15 +1249,16 @@ class PatternRankingTester:
                 if position < 0.0 and entry_idx is not None:
                     eff_exit = exec_price + self._slippage
                     raw_pnl = (-position) * (entry_price - eff_exit)
+                    exit_time_val = _safe_get_time(times, exec_idx) if self._fx_history is not None else None
                     conv_pnl, fx_rate, fx_src = self._convert_pnl_with_source(
-                        raw_pnl, exec_price, exit_time=times[exec_idx]
+                        raw_pnl, exec_price, exit_time=exit_time_val
                     )
                     pnl = conv_pnl - self._commission
                     trades.append(
                         {
                             "entry_idx": entry_idx,
-                            "entry_time": times[entry_idx],
-                            "exit_time": times[exec_idx],
+                            "entry_time": _safe_get_time(times, entry_idx),
+                            "exit_time": _safe_get_time(times, exec_idx),
                             "exit_idx": exec_idx,
                             "direction": "SHORT",
                             "position": abs(position),
@@ -1261,15 +1283,16 @@ class PatternRankingTester:
                 if position > 0.0 and entry_idx is not None:
                     eff_exit = exec_price - self._slippage
                     raw_pnl = position * (eff_exit - entry_price)
+                    exit_time_val = _safe_get_time(times, exec_idx) if self._fx_history is not None else None
                     conv_pnl, fx_rate, fx_src = self._convert_pnl_with_source(
-                        raw_pnl, exec_price, exit_time=times[exec_idx]
+                        raw_pnl, exec_price, exit_time=exit_time_val
                     )
                     pnl = conv_pnl - self._commission
                     trades.append(
                         {
                             "entry_idx": entry_idx,
-                            "entry_time": times[entry_idx],
-                            "exit_time": times[exec_idx],
+                            "entry_time": _safe_get_time(times, entry_idx),
+                            "exit_time": _safe_get_time(times, exec_idx),
                             "exit_idx": exec_idx,
                             "direction": "LONG",
                             "position": abs(position),
@@ -1300,15 +1323,16 @@ class PatternRankingTester:
                 eff_exit = last_exit_price + self._slippage
                 raw_pnl = (-position) * (entry_price - eff_exit)
                 direction = "SHORT"
+            exit_time_val = _safe_get_time(times, -1) if self._fx_history is not None else None
             conv_pnl, fx_rate, fx_src = self._convert_pnl_with_source(
-                raw_pnl, last_exit_price, exit_time=times[-1]
+                raw_pnl, last_exit_price, exit_time=exit_time_val
             )
             pnl = conv_pnl - self._commission
             trades.append(
                 {
                     "entry_idx": entry_idx,
-                    "entry_time": times[entry_idx],
-                    "exit_time": times[-1],
+                    "entry_time": _safe_get_time(times, entry_idx),
+                    "exit_time": _safe_get_time(times, -1),
                     "exit_idx": n - 1,
                     "direction": direction,
                     "position": abs(position),
@@ -1325,7 +1349,7 @@ class PatternRankingTester:
         elif position != 0.0 and entry_idx is not None:
             self._last_open_trade = {
                 "entry_idx": entry_idx,
-                "entry_time": times[entry_idx],
+                "entry_time": _safe_get_time(times, entry_idx),
                 "direction": "LONG" if position > 0 else "SHORT",
                 "position": abs(position),
                 "entry_price": entry_price,
