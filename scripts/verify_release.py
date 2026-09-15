@@ -211,7 +211,7 @@ def check_6_backtest_and_ai_scoring() -> None:
     try:
         last_idx = df.index[-1]
     except (AttributeError, Exception):
-        last_idx = str(dates[-1]) if "dates" in locals() else "2025-02-19"
+        last_idx = "2025-02-19"
     res = scorer.score_signal("HAMMER", last_idx, raw_signal=100)
     assert isinstance(res, PatternConfidenceResult), "AIPatternScorer did not return PatternConfidenceResult"
     assert 0.0 <= res.confidence_score <= 1.0, f"Invalid confidence score: {res.confidence_score}"
