@@ -514,10 +514,11 @@ class PatternRankingTester:
                     except ValueError:
                         pass
                 try:
-                    return pd.Timedelta(s)
+                    return cast(pd.Timedelta, pd.Timedelta(s))
                 except Exception:
                     return datetime.timedelta(days=7)
-            return val
+            return None
+
 
         self._max_fx_staleness: datetime.timedelta | pd.Timedelta | None = _parse_staleness(
             max_fx_staleness
