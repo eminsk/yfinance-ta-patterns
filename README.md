@@ -70,6 +70,25 @@ uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h
 > [!TIP]
 > **Why `--no-config`?** Passing `--no-config` tells `uv` to ignore any local or parent `uv.toml` settings (such as local wheel registries or find-links overrides), ensuring a clean, isolated, and reproducible installation directly from PyPI in any project directory.
 
+> [!IMPORTANT]
+> **🪟 Windows + PyPy: One-Line Install via `--find-links` (Precompiled Wheels)**
+> PyPI does not host precompiled Windows binary wheels for PyPy for `ta-lib`. Without `--find-links`, package managers (`uv` and `pip`) attempt to compile `ta-lib` from source, which may fail if a local MSVC compiler/linker is missing or incompatible.
+> To install instantly with precompiled, self-contained native TA-Lib wheels (with zero compilation required):
+> ```bash
+> # Using uv:
+> uv add "yfinance-ta-patterns[all]" --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.30
+>
+> # Using standard pip:
+> pip install "yfinance-ta-patterns[all]" --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.30
+> ```
+> Or declare `find-links` directly in your `pyproject.toml`:
+> ```toml
+> [tool.uv]
+> find-links = [
+>     "https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.30",
+> ]
+> ```
+
 #### Option B: Using Standard `pip`
 
 ```bash

@@ -8,19 +8,22 @@ even if native C ta-lib binaries are not installed.
 from __future__ import annotations
 
 import importlib
+import sys
 from typing import Any
 
 import numpy as np
 
 _talib: Any = None
 HAS_NATIVE_TALIB: bool = False
+TALIB_IMPORT_ERROR: Exception | None = None
 
 try:
     _talib = importlib.import_module("talib")
     HAS_NATIVE_TALIB = True
-except (ImportError, ModuleNotFoundError):
+except (ImportError, ModuleNotFoundError) as exc:
     _talib = None
     HAS_NATIVE_TALIB = False
+    TALIB_IMPORT_ERROR = exc
 
 
 # Full canonical list of 61 TA-Lib candlestick patterns
@@ -346,3 +349,78 @@ class TALibWrapper:
 
 
 talib: Any = _talib if HAS_NATIVE_TALIB else TALibWrapper()
+
+
+def get_talib_status() -> dict[str, Any]:
+    """Return diagnostic details regarding native TA-Lib availability and system environment."""
+    is_pypy = sys.implementation.name == "pypy"
+    is_windows = sys.platform.startswith("win")
+    is_macos = sys.platform == "darwin"
+    is_linux = sys.platform.startswith("linux")
+
+    err_str = str(TALIB_IMPORT_ERROR) if TALIB_IMPORT_ERROR is not None else None
+    if HAS_NATIVE_TALIB:
+        reason = "Native C TA-Lib successfully loaded."
+    elif is_windows and is_pypy:
+        reason = (
+            "Native TA-Lib binary not found for Windows PyPy. PyPI does not host "
+            "precompiled PyPy Windows wheels for TA-Lib. Use --find-links with GitHub Releases "
+            "to install prebuilt wheels."
+        )
+    elif TALIB_IMPORT_ERROR is not None:
+        reason = f"Native TA-Lib import failed: {err_str}"
+    else:
+        reason = "Native TA-Lib package is not installed."
+
+    return {
+        "has_native_talib": HAS_NATIVE_TALIB,
+        "import_error": err_str,
+        "is_pypy": is_pypy,
+        "is_windows": is_windows,
+        "is_macos": is_macos,
+        "is_linux": is_linux,
+        "python_version": sys.version.split()[0],
+        "implementation": sys.implementation.name,
+        "reason": reason,
+    }
+
+
+def get_talib_install_hint(release_tag: str = "v0.3.30") -> str:
+    """Return actionable platform-specific instructions to install or repair native TA-Lib."""
+    if HAS_NATIVE_TALIB:
+        return "Native TA-Lib is already installed and available."
+
+    is_pypy = sys.implementation.name == "pypy"
+    is_windows = sys.platform.startswith("win")
+    is_macos = sys.platform == "darwin"
+    is_linux = sys.platform.startswith("linux")
+
+    find_links_url = (
+        f"https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/{release_tag}"
+    )
+
+    lines: list[str] = []
+    if is_windows and is_pypy:
+        lines.append("To enable all 61 native TA-Lib candlestick patterns on Windows PyPy:")
+        lines.append("  [uv]:")
+        lines.append(f'    uv add "yfinance-ta-patterns[all]" --find-links {find_links_url}')
+        lines.append("  [pip]:")
+        lines.append(f'    pip install "ta-lib>=0.4.19,<=0.7.1" --find-links {find_links_url}')
+        lines.append("  [pyproject.toml]:")
+        lines.append("    [tool.uv]")
+        lines.append(f'    find-links = ["{find_links_url}"]')
+    elif is_macos:
+        lines.append("To install native TA-Lib on macOS:")
+        lines.append("  brew install ta-lib")
+        lines.append("  pip install ta-lib")
+    elif is_linux:
+        lines.append("To install native TA-Lib on Linux (Ubuntu/Debian):")
+        lines.append("  sudo apt-get install -y libta-lib0 libta-lib-dev")
+        lines.append("  pip install ta-lib")
+    else:
+        lines.append("To install native TA-Lib on Windows (CPython):")
+        lines.append("  pip install ta-lib")
+        lines.append(f"  or install prebuilt wheels via: pip install ta-lib --find-links {find_links_url}")
+
+    return "\n".join(lines)
+
