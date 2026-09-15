@@ -47,6 +47,11 @@ class PatternAnalyzer:
         )
         self.pattern_functions: list[str] = funcs
 
+    @classmethod
+    def get_supported_fallback_patterns(cls) -> list[str]:
+        """Return canonical list of patterns supported in pure-Python fallback mode."""
+        return sorted(SUPPORTED_FALLBACK_PATTERNS)
+
     def _normalize_pattern(self, pattern: str) -> str:
         pattern_upper = pattern.upper()
         return pattern_upper if pattern_upper.startswith("CDL") else f"CDL{pattern_upper}"

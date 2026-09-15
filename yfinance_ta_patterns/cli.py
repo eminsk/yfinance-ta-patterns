@@ -16,7 +16,7 @@ from .ai.scorer import AIPatternScorer, PatternConfidenceResult
 from .data import MarketDataLoader, normalize_interval
 from .forex_data_loader import FOREX_56_PAIRS
 from .pattern_analyzer import PatternAnalyzer
-from .talib_compat import HAS_NATIVE_TALIB
+from .talib_compat import HAS_NATIVE_TALIB, get_talib_install_hint, get_talib_status
 
 TIMEFRAME_MAP: dict[str, str] = {
     "M1": "1m",
@@ -101,6 +101,11 @@ def get_parser() -> argparse.ArgumentParser:
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
+    )
+    parser.add_argument(
+        "--check-talib",
+        action="store_true",
+        help="Check native TA-Lib binary status and display diagnostic installation hints.",
     )
     parser.add_argument(
         "--symbol",
@@ -258,6 +263,17 @@ def run_cli(args: argparse.Namespace) -> int:
         with contextlib.suppress(Exception):
             sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+    if getattr(args, "check_talib", False):
+        status = get_talib_status()
+        print("=== TA-Lib Environment & Binary Status ===")
+        print(f"Native TA-Lib Available: {status['has_native_talib']}")
+        print(f"Python Implementation:   {status['implementation']} ({status['python_version']})")
+        print(f"Platform:                {sys.platform}")
+        print(f"Status Details:          {status['reason']}")
+        if not status["has_native_talib"]:
+            print("\n" + get_talib_install_hint())
+        return 0
+
     interval = normalize_timeframe(args.timeframe)
 
     if not args.pattern and not args.all_patterns:
@@ -309,6 +325,14 @@ def run_cli(args: argparse.Namespace) -> int:
             "Поиск самых выгодных точек входа на основе AI Confluence Scoring (Trend + RSI + Volume + ATR)"
         )
         print("=" * 95)
+
+        if not HAS_NATIVE_TALIB and not args.pattern:
+            fallback_count = len(PatternAnalyzer.get_supported_fallback_patterns())
+            print(
+                f"ℹ️ Native TA-Lib binary not found. Scanning {fallback_count} pure-Python fallback patterns.\n"
+                f"{get_talib_install_hint()}\n",
+                file=sys.stderr,
+            )
 
         all_signals_records: list[dict[str, Any]] = []
         active_pairs_count = 0
@@ -561,7 +585,8 @@ def run_cli(args: argparse.Namespace) -> int:
     patterns_to_scan = [args.pattern] if args.pattern else sorted(analyzer.pattern_functions)
     if not HAS_NATIVE_TALIB and args.all_patterns:
         print(
-            f"Notice: Native TA-Lib binary not found. Scanning {len(analyzer.pattern_functions)} pure-Python fallback patterns.",
+            f"Notice: Native TA-Lib binary not found. Scanning {len(analyzer.pattern_functions)} pure-Python fallback patterns.\n"
+            f"{get_talib_install_hint()}",
             file=sys.stderr,
         )
 
