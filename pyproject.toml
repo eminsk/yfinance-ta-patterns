@@ -115,6 +115,7 @@ filterwarnings = [
     "ignore:Static default FX rate used.*:UserWarning",
     "ignore:Quote currency for .* using exchange suffix heuristic.*:UserWarning",
     "ignore:validate_ohlc dropped.*:UserWarning",
+    "ignore:Corrupted OHLC data anomaly detected.*:UserWarning",
     "ignore:cython\\.collection_type only works on PyPy.*:RuntimeWarning",
 ]
 
