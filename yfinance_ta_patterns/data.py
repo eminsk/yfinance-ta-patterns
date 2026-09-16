@@ -774,6 +774,28 @@ def validate_ohlc(
     if data.empty:
         return data
 
+    if isinstance(data.columns, pd.MultiIndex):
+        cleaned_data = data.copy()
+        lvl0_names = list(cleaned_data.columns.get_level_values(0))
+        ohlc_names = {"Open", "High", "Low", "Close"}
+        if any(c in ohlc_names for c in lvl0_names):
+            cleaned_data.columns = cleaned_data.columns.get_level_values(0)
+        elif cleaned_data.columns.nlevels > 1 and any(
+            c in ohlc_names for c in cleaned_data.columns.get_level_values(1)
+        ):
+            cleaned_data.columns = cleaned_data.columns.get_level_values(1)
+        else:
+            cleaned_data.columns = cast(pd.MultiIndex, cleaned_data.columns).droplevel(1)
+
+        if cleaned_data.columns.has_duplicates:
+            dup_cols = [c for c in ohlc_names if list(cleaned_data.columns).count(c) > 1]
+            if dup_cols:
+                raise ValueError(
+                    f"MultiIndex OHLC data contains multiple tickers or duplicate columns: {dup_cols}. "
+                    "Please select or pass data for a single ticker."
+                )
+        data = cleaned_data
+
     if strict and hasattr(data.index, "has_duplicates") and data.index.has_duplicates:
         raise ValueError("Corrupted OHLC data: duplicate candle timestamps detected in index.")
 
