@@ -1050,6 +1050,10 @@ class MarketDataLoader:
         """Fetch raw market data via yfinance."""
         start_val = self.start or self.start_date
         end_val = self.end or self.end_date
+        is_intraday_forex = (
+            self.asset_type == "forex" or self.ticker.endswith("=X")
+        ) and self._download_interval not in ("1d", "5d", "1wk", "1mo", "3mo")
+
         if self.repair is True:
             if not HAS_SKLEARN:
                 warnings.warn(
@@ -1064,8 +1068,9 @@ class MarketDataLoader:
         elif self.repair is False:
             repair_opt = False
         else:
-            # self.repair is None: silently enable repair if scikit-learn is available, otherwise False without warning
-            repair_opt = HAS_SKLEARN
+            # self.repair is None: silently enable repair if scikit-learn is available,
+            # except for intraday Forex where yfinance's repair algorithm erroneously discards all rows (Issue #17).
+            repair_opt = HAS_SKLEARN and not is_intraday_forex
 
         global yf
         if yf is None:
@@ -1090,6 +1095,30 @@ class MarketDataLoader:
                 repair=repair_opt,
                 progress=False,
             )
+
+        # Resilient fallback: if repair was auto-enabled (repair=None) and returned an empty DataFrame,
+        # retry once with repair=False before raising (Issue #17).
+        if data.empty and self.repair is None and repair_opt is True:
+            if start_val or end_val:
+                data = yf.download(
+                    self.ticker,
+                    start=start_val,
+                    end=end_val,
+                    interval=self._download_interval,
+                    auto_adjust=self.auto_adjust,
+                    repair=False,
+                    progress=False,
+                )
+            else:
+                data = yf.download(
+                    self.ticker,
+                    period=self.period,
+                    interval=self._download_interval,
+                    auto_adjust=self.auto_adjust,
+                    repair=False,
+                    progress=False,
+                )
+
         if data.empty:
             raise ValueError(
                 f"No market data found on Yahoo Finance for ticker '{self.ticker}'. "
