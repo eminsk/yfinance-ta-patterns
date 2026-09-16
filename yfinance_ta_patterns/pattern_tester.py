@@ -264,6 +264,72 @@ def resolve_periods_per_year(
     return TIMEFRAME_PERIODS_PER_YEAR.get(tf, 252.0)
 
 
+# Candlestick patterns representing market indecision/hesitation rather than directional momentum
+INDECISION_PATTERNS: frozenset[str] = frozenset(
+    {
+        "CDLDOJI",
+        "CDLLONGLEGGEDDOJI",
+        "CDLRICKSHAWMAN",
+        "CDLHIGHWAVE",
+        "CDLSPINNINGTOP",
+    }
+)
+
+# Candlestick patterns capable of generating both bullish (+100) and bearish (-100) signals
+TWO_WAY_PATTERNS: frozenset[str] = frozenset(
+    {
+        "CDL2CROWS",
+        "CDL3BLACKCROWS",
+        "CDL3INSIDE",
+        "CDL3LINESTRIKE",
+        "CDL3OUTSIDE",
+        "CDL3STARSINSOUTH",
+        "CDL3WHITESOLDIERS",
+        "CDLABANDONEDBABY",
+        "CDLADVANCEBLOCK",
+        "CDLBELTHOLD",
+        "CDLBREAKAWAY",
+        "CDLCLOSINGMARUBOZU",
+        "CDLCONCEALBABYSWALL",
+        "CDLCOUNTERATTACK",
+        "CDLDARKCLOUDCOVER",
+        "CDLDOJISTAR",
+        "CDLENGULFING",
+        "CDLEVENINGDOJISTAR",
+        "CDLEVENINGSTAR",
+        "CDLGAPSIDESIDEWHITE",
+        "CDLHARAMI",
+        "CDLHARAMICROSS",
+        "CDLHIKKAKE",
+        "CDLHIKKAKEMOD",
+        "CDLHOMINGPIGEON",
+        "CDLINNECK",
+        "CDLKICKING",
+        "CDLKICKINGBYLENGTH",
+        "CDLLADDERBOTTOM",
+        "CDLLONGLINE",
+        "CDLMARUBOZU",
+        "CDLMATCHINGLOW",
+        "CDLMATHOLD",
+        "CDLMORNINGDOJISTAR",
+        "CDLMORNINGSTAR",
+        "CDLONNECK",
+        "CDLPIERCING",
+        "CDLRISEFALL3METHODS",
+        "CDLSEPARATINGLINES",
+        "CDLSHORTLINE",
+        "CDLSTALLEDPATTERN",
+        "CDLSTICKSANDWICH",
+        "CDLTASUKIGAP",
+        "CDLTHRUSTING",
+        "CDLTRISTAR",
+        "CDLUNIQUE3RIVER",
+        "CDLUPSIDEGAP2CROWS",
+        "CDLXSIDEGAP3METHODS",
+    }
+)
+
+
 @dataclass
 class PatternResult:
     """Result for a single pattern test."""
@@ -876,6 +942,9 @@ class PatternRankingTester:
         min_signals: int | None = None,
         min_trades: int | None = None,
         sort_by: str = "win_rate",
+        split_directions: bool = False,
+        exclude_indecision: bool = False,
+        trade_indecision: bool = True,
     ) -> list[PatternResult]:
         """Test all patterns and return ranked results.
 
@@ -889,6 +958,12 @@ class PatternRankingTester:
             Minimum completed trades required to include in ranked results (default from __init__)
         sort_by : str
             Ranking criteria: 'win_rate' (default, sorts by win_rate then total_pnl) or 'composite' (sorts by score)
+        split_directions : bool
+            If True, test and report bullish and bearish occurrences of two-way patterns separately (e.g. CDLENGULFING_BULL, CDLENGULFING_BEAR)
+        exclude_indecision : bool
+            If True, exclude neutral/indecision patterns (Doji, Spinning Top, High Wave) from directional ranking (default False)
+        trade_indecision : bool
+            If False, suppress directional trades on neutral/indecision patterns (default True for backwards compatibility)
 
         Returns:
         --------
@@ -899,9 +974,21 @@ class PatternRankingTester:
         thresh_signals = min_signals if min_signals is not None else self._min_signals
         thresh_trades = min_trades if min_trades is not None else self._min_trades
 
-        for pattern_name in all_patterns:
+        patterns_to_test: list[str] = []
+        for pat in all_patterns:
+            if (exclude_indecision or not trade_indecision) and pat in INDECISION_PATTERNS:
+                continue
+            if split_directions and pat in TWO_WAY_PATTERNS:
+                patterns_to_test.append(f"{pat}_BULL")
+                patterns_to_test.append(f"{pat}_BEAR")
+            else:
+                patterns_to_test.append(pat)
+
+        for pattern_name in patterns_to_test:
             try:
-                result = self._test_single_pattern(pattern_name, filter_news)
+                result = self._test_single_pattern(
+                    pattern_name, filter_news, trade_indecision=trade_indecision
+                )
                 if (
                     result
                     and result.total_signals >= thresh_signals
@@ -926,17 +1013,26 @@ class PatternRankingTester:
         self,
         pattern_name: str,
         filter_news: bool = False,
+        direction: str | None = None,
+        trade_indecision: bool = True,
     ) -> PatternResult | None:
         """Test a single candlestick pattern by name."""
         self.trades = []
         self.equity_curve = [self._initial_capital]
         self._last_open_trade = None
-        return self._test_single_pattern(pattern_name, filter_news=filter_news)
+        return self._test_single_pattern(
+            pattern_name,
+            filter_news=filter_news,
+            direction=direction,
+            trade_indecision=trade_indecision,
+        )
 
     def _test_single_pattern(
         self,
         pattern_name: str,
         filter_news: bool,
+        direction: str | None = None,
+        trade_indecision: bool = True,
     ) -> PatternResult | None:
         """Test a single pattern."""
         self.trades = []
@@ -944,6 +1040,14 @@ class PatternRankingTester:
         self._last_open_trade = None
 
         pat = pattern_name.upper()
+        dir_filter = direction.lower() if direction else None
+        if pat.endswith("_BULL") or pat.endswith("_BULLISH"):
+            pat = pat.rsplit("_", 1)[0]
+            dir_filter = "bullish"
+        elif pat.endswith("_BEAR") or pat.endswith("_BEARISH"):
+            pat = pat.rsplit("_", 1)[0]
+            dir_filter = "bearish"
+
         if not pat.startswith("CDL"):
             pat = f"CDL{pat}"
 
@@ -969,14 +1073,20 @@ class PatternRankingTester:
         # Generate signals and preserve pattern strength
         signals = np.zeros(len(self._data))
         strengths = np.zeros(len(self._data))
-        for i in range(len(pattern_values)):
-            val = pattern_values[i]
-            if val > 0:  # Bullish pattern
-                signals[i] = 1
-                strengths[i] = abs(val)
-            elif val < 0:  # Bearish pattern
-                signals[i] = -1
-                strengths[i] = abs(val)
+
+        is_indecision = pat in INDECISION_PATTERNS
+        if is_indecision and not trade_indecision and dir_filter is None:
+            # Neutral/indecision candles denote market equilibrium, not directional bias
+            pass
+        else:
+            for i in range(len(pattern_values)):
+                val = pattern_values[i]
+                if val > 0 and dir_filter in (None, "bullish", "long"):
+                    signals[i] = 1
+                    strengths[i] = abs(val)
+                elif val < 0 and dir_filter in (None, "bearish", "short"):
+                    signals[i] = -1
+                    strengths[i] = abs(val)
 
         # Filter by news if requested
         if filter_news and self._news_dates:
