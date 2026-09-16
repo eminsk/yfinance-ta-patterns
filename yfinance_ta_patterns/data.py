@@ -754,7 +754,10 @@ def normalize_interval(interval: str) -> str:
 
 
 def validate_ohlc(
-    data: pd.DataFrame, strict: bool = False, require_ohlc: bool = False
+    data: pd.DataFrame,
+    strict: bool = False,
+    require_ohlc: bool = False,
+    check_anomalies: bool = False,
 ) -> pd.DataFrame:
     """Validate OHLC price integrity, drop corrupted rows, and check invariants.
 
@@ -824,6 +827,33 @@ def validate_ohlc(
                 stacklevel=2,
             )
         cleaned.attrs["dropped_rows"] = dropped
+
+    # Anomaly detection: flag corrupted near-zero body candles (Issue #12)
+    if (
+        check_anomalies
+        and len(cleaned) >= 5
+        and "Open" in cleaned.columns
+        and "Close" in cleaned.columns
+        and "High" in cleaned.columns
+        and "Low" in cleaned.columns
+    ):
+        bodies = (cleaned["Close"] - cleaned["Open"]).abs()
+        ranges = cleaned["High"] - cleaned["Low"]
+        med_body = float(bodies.median())
+        med_range = float(ranges.median())
+
+        if med_range > 0:
+            body_ratio = med_body / med_range
+            if body_ratio < 0.05:
+                warnings.warn(
+                    f"Corrupted OHLC data anomaly detected: median candle body ({med_body:.5f}) is only {body_ratio:.1%} "
+                    f"of median range ({med_range:.5f}). On Yahoo Finance, daily Forex data (e.g. EURUSD=X) often has "
+                    f"corrupted Open prices near Close, making almost all bars false Dojis. "
+                    f"Consider using clean resampled bars (clean_forex_daily=True) or intraday intervals (1h/4h).",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                cleaned.attrs["zero_body_anomaly"] = True
 
     return cast(pd.DataFrame, cleaned)
 
@@ -935,6 +965,7 @@ class MarketDataLoader:
         repair: bool | None = None,
         timeframe: str | None = None,
         closed_only: bool = True,
+        clean_forex_daily: bool = False,
     ) -> None:
         """Initialize data loader with symbol and timeframe parameters.
 
@@ -955,6 +986,9 @@ class MarketDataLoader:
                 If False, repair is disabled.
             timeframe: Alias keyword for interval.
             closed_only: If True, filters out unclosed (forming) candles based on market session.
+            clean_forex_daily: If True and interval is '1d' for Forex, downloads 1h bars and resamples
+                them to construct clean daily bars with genuine candle bodies (counteracting Yahoo's
+                corrupted daily Forex Open prices).
         """
         effective_interval = timeframe if timeframe is not None else interval
         norm_interval = normalize_interval(effective_interval)
@@ -973,8 +1007,15 @@ class MarketDataLoader:
         self.end_date: str | None = end
         self.auto_adjust: bool = auto_adjust
         self.repair: bool | None = repair
-        self._download_interval: str = self._resolve_download_interval(norm_interval)
-        self._resample_rule: str | None = "4h" if norm_interval == "4h" else None
+        self.clean_forex_daily: bool = clean_forex_daily
+
+        is_fx = self.asset_type == "forex" or self.ticker.endswith("=X")
+        if clean_forex_daily and norm_interval == "1d" and is_fx:
+            self._download_interval: str = "1h"
+            self._resample_rule: str | None = "1D"
+        else:
+            self._download_interval = self._resolve_download_interval(norm_interval)
+            self._resample_rule = "4h" if norm_interval == "4h" else None
 
     @staticmethod
     def _resolve_download_interval(interval: str) -> str:
@@ -1057,11 +1098,13 @@ class MarketDataLoader:
             if col_str not in agg:
                 agg[col_str] = "last"
 
-        # Anchor resampling in UTC (origin='epoch') to preserve institutional 4h candle bounds
-        resampled = data.resample(self._resample_rule, origin="epoch").agg(agg).dropna()
+        rule_str = str(self._resample_rule or "4h").lower()
+        rule_to_use = "24h" if rule_str in ("1d", "d1") else (self._resample_rule or "4h")
+        # Anchor resampling in UTC (origin='epoch') to preserve institutional candle bounds
+        resampled = data.resample(rule_to_use, origin="epoch").agg(agg).dropna()
 
         # Check input bar completeness per bucket (Issue 3: YF-003, Screenshot 2 & Screenshot 5)
-        bar_counts = data.resample(self._resample_rule, origin="epoch")["Close"].count()
+        bar_counts = data.resample(rule_to_use, origin="epoch")["Close"].count()
         resolved_type = classify_asset(self.ticker, self.asset_type)
         is_crypto = resolved_type == "crypto"
         is_forex = resolved_type == "forex"
@@ -1074,6 +1117,13 @@ class MarketDataLoader:
             bucket_stamps = dt_index[(dt_index >= bucket_start) & (dt_index < bucket_end)]
             if len(bucket_stamps) == 0:
                 return False
+
+            if rule_str.lower() in ("1d", "d1"):
+                if is_crypto:
+                    return len(bucket_stamps) >= 20
+                if is_forex:
+                    return len(bucket_stamps) >= 15
+                return len(bucket_stamps) >= 5
 
             if is_crypto:
                 # Crypto trades 24/7. Exactly 4 hourly bars expected on the regular 1h grid:
@@ -1356,7 +1406,9 @@ class MarketDataLoader:
         if not data.index.is_monotonic_increasing:
             data = data.sort_index()
 
-        data = validate_ohlc(data, require_ohlc=True)
+        is_fx = self.asset_type == "forex" or self.ticker.endswith("=X")
+        check_anomaly = is_fx and self.interval == "1d" and not self.clean_forex_daily
+        data = validate_ohlc(data, require_ohlc=True, check_anomalies=check_anomaly)
         if data.empty:
             return data
 
