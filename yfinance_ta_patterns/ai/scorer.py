@@ -64,6 +64,83 @@ class TradeSetup:
         }
 
 
+# Canonical candle lookback counts for TA-Lib candlestick patterns
+PATTERN_CANDLE_COUNTS: dict[str, int] = {
+    # 1-candle patterns
+    "BELTHOLD": 1,
+    "CLOSINGMARUBOZU": 1,
+    "DOJI": 1,
+    "DRAGONFLYDOJI": 1,
+    "GRAVESTONEDOJI": 1,
+    "HAMMER": 1,
+    "HANGINGMAN": 1,
+    "HIGHWAVE": 1,
+    "INVERTEDHAMMER": 1,
+    "LONGLEGGEDDOJI": 1,
+    "LONGLINE": 1,
+    "MARUBOZU": 1,
+    "RICKSHAWMAN": 1,
+    "SHOOTINGSTAR": 1,
+    "SHORTLINE": 1,
+    "SPINNINGTOP": 1,
+    "TAKURI": 1,
+    # 2-candle patterns
+    "COUNTERATTACK": 2,
+    "DARKCLOUDCOVER": 2,
+    "DOJISTAR": 2,
+    "ENGULFING": 2,
+    "HARAMI": 2,
+    "HARAMICROSS": 2,
+    "HOMINGPIGEON": 2,
+    "INNECK": 2,
+    "KICKING": 2,
+    "KICKINGBYLENGTH": 2,
+    "MATCHINGLOW": 2,
+    "ONNECK": 2,
+    "PIERCING": 2,
+    "SEPARATINGLINES": 2,
+    "THRUSTING": 2,
+    # 3-candle patterns
+    "2CROWS": 3,
+    "3BLACKCROWS": 3,
+    "3INSIDE": 3,
+    "3OUTSIDE": 3,
+    "3STARSINSOUTH": 3,
+    "3WHITESOLDIERS": 3,
+    "ABANDONEDBABY": 3,
+    "ADVANCEBLOCK": 3,
+    "EVENINGDOJISTAR": 3,
+    "EVENINGSTAR": 3,
+    "GAPSIDESIDEWHITE": 3,
+    "IDENTICAL3CROWS": 3,
+    "MORNINGDOJISTAR": 3,
+    "MORNINGSTAR": 3,
+    "STALLEDPATTERN": 3,
+    "STICKSANDWICH": 3,
+    "TASUKIGAP": 3,
+    "TRISTAR": 3,
+    "UNIQUE3RIVER": 3,
+    "UPSIDEGAP2CROWS": 3,
+    "XSIDEGAP3METHODS": 3,
+    # 4-candle patterns
+    "3LINESTRIKE": 4,
+    "CONCEALBABYSWALL": 4,
+    # 5-candle patterns
+    "BREAKAWAY": 5,
+    "HIKKAKE": 5,
+    "HIKKAKEMOD": 5,
+    "LADDERBOTTOM": 5,
+    "MATHOLD": 5,
+    "RISEFALL3METHODS": 5,
+}
+
+
+def get_pattern_lookback(pattern_name: str) -> int:
+    """Return candle lookback length (k) for a candlestick pattern (default 1)."""
+    norm = pattern_name.upper().replace("CDL", "").strip()
+    return PATTERN_CANDLE_COUNTS.get(norm, 1)
+
+
 @dataclass(**_DATACLASS_SLOTS_FROZEN)
 class PatternConfidenceResult:
     """Comprehensive AI evaluation of a detected candlestick pattern.
@@ -540,11 +617,22 @@ class AIPatternScorer:
         else:
             grade = SignalGrade.FALSE_SIGNAL
 
+        # Determine pattern lookback window to find true pattern high/low extremes
+        k = get_pattern_lookback(pattern_name)
+        loc = self.df.index.get_loc(timestamp)
+        idx = int(loc) if isinstance(loc, (int, np.integer)) else int(loc.start if isinstance(loc, slice) else 0)
+        start_idx = max(0, idx - k + 1)
+        window = self.df.iloc[start_idx : idx + 1]
+        pattern_high = float(cast(Any, window["High"]).max())
+        pattern_low = float(cast(Any, window["Low"]).min())
+
         # Calculate Actionable Trade Setup (omitted if indicators not warmed up)
         trade_setup = (
             None
             if insufficient_history
-            else self._build_trade_setup(is_bullish, close, high, low, atr)
+            else self._build_trade_setup(
+                is_bullish, close, high, low, atr, pattern_high=pattern_high, pattern_low=pattern_low
+            )
         )
 
         return PatternConfidenceResult(
@@ -570,17 +658,22 @@ class AIPatternScorer:
         high: float,
         low: float,
         atr: float,
+        pattern_high: float | None = None,
+        pattern_low: float | None = None,
     ) -> TradeSetup:
         """Construct ATR-governed entry, stop loss, and tiered profit targets."""
         buffer = 0.2 * atr
         rr_tp1 = 1.5
         rr_tp2 = 3.0
 
+        p_low = pattern_low if pattern_low is not None else low
+        p_high = pattern_high if pattern_high is not None else high
+
         if is_bullish:
             direction = "BUY"
             entry = close
-            # Stop below the low minus ATR buffer, strictly positive
-            stop_loss = max(low - buffer, close * 0.001)
+            # Stop below the lowest low of the pattern formation minus ATR buffer, strictly positive
+            stop_loss = max(p_low - buffer, close * 0.001)
             risk = max(entry - stop_loss, close * 1e-5)
             tp1 = entry + (rr_tp1 * risk)
             tp2 = entry + (rr_tp2 * risk)
@@ -589,8 +682,8 @@ class AIPatternScorer:
         else:
             direction = "SELL"
             entry = close
-            # Stop above the high plus ATR buffer
-            stop_loss = high + buffer
+            # Stop above the highest high of the pattern formation plus ATR buffer
+            stop_loss = p_high + buffer
             risk = max(stop_loss - entry, close * 1e-5)
             # Ensure profit targets remain strictly positive
             tp1 = max(entry - (rr_tp1 * risk), close * 0.001)
