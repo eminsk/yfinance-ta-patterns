@@ -54,10 +54,12 @@ def test_indecision_pattern_not_traded_as_directional_buy():
 def test_directional_splitting_engulfing():
     """Issue #11: CDLENGULFING_BULL and CDLENGULFING_BEAR should isolate respective directions."""
     dates = pd.date_range("2025-01-01", periods=10, freq="1D", tz="UTC")
-    opens = np.full(10, 100.0)
+    # Use same-direction background runs so only the two explicit reversal
+    # pairs below can qualify as engulfing patterns across TA-Lib versions.
+    opens = np.array([101.0, 101.0, 101.0, 98.0, 99.0, 99.0, 99.0, 102.0, 101.0, 101.0])
     highs = np.full(10, 102.0)
     lows = np.full(10, 98.0)
-    closes = np.full(10, 100.0)
+    closes = np.array([99.0, 99.0, 99.0, 103.0, 101.0, 101.0, 101.0, 97.0, 99.0, 99.0])
 
     # Bar 2-3: Bullish Engulfing
     # Bar 2: small black candle

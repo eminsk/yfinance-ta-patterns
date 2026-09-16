@@ -25,12 +25,16 @@ def test_get_talib_status_structure():
     assert "is_windows" in status
     assert "is_macos" in status
     assert "is_linux" in status
+    assert "is_free_threaded" in status
+    assert "gil_enabled" in status
     assert "python_version" in status
     assert "implementation" in status
     assert "reason" in status
 
     assert status["has_native_talib"] is HAS_NATIVE_TALIB
     assert status["implementation"] == sys.implementation.name
+    assert isinstance(status["is_free_threaded"], bool)
+    assert status["gil_enabled"] in (True, False, None)
 
 
 def test_get_talib_status_simulated_scenarios():
@@ -70,7 +74,9 @@ def test_get_talib_install_hint_formatting():
     # When native ta-lib is absent on CPython + Windows:
     with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), \
          patch("sys.implementation.name", "cpython"), \
-         patch("sys.platform", "win32"):
+         patch("sys.platform", "win32"), \
+         patch("yfinance_ta_patterns.talib_compat.sys.version_info", (3, 14, 0, "final", 0)), \
+         patch("yfinance_ta_patterns.talib_compat.sysconfig.get_config_var", return_value=0):
         hint = get_talib_install_hint(release_tag="v0.3.30")
         assert "pip install ta-lib" in hint
         assert "--find-links" in hint
@@ -85,10 +91,38 @@ def test_get_talib_install_hint_formatting():
 
     # When native ta-lib is absent on macOS:
     with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), \
-         patch("sys.implementation.name", "cpython"), \
-         patch("sys.platform", "darwin"):
+          patch("sys.implementation.name", "cpython"), \
+          patch("sys.platform", "darwin"):
         hint = get_talib_install_hint()
         assert "brew install ta-lib" in hint
+
+
+def test_free_threaded_windows_install_hint_uses_wheelhouse():
+    """Free-threaded Windows must not fall back to a local C-extension build."""
+    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), \
+         patch("sys.implementation.name", "cpython"), \
+         patch("sys.platform", "win32"), \
+         patch("yfinance_ta_patterns.talib_compat.sysconfig.get_config_var", return_value=1):
+        hint = get_talib_install_hint()
+
+    assert "PYTHON_GIL" in hint
+    assert "expanded_assets/v0.3.26" in hint
+    assert "pandas, curl_cffi, and TA-Lib" in hint
+    assert "3.14t and 3.15t" in hint
+
+
+def test_standard_windows_315_install_hint_mentions_pandas_build():
+    """Standard CPython 3.15 needs a pandas source build until upstream ships a wheel."""
+    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), \
+         patch("sys.implementation.name", "cpython"), \
+         patch("sys.platform", "win32"), \
+         patch("yfinance_ta_patterns.talib_compat.sys.version_info", (3, 15, 0, "final", 0)), \
+         patch("yfinance_ta_patterns.talib_compat.sysconfig.get_config_var", return_value=0):
+        hint = get_talib_install_hint()
+
+    assert "TA-Lib cp315" in hint
+    assert "pandas cp315" in hint
+    assert "built from source" in hint
 
 
 def test_pattern_analyzer_fallback_patterns():

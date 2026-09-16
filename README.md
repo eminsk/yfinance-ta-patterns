@@ -3,14 +3,14 @@
 [![PyPI](https://img.shields.io/pypi/v/yfinance-ta-patterns?color=blue)](https://pypi.org/project/yfinance-ta-patterns/)
 [![Python](https://img.shields.io/pypi/pyversions/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
 [![PyPy](https://img.shields.io/badge/PyPy-3.8%20--%203.11-orange.svg)](https://www.pypy.org/)
-[![No-GIL](https://img.shields.io/badge/No--GIL-3.13t%20--%203.15t-purple.svg)](https://peps.python.org/pep-0703/)
+[![No-GIL](https://img.shields.io/badge/No--GIL-3.14t%20--%203.15t-purple.svg)](https://peps.python.org/pep-0703/)
 [![CI](https://github.com/eminsk/yfinance-ta-patterns/actions/workflows/ci.yml/badge.svg)](https://github.com/eminsk/yfinance-ta-patterns/actions)
 [![Downloads](https://static.pepy.tech/badge/yfinance-ta-patterns)](https://pepy.tech/project/yfinance-ta-patterns)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 High-performance Python library and CLI that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate multi-factor confluence scores (deterministic quantitative confluence heuristic, not uncalibrated win-rate probability), trade setups, and LLM-ready market briefs.
 
-Universal runtime compatibility across **CPython 3.8 to 3.15 (including Free-Threaded No-GIL 3.13t–3.15t), PyPy 3.8 to 3.11 with high-speed JIT tracing, and legacy Windows 7+ support**.
+Universal runtime compatibility across **CPython 3.8 to 3.14, PyPy 3.8 to 3.11 with high-speed JIT tracing, and legacy Windows 7+ support**. Free-threaded CPython 3.14t and 3.15.0rc2t are verified when the interpreter is started with its GIL disabled; standard CPython 3.15 remains preview-only until upstream Windows dependency wheels are available.
 
 ---
 
@@ -33,8 +33,10 @@ Universal runtime compatibility across **CPython 3.8 to 3.15 (including Free-Thr
 
 | Runtime / Implementation | Supported Versions | Execution Mode | Status | Pre-built Wheels |
 |:---|:---|:---|:---:|:---:|
-| **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | Standard bytecode + GIL | ✅ Fully Supported | Included in Release |
-| **CPython (Free-Threaded)** | 3.13t, 3.14t, 3.15t | Multi-core No-GIL (PEP 703) | ✅ Fully Supported | Included in Release |
+| **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14 | Standard bytecode + GIL | ✅ Fully Supported | PyPI wheels |
+| **CPython (Standard preview)** | 3.15.0rc2 | Standard bytecode + GIL | ⚠️ Preview | Windows needs a pandas source build until upstream ships a cp315 wheel |
+| **CPython (Free-Threaded)** | 3.14t, 3.15.0rc2t | Multi-core No-GIL (PEP 703) | ✅ Verified with GIL disabled | Windows release wheelhouse for pandas, curl_cffi, and TA-Lib |
+| **CPython (Free-Threaded, legacy)** | 3.13t | Multi-core No-GIL (PEP 703) | Best effort | Depends on third-party wheel availability |
 | **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11 | High-speed JIT tracing | ✅ Fully Supported | Included in Release |
 | **Operating Systems** | Windows (7, 8, 10, 11), Linux, macOS (Intel & Apple Silicon) | x86_64, ARM64 | ✅ Fully Supported | Universal & Native |
 
@@ -57,7 +59,9 @@ uv add yfinance-ta-patterns --no-config
 
 # 3. Free-Threaded (No-GIL / PEP 703: 3.14t, 3.15t):
 uv python pin 3.14t
-uv add "yfinance-ta-patterns[all]" --no-config
+# PowerShell: use the matching release wheelhouse and keep the GIL disabled.
+$env:PYTHON_GIL = "0"
+uv add "yfinance-ta-patterns[all]" --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.26 --no-config
 
 # 4. High-Performance PyPy JIT (PyPy 3.8, 3.9, 3.10, 3.11):
 uv python pin pypy-3.8
@@ -69,6 +73,14 @@ uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h
 
 > [!TIP]
 > **Why `--no-config`?** Passing `--no-config` tells `uv` to ignore any local or parent `uv.toml` settings (such as local wheel registries or find-links overrides), ensuring a clean, isolated, and reproducible installation directly from PyPI in any project directory.
+
+> [!IMPORTANT]
+> **Free-threaded CPython must start with the GIL disabled.** If `PYTHON_GIL=1` is set, it overrides the free-threaded build and runs it with the GIL. In PowerShell, use:
+> ```powershell
+> $env:PYTHON_GIL = "0"
+> uv run python -c "import sys; assert not sys._is_gil_enabled(); print('GIL disabled')"
+> ```
+> `yftp --check-talib` reports both the free-threaded build state and the current GIL state. The `talib` and `all` extras pin `TA-Lib 0.7.1` on CPython 3.14+ because `TA-Lib 0.8.x` does not provide a usable 3.14t wheel. On Windows, free-threaded 3.14t and 3.15t must use the release wheelhouse, which supplies matching `pandas`, `curl_cffi`, and TA-Lib wheels. Standard Windows 3.15 remains preview-only because PyPI has no `pandas` cp315 wheel.
 
 > [!IMPORTANT]
 > **🪟 Windows + PyPy: One-Line Install via `--find-links` (Precompiled Wheels)**
@@ -123,20 +135,9 @@ uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/
 uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/pandas-3.0.5-pp311-pypy311_pp73-win_amd64.whl
 ```
 
-##### CPython Free-Threaded (No-GIL 3.13t – 3.15t):
-```bash
-# Python 3.14t (Free-Threaded No-GIL):
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/ta_lib-0.7.1-cp314-cp314t-win_amd64.whl
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/pandas-3.0.5-cp314-cp314t-win_amd64.whl
+##### CPython Free-Threaded (No-GIL 3.14t – 3.15t):
 
-# Python 3.13t (Free-Threaded No-GIL):
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/ta_lib-0.7.1-cp313-cp313t-win_amd64.whl
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/pandas-3.0.5-cp313-cp313t-win_amd64.whl
-
-# Python 3.15t (Free-Threaded No-GIL Preview):
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/ta_lib-0.7.1-cp315-cp315t-win_amd64.whl
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/pandas-3.0.5-cp315-cp315t-win_amd64.whl
-```
+Use the `uv add ... --find-links` command from Quick Start. It selects the matching `pandas`, `curl_cffi`, and TA-Lib wheels together, rather than mixing a release wheel with incompatible PyPI dependencies.
 
 #### Option D: Native TA-Lib on Linux & macOS (Apple Silicon & Intel)
 
@@ -166,9 +167,10 @@ uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/
 
 | Python Version | Execution Mode | Installation Status | Recommendation |
 |:---:|:---:|:---:|---|
-| **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | **Recommended No-GIL release**. All dependencies (`numpy`, `pandas`, `cffi`, `scikit-learn`) provide official wheels on PyPI. |
-| **Python 3.13t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | **Fully supported**. Pre-built native `ta-lib` wheel (`cp313t`) available; seamless execution with `yfinance>=0.2.50`. |
-| **Python 3.15t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | Next-generation No-GIL preview. Fully functional with pre-built `pandas` and `ta-lib` wheels. |
+| **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **Verified** | Start with `PYTHON_GIL=0` or `-X gil=0`; use the Windows TA-Lib release wheelhouse. |
+| **Python 3.13t** | **Free-Threaded (No-GIL)** | Best effort | Use the fallback or provide compatible third-party wheels for the desired extras. |
+| **Python 3.15t** | **Free-Threaded (No-GIL)** | ✅ **Verified on 3.15.0rc2** | Use the matching release wheel and revalidate after the final release. |
+| **Python 3.15** | **Standard (GIL)** | Preview | On Windows, wait for an upstream `pandas` cp315 wheel or build pandas from source. |
 | **Python 3.13** | **Standard (GIL)** | ✅ **100% Supported** | Current stable Python release. Full support for native TA-Lib and pre-built wheels. |
 | **Python 3.12** | **Standard (GIL)** | ✅ **100% Supported** | Long-Term Support release with instant sub-second wheel installation. |
 

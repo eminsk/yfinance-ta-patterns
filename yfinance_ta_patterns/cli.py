@@ -269,6 +269,11 @@ def run_cli(args: argparse.Namespace) -> int:
         print(f"Native TA-Lib Available: {status['has_native_talib']}")
         print(f"Python Implementation:   {status['implementation']} ({status['python_version']})")
         print(f"Platform:                {sys.platform}")
+        if status["is_free_threaded"]:
+            print("Free-Threaded Build:     True")
+            print(f"GIL Currently Enabled:   {status['gil_enabled']}")
+            if status["gil_enabled"]:
+                print("Runtime Note:            Set PYTHON_GIL=0 or pass -X gil=0 to enable no-GIL mode.")
         print(f"Status Details:          {status['reason']}")
         if not status["has_native_talib"]:
             print("\n" + get_talib_install_hint())

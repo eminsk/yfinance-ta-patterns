@@ -9,9 +9,14 @@ from __future__ import annotations
 
 import importlib
 import sys
+import sysconfig
 from typing import Any
 
 import numpy as np
+
+# TA-Lib does not publish the required Windows CPython 3.15 or free-threaded
+# wheels to PyPI. This release contains matching TA-Lib 0.7.1 x64 wheels.
+WINDOWS_TALIB_WHEELHOUSE_TAG = "v0.3.26"
 
 _talib: Any = None
 HAS_NATIVE_TALIB: bool = False
@@ -357,6 +362,12 @@ def get_talib_status() -> dict[str, Any]:
     is_windows = sys.platform.startswith("win")
     is_macos = sys.platform == "darwin"
     is_linux = sys.platform.startswith("linux")
+    is_free_threaded = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+    gil_probe = getattr(sys, "_is_gil_enabled", None)
+    try:
+        gil_enabled = bool(gil_probe()) if callable(gil_probe) else None
+    except Exception:  # pragma: no cover - interpreter-specific diagnostic API
+        gil_enabled = None
 
     err_str = str(TALIB_IMPORT_ERROR) if TALIB_IMPORT_ERROR is not None else None
     if HAS_NATIVE_TALIB:
@@ -379,6 +390,8 @@ def get_talib_status() -> dict[str, Any]:
         "is_windows": is_windows,
         "is_macos": is_macos,
         "is_linux": is_linux,
+        "is_free_threaded": is_free_threaded,
+        "gil_enabled": gil_enabled,
         "python_version": sys.version.split()[0],
         "implementation": sys.implementation.name,
         "reason": reason,
@@ -398,9 +411,42 @@ def get_talib_install_hint(release_tag: str = "v0.3.30") -> str:
     find_links_url = (
         f"https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/{release_tag}"
     )
+    is_free_threaded = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+    windows_wheelhouse_url = (
+        "https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/"
+        f"{WINDOWS_TALIB_WHEELHOUSE_TAG}"
+    )
+    needs_windows_wheelhouse = is_windows and not is_pypy and (
+        is_free_threaded or sys.version_info >= (3, 15)
+    )
 
     lines: list[str] = []
-    if is_windows and is_pypy:
+    if needs_windows_wheelhouse:
+        runtime = "Windows free-threaded CPython" if is_free_threaded else "Windows CPython 3.15+"
+        lines.append(f"To enable native TA-Lib on {runtime}:")
+        lines.append("  [PowerShell + uv]:")
+        if is_free_threaded:
+            lines.append('    $env:PYTHON_GIL = "0"')
+        lines.append(
+            f'    uv add "yfinance-ta-patterns[all]" --find-links {windows_wheelhouse_url}'
+        )
+        lines.append("  [PowerShell + pip]:")
+        if is_free_threaded:
+            lines.append('    $env:PYTHON_GIL = "0"')
+        lines.append(
+            f'    pip install "yfinance-ta-patterns[all]" --find-links {windows_wheelhouse_url}'
+        )
+        if is_free_threaded:
+            lines.append(
+                "  The wheelhouse supplies matching pandas, curl_cffi, and TA-Lib wheels "
+                "for CPython 3.14t and 3.15t."
+            )
+        else:
+            lines.append(
+                "  The wheelhouse supplies a TA-Lib cp315 wheel, but PyPI does not yet provide "
+                "a Windows pandas cp315 wheel; pandas must be built from source."
+            )
+    elif is_windows and is_pypy:
         lines.append("To enable all 61 native TA-Lib candlestick patterns on Windows PyPy:")
         lines.append("  [uv]:")
         lines.append(f'    uv add "yfinance-ta-patterns[all]" --find-links {find_links_url}')
