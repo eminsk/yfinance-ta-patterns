@@ -75,12 +75,51 @@ uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h
 > **Why `--no-config`?** Passing `--no-config` tells `uv` to ignore any local or parent `uv.toml` settings (such as local wheel registries or find-links overrides), ensuring a clean, isolated, and reproducible installation directly from PyPI in any project directory.
 
 > [!IMPORTANT]
-> **Free-threaded CPython must start with the GIL disabled.** If `PYTHON_GIL=1` is set, it overrides the free-threaded build and runs it with the GIL. In PowerShell, use:
-> ```powershell
-> $env:PYTHON_GIL = "0"
-> uv run python -c "import sys; assert not sys._is_gil_enabled(); print('GIL disabled')"
+> ### ⚡ Free-Threaded Python / No-GIL Guide (PEP 703: 3.14t, 3.15t)
+>
+> Python 3.13+ introduces experimental free-threaded (No-GIL) builds. `yfinance-ta-patterns` is verified on Windows, Linux, and macOS under free-threaded CPython. Here is what you need to know for a smooth No-GIL setup on Windows:
+>
+> #### 1. Python Version Selection & Wheel Availability
+> - **Python 3.14t & 3.15t (Recommended)**: PyPI provides official precompiled `cp314t` and `cp315t` Windows wheels for `lxml 6.1.3`, `numpy 2.5.3`, and `scipy 1.18.1`. Combining PyPI with our release wheelhouse (`pandas 3.0.5`, `curl_cffi`, and `ta-lib 0.7.1`) allows a 100% binary install with zero C compiler required.
+> - **Python 3.13t (Legacy / Experimental)**: PyPI lacks precompiled `cp313t-win_amd64` wheels for `lxml`, `numpy`, and `scipy`. Building `lxml` from source on Windows requires MSVC and `libxml2`/`libxslt` headers. If using Python 3.13t on Windows, install without the `[all]` extra to use the pure-Python vectorized engine: `uv add yfinance-ta-patterns`.
+>
+> #### 2. Understanding Automatic GIL Re-Enablement
+> In free-threaded interpreters, `sys._is_gil_enabled()` may return `True` for two common reasons:
+> 1. **Global Environment Variable**: A Windows user/system variable `PYTHON_GIL=1` forces the GIL on at startup. Check in PowerShell:
+>    ```powershell
+>    [System.Environment]::GetEnvironmentVariable('PYTHON_GIL', 'User')
+>    ```
+> 2. **PEP 703 C-Extension Protection**: When loading C extensions (such as `talib._ta_lib`) that have not yet declared `Py_MOD_GIL_NOT_USED`, CPython automatically re-enables the GIL to protect thread safety and emits a `RuntimeWarning`.
+>
+> #### 3. Running in True No-GIL Mode
+> To run at full multi-core performance with the GIL disabled:
+> - **Command Line Flag**:
+>   ```bash
+>   python -X gil=0 my_scanner.py
+>   ```
+> - **PowerShell**:
+>   ```powershell
+>   $env:PYTHON_GIL = "0"
+>   python my_scanner.py
+>   ```
+> - **CMD**:
+>   ```cmd
+>   set PYTHON_GIL=0
+>   python my_scanner.py
+>   ```
+> - **Pure-Python Engine**: When native TA-Lib is not installed, the built-in NumPy fallback engine keeps the GIL disabled out-of-the-box without extra flags.
+>
+> #### 4. Verification
+> Run `yftp --check-talib` to inspect the runtime environment:
+> ```bash
+> yftp --check-talib
 > ```
-> `yftp --check-talib` reports both the free-threaded build state and the current GIL state. The `talib` and `all` extras pin `TA-Lib 0.7.1` on CPython 3.14+ because `TA-Lib 0.8.x` does not provide a usable 3.14t wheel. On Windows, free-threaded 3.14t and 3.15t must use the release wheelhouse, which supplies matching `pandas`, `curl_cffi`, and TA-Lib wheels. Standard Windows 3.15 remains preview-only because PyPI has no `pandas` cp315 wheel.
+> Or verify programmatically:
+> ```python
+> from yfinance_ta_patterns import is_freethreaded, is_gil_enabled
+> print("Free-Threaded build:", is_freethreaded())
+> print("GIL active:", is_gil_enabled())
+> ```
 
 > [!IMPORTANT]
 > **🪟 Windows + PyPy: One-Line Install via `--find-links` (Precompiled Wheels)**

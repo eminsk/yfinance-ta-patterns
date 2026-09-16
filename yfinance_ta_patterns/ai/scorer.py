@@ -403,7 +403,7 @@ class AIPatternScorer:
 
         # Relative Volume (RVOL 20 - strictly historical, excludes current candle from baseline)
         if "Volume" in self.df.columns:
-            vol = self.df["Volume"].astype(float)
+            vol = self.df["Volume"].astype("float64")
             if not np.isfinite(vol).all() or (vol < 0).any():
                 raise ValueError("Invalid Volume values: volume must be finite and non-negative")
             if (vol > 0).any():

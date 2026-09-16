@@ -8,6 +8,7 @@ even if native C ta-lib binaries are not installed.
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 import sysconfig
 from typing import Any
@@ -356,18 +357,62 @@ class TALibWrapper:
 talib: Any = _talib if HAS_NATIVE_TALIB else TALibWrapper()
 
 
+def is_freethreaded() -> bool:
+    """Return True if running under a free-threaded (No-GIL, PEP 703) CPython build."""
+    return bool(sysconfig.get_config_var("Py_GIL_DISABLED") == 1)
+
+
+def is_gil_enabled() -> bool:
+    """Return True if the Global Interpreter Lock (GIL) is currently active.
+
+    On free-threaded CPython (3.13t+), queries sys._is_gil_enabled().
+    On standard CPython and PyPy, returns True.
+    """
+    gil_probe = getattr(sys, "_is_gil_enabled", None)
+    if callable(gil_probe):
+        try:
+            return bool(gil_probe())
+        except Exception:  # pragma: no cover
+            return True
+    return True
+
+
 def get_talib_status() -> dict[str, Any]:
     """Return diagnostic details regarding native TA-Lib availability and system environment."""
     is_pypy = sys.implementation.name == "pypy"
     is_windows = sys.platform.startswith("win")
     is_macos = sys.platform == "darwin"
     is_linux = sys.platform.startswith("linux")
-    is_free_threaded = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+    is_free_threaded = is_freethreaded()
     gil_probe = getattr(sys, "_is_gil_enabled", None)
     try:
         gil_enabled = bool(gil_probe()) if callable(gil_probe) else None
     except Exception:  # pragma: no cover - interpreter-specific diagnostic API
         gil_enabled = None
+
+    gil_cause: str | None = None
+    gil_recommendation: str | None = None
+
+    if is_free_threaded:
+        if gil_enabled is True:
+            env_gil = os.environ.get("PYTHON_GIL")
+            if env_gil == "1":
+                gil_cause = "Forced enabled by PYTHON_GIL=1 environment variable."
+            elif HAS_NATIVE_TALIB:
+                gil_cause = (
+                    "Automatically re-enabled by CPython PEP 703 runtime protection upon importing "
+                    "native 'talib._ta_lib' (which lacks Py_MOD_GIL_NOT_USED declaration)."
+                )
+            else:
+                gil_cause = (
+                    "Re-enabled by non-free-threaded C extension or default interpreter policy."
+                )
+            gil_recommendation = (
+                "Run with 'python -X gil=0 <script>' or set PYTHON_GIL=0 in environment to maintain No-GIL execution."
+            )
+        elif gil_enabled is False:
+            gil_cause = "GIL is disabled (running in true multi-core No-GIL mode)."
+            gil_recommendation = None
 
     err_str = str(TALIB_IMPORT_ERROR) if TALIB_IMPORT_ERROR is not None else None
     if HAS_NATIVE_TALIB:
@@ -392,6 +437,8 @@ def get_talib_status() -> dict[str, Any]:
         "is_linux": is_linux,
         "is_free_threaded": is_free_threaded,
         "gil_enabled": gil_enabled,
+        "gil_cause": gil_cause,
+        "gil_recommendation": gil_recommendation,
         "python_version": sys.version.split()[0],
         "implementation": sys.implementation.name,
         "reason": reason,
@@ -421,6 +468,19 @@ def get_talib_install_hint(release_tag: str = "v0.3.30") -> str:
     )
 
     lines: list[str] = []
+    if is_windows and is_free_threaded and sys.version_info[:2] == (3, 13):
+        lines.append("Note on Windows Free-Threaded Python 3.13t:")
+        lines.append(
+            "  PyPI does not host precompiled cp313t-win_amd64 wheels for core dependencies "
+            "(lxml, numpy, scipy). Building from source requires MSVC and libxml2 development headers."
+        )
+        lines.append(
+            "  Recommended action: Upgrade to Python 3.14t or 3.15t where official prebuilt wheels "
+            "are available on PyPI, or install yfinance-ta-patterns without the [all] extra:"
+        )
+        lines.append("    uv add yfinance-ta-patterns")
+        lines.append("  If native TA-Lib is desired on Windows, use Python 3.14t or 3.15t:")
+
     if needs_windows_wheelhouse:
         runtime = "Windows free-threaded CPython" if is_free_threaded else "Windows CPython 3.15+"
         lines.append(f"To enable native TA-Lib on {runtime}:")

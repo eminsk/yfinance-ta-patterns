@@ -42,6 +42,8 @@ from .talib_compat import (
     TALIB_IMPORT_ERROR,
     get_talib_install_hint,
     get_talib_status,
+    is_freethreaded,
+    is_gil_enabled,
 )
 
 __all__ = [
@@ -64,6 +66,8 @@ __all__ = [
     "classify_asset",
     "get_talib_install_hint",
     "get_talib_status",
+    "is_freethreaded",
+    "is_gil_enabled",
     "normalize_ticker",
     "resolve_asset_currencies",
     "validate_asset_type",

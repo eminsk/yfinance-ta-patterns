@@ -272,7 +272,11 @@ def run_cli(args: argparse.Namespace) -> int:
         if status["is_free_threaded"]:
             print("Free-Threaded Build:     True")
             print(f"GIL Currently Enabled:   {status['gil_enabled']}")
-            if status["gil_enabled"]:
+            if status.get("gil_cause"):
+                print(f"GIL Status Detail:       {status['gil_cause']}")
+            if status.get("gil_recommendation"):
+                print(f"Recommendation:          {status['gil_recommendation']}")
+            elif status["gil_enabled"]:
                 print("Runtime Note:            Set PYTHON_GIL=0 or pass -X gil=0 to enable no-GIL mode.")
         print(f"Status Details:          {status['reason']}")
         if not status["has_native_talib"]:

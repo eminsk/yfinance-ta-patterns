@@ -521,8 +521,8 @@ class PatternRankingTester:
 
         if use_adj_close and "Adj Close" in data.columns and "Close" in data.columns:
             self._data = data.copy()
-            raw_close = self._data["Close"].astype(float)
-            adj_close = self._data["Adj Close"].astype(float)
+            raw_close = self._data["Close"].astype("float64")
+            adj_close = self._data["Adj Close"].astype("float64")
             valid_mask = (
                 (raw_close > 0) & np.isfinite(raw_close) & (adj_close > 0) & np.isfinite(adj_close)
             )
