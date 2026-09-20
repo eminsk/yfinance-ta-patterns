@@ -13,11 +13,11 @@ import pytz
 # yfinance is loaded lazily on demand in _fetch_yfinance
 yf: Any = None
 
-try:
-    import sklearn  # noqa: F401
+import importlib.util
 
-    HAS_SKLEARN = True
-except (ImportError, ModuleNotFoundError):
+try:
+    HAS_SKLEARN = importlib.util.find_spec("sklearn") is not None
+except Exception:
     HAS_SKLEARN = False
 
 
