@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import importlib.util
 import warnings
 from typing import Any, cast
 
@@ -12,8 +13,6 @@ import pytz
 
 # yfinance is loaded lazily on demand in _fetch_yfinance
 yf: Any = None
-
-import importlib.util
 
 try:
     HAS_SKLEARN = importlib.util.find_spec("sklearn") is not None
