@@ -1,6 +1,10 @@
 # Market Candlestick & AI Pattern Scanner (`yfinance-ta-patterns`)
 
 [![PyPI](https://img.shields.io/pypi/v/yfinance-ta-patterns?color=blue)](https://pypi.org/project/yfinance-ta-patterns/)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/yfinance-ta-patterns.svg)](https://anaconda.org/conda-forge/yfinance-ta-patterns)
+[![Ubuntu / Debian](https://img.shields.io/badge/deb-Ubuntu%20%2F%20Debian-E95420?logo=ubuntu&logoColor=white)](https://github.com/eminsk/yfinance-ta-patterns/releases)
+[![MSYS2](https://img.shields.io/badge/MSYS2-MinGW64-blue?logo=windows&logoColor=white)](https://github.com/msys2/MINGW-packages/pull/31765)
+[![Arch Linux](https://img.shields.io/badge/AUR-Arch%20Linux-1793D1?logo=arch-linux&logoColor=white)](https://github.com/eminsk/yfinance-ta-patterns/tree/main/aur)
 [![Python](https://img.shields.io/pypi/pyversions/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
 [![PyPy](https://img.shields.io/badge/PyPy-3.8%20--%203.11-orange.svg)](https://www.pypy.org/)
 [![No-GIL](https://img.shields.io/badge/No--GIL-3.14t%20--%203.15t-purple.svg)](https://peps.python.org/pep-0703/)
@@ -47,6 +51,19 @@ Universal runtime compatibility across **CPython 3.8 to 3.14, PyPy 3.8 to 3.11 w
 ### 1. Installation
 
 `yfinance-ta-patterns` installs in seconds with **zero C build requirements** by default, using an internal vectorized pure-Python/NumPy engine for candlestick pattern recognition.
+
+#### 🚀 Quick Installation by Platform
+
+| Platform / Tool | Command | Description |
+|:---|:---|:---|
+| **Conda / Mamba** | `conda install -c conda-forge yfinance-ta-patterns` | Recommended for Quant, Finance & Data Science |
+| **Conda + Native TA-Lib** | `conda install -c conda-forge yfinance-ta-patterns ta-lib` | Full C-accelerated TA-Lib with **zero compilation** |
+| **Pixi** | `pixi add yfinance-ta-patterns` | Modern high-speed reproducible Conda workflow |
+| **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.35-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
+| **Ubuntu / Debian (pipx)** | `sudo apt install pipx && pipx install yfinance-ta-patterns` | Isolated global CLI tool install (PEP 668 compliant) |
+| **Windows (MSYS2)** | `pacman -S mingw-w64-x86_64-python-yfinance-ta-patterns` | Native MSYS2 MinGW package (zero C compiler needed) |
+| **uv (Python)** | `uv add yfinance-ta-patterns` | Sub-second pure Python installation |
+| **pip (Python)** | `pip install yfinance-ta-patterns` | Universal PyPI installation |
 
 #### Option A: Using `uv` (Fastest & Recommended)
 
@@ -178,7 +195,17 @@ uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/
 
 Use the `uv add ... --find-links` command from Quick Start. It selects the matching `pandas`, `curl_cffi`, and TA-Lib wheels together, rather than mixing a release wheel with incompatible PyPI dependencies.
 
-#### Option D: Native TA-Lib on Linux & macOS (Apple Silicon & Intel)
+#### Option D: Native C TA-Lib on Linux & macOS (Optional)
+
+> [!NOTE]
+> **Native C TA-Lib is 100% OPTIONAL**: `yfinance-ta-patterns` already includes a built-in high-speed vectorized NumPy pattern recognition engine that works immediately with **zero compilation**.
+>
+> If you want the full C-accelerated TA-Lib engine without any manual compilation:
+> - **Via Conda (Recommended — Zero C builds)**:
+>   ```bash
+>   conda install -c conda-forge yfinance-ta-patterns ta-lib
+>   ```
+> - **Or manual C compiler build from source**:
 
 - **macOS (Homebrew):**
   ```bash
