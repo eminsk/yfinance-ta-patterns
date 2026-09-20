@@ -1,5 +1,6 @@
 #!/usr/bin/make -f
 export PYBUILD_NAME=yfinance-ta-patterns
+export PYBUILD_DISABLE=test
 
 %:
 	dh $@ --with python3 --buildsystem=pybuild
