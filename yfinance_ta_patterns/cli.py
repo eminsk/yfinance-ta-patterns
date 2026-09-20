@@ -328,10 +328,10 @@ def run_cli(args: argparse.Namespace) -> int:
     if len(symbols) > 1:
         print("=" * 95)
         print(
-            f"🌍 СКАНИРОВАНИЕ {len(symbols)} ВАЛЮТНЫХ ПАР FOREX (Таймфрейм: {interval}, Период: {args.period})"
+            f"🌍 SCANNING {len(symbols)} FOREX CURRENCY PAIRS (Timeframe: {interval}, Period: {args.period})"
         )
         print(
-            "Поиск самых выгодных точек входа на основе AI Confluence Scoring (Trend + RSI + Volume + ATR)"
+            "Identifying high-probability setups via AI Confluence Scoring (Trend + RSI + Volume + ATR)"
         )
         print("=" * 95)
 
@@ -350,7 +350,7 @@ def run_cli(args: argparse.Namespace) -> int:
         for idx, sym in enumerate(symbols, 1):
             clean_sym = sym.replace("=X", "")
             if sys.stdout and hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
-                print(f"[{idx:2d}/{len(symbols)}] Опрос {clean_sym:<7} ...", end="\r", flush=True)
+                print(f"[{idx:2d}/{len(symbols)}] Querying {clean_sym:<7} ...", end="\r", flush=True)
 
             try:
                 loader = MarketDataLoader(
@@ -469,17 +469,17 @@ def run_cli(args: argparse.Namespace) -> int:
 
         if sys.stdout and hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
             print(" " * 60, end="\r")
-        print(f"✔ Просканировано: {active_pairs_count} активных пар из {len(symbols)}")
+        print(f"✔ Scanned: {active_pairs_count} active pairs out of {len(symbols)}")
 
         if not all_signals_records:
             bars_info = (
-                f"за последние {lookback} бара(ов)" if lookback > 0 else "за выбранный период"
+                f"over the last {lookback} bar(s)" if lookback > 0 else "over the selected period"
             )
             print(
-                f"\n⚠️ {bars_info.capitalize()} надежных сетапов с уверенностью >= {min_confidence*100:.0f}% не найдено."
+                f"\n⚠️ No reliable setups with confidence >= {min_confidence*100:.0f}% found {bars_info}."
             )
             print(
-                "Рынок находится в фазе консолидации / флэта. Попробуйте сменить таймфрейм на 15m или 1h."
+                "The market is consolidating / range-bound. Try switching timeframe to 15m or 1h."
             )
             return 0
 
@@ -488,7 +488,7 @@ def run_cli(args: argparse.Namespace) -> int:
                 ["Time", "Symbol", "Direction", "Pattern", "Price"]
             ]
             print("\n" + "=" * 80)
-            print(f"📊 НАЙДЕННЫЕ СИГНАЛЫ ({len(classic_df)} паттернов):")
+            print(f"📊 DETECTED SIGNALS ({len(classic_df)} patterns):")
             print("=" * 80)
             print(classic_df.to_string(index=False))
             return 0
@@ -509,7 +509,7 @@ def run_cli(args: argparse.Namespace) -> int:
 
         print("\n" + "=" * 105)
         print(
-            f"📊 РЕЙТИНГ НАЙДЕННЫХ ВОЗМОЖНОСТЕЙ ({len(signals_df)} сигналов, отсортированы по качеству входа):"
+            f"📊 OPPORTUNITY RANKING ({len(signals_df)} setups, sorted by confluence quality):"
         )
         print("=" * 105)
 
@@ -532,29 +532,29 @@ def run_cli(args: argparse.Namespace) -> int:
         best = signals_df.iloc[0]
 
         print("\n" + "🔥" * 38)
-        print(f"  🏆 НАИБОЛЕЕ ВЫГОДНАЯ ПАРА ДЛЯ ВХОДА ПРЯМО СЕЙЧАС: {best['Symbol']}")
+        print(f"  🏆 TOP RECOMMENDED SETUP RIGHT NOW: {best['Symbol']}")
         print("🔥" * 38)
-        print(f"  • Направление сделки:   {best['Direction']} (Паттерн: {best['Pattern']})")
-        print(f"  • Качество слияния:     {best['Confluence']} [Грейд: {best['Grade']}]")
-        print(f"  • Подтверждение тренда: {best['Trend']}")
-        print(f"  • Индекс силы RSI(14):  {best['RSI']}")
-        print(f"  • Точка входа (Entry):  {best['Entry']}")
-        print(f"  • Стоп-лосс (StopLoss): {best['StopLoss']}")
-        print(f"  • Тейк-профит 1 (TP1):  {best['TakeProfit_1']} (Риск/Прибыль {best['RR']})")
-        print(f"  • Тейк-профит 2 (TP2):  {best['TakeProfit_2']}")
-        print(f"  • Свеча сигнала:        {best['Time']}")
+        print(f"  • Trade Direction:    {best['Direction']} (Pattern: {best['Pattern']})")
+        print(f"  • Confluence Score:   {best['Confluence']} [Grade: {best['Grade']}]")
+        print(f"  • Trend Alignment:    {best['Trend']}")
+        print(f"  • RSI(14) Momentum:   {best['RSI']}")
+        print(f"  • Entry Price:        {best['Entry']}")
+        print(f"  • Invalidation (SL):  {best['StopLoss']}")
+        print(f"  • Target 1 (TP1):     {best['TakeProfit_1']} (R/R {best['RR']})")
+        print(f"  • Target 2 (TP2):     {best['TakeProfit_2']}")
+        print(f"  • Signal Candle:      {best['Time']}")
         print("=" * 76)
 
         if args.ai_analyst:
             print("\n" + "=" * 76)
-            print(f"📋 AI TECHNICAL INTELLIGENCE BRIEF ДЛЯ ТОП-ПАРЫ: {best['Symbol']}")
+            print(f"📋 AI TECHNICAL INTELLIGENCE BRIEF FOR TOP SETUP: {best['Symbol']}")
             print("=" * 76 + "\n")
             analyst = AIMarketAnalyst(best["df"], [best["result"]])
             print(analyst.generate_brief(best["Symbol"], interval))
 
         if args.prompt:
             print("\n" + "=" * 76)
-            print(f"🤖 LLM PROMPT ДЛЯ ТОП-ПАРЫ: {best['Symbol']}")
+            print(f"🤖 LLM PROMPT FOR TOP SETUP: {best['Symbol']}")
             print("=" * 76 + "\n")
             analyst = AIMarketAnalyst(best["df"], [best["result"]])
             print(analyst.to_llm_prompt(best["Symbol"], interval))

@@ -1,6 +1,6 @@
 """
 Live Multi-Asset Candlestick Scanner with AI Confluence Scoring.
-Пример сканера рынков реального времени (Forex + Crypto) с AI-оценкой сетапов.
+Real-time market scanner example (Forex + Crypto) with AI Confluence Scoring.
 
 Features demonstrated:
 - MarketDataLoader across 12 Forex & Crypto instruments
@@ -42,12 +42,12 @@ WATCHLIST = [
 
 TIMEFRAME = "1h"
 PERIOD = "30d"
-LOOKBACK_BARS = 3  # Проверять последние 3 свечи
-MIN_CONFIDENCE = 0.50  # Порог уверенности (50%+)
+LOOKBACK_BARS = 3  # Scan the last 3 candles
+MIN_CONFIDENCE = 0.50  # Confidence threshold (50%+)
 
 all_signals = []
 
-print(f"Сканирование {len(WATCHLIST)} инструментов на таймфрейме {TIMEFRAME}...")
+print(f"Scanning {len(WATCHLIST)} instruments on {TIMEFRAME} timeframe...")
 
 for symbol in WATCHLIST:
     try:
@@ -81,7 +81,7 @@ for symbol in WATCHLIST:
                     if res.confidence_score >= MIN_CONFIDENCE:
                         setup = res.trade_setup
 
-                        # Безопасное получение грейда (grade.value или str)
+                        # Safe grade resolution (grade.value or str)
                         grade_label = (
                             res.grade.value if hasattr(res.grade, "value") else str(res.grade)
                         )
@@ -94,7 +94,7 @@ for symbol in WATCHLIST:
                                 if setup
                                 else ("BUY" if signal_val > 0 else "SELL"),
                                 "Pattern": pat.replace("CDL", ""),
-                                # Эвристическая оценка согласованности (confluence), не вероятность выигрыша/прибыли
+                                # Quantitative confluence heuristic, not win-rate probability
                                 "Confluence": f"{res.confluence_score * 100:.1f}/100",
                                 "Score_Raw": res.confidence_score,
                                 "Grade": grade_label,
@@ -109,7 +109,7 @@ for symbol in WATCHLIST:
                             }
                         )
     except Exception as e:
-        print(f"Ошибка при обработке {symbol}: {e}")
+        print(f"Error processing {symbol}: {e}")
 
 if all_signals:
     signals_df = (
@@ -119,7 +119,7 @@ if all_signals:
     )
 
     print("\n" + "=" * 105)
-    print(f" НАЙДЕНО СИГНАЛОВ: {len(signals_df)} (отсортированы по качеству/согласованности)")
+    print(f" DETECTED SIGNALS: {len(signals_df)} (ranked by confluence quality)")
     print("=" * 105)
 
     print(
@@ -142,16 +142,16 @@ if all_signals:
 
     best = signals_df.iloc[0]
     print("\n" + "*" * 55)
-    print(f" ТОП-1 СИГНАЛ: {best['Symbol']} — {best['Direction']} ({best['Pattern']})")
+    print(f" TOP-1 SETUP: {best['Symbol']} — {best['Direction']} ({best['Pattern']})")
     print(
-        f" Время свечи: {best['Time']} | Confluence: {best['Confluence']} [{best['Grade']}] (эвристика согласованности, не вероятность прибыли)"
+        f" Signal Time: {best['Time']} | Confluence: {best['Confluence']} [{best['Grade']}] (quantitative heuristic, not win-rate probability)"
     )
-    print(f" Тренд рынка: {best['Trend']} | RSI: {best['RSI']}")
-    print(f" Точка входа: {best['Entry']}")
+    print(f" Market Trend: {best['Trend']} | RSI: {best['RSI']}")
+    print(f" Entry Price: {best['Entry']}")
     print(f" Stop Loss:   {best['StopLoss']}")
     print(f" Take Profit: {best['TakeProfit_1']} (R:R {best['Risk_Reward']})")
     print("*" * 55)
 else:
     print(
-        f"\nЗа последние {LOOKBACK_BARS} бара(ов) сигналов с Confluence >= {MIN_CONFIDENCE * 100:.0f}/100 не обнаружено."
+        f"\nNo setups with Confluence >= {MIN_CONFIDENCE * 100:.0f}/100 detected over the last {LOOKBACK_BARS} bar(s)."
     )

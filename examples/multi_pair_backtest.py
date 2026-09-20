@@ -1,6 +1,6 @@
 """
 Multi-Pair Historical Candlestick Backtesting Example.
-Пример глобального бэктеста по набору валютных пар за 2 года.
+Multi-pair historical backtest example over 2 years of market data.
 
 Features demonstrated:
 - MarketDataLoader with interval and repair=False
@@ -30,16 +30,16 @@ PERIOD = "2y"
 
 global_results = []
 
-print(f"Запуск глобального бэктеста по {len(PAIRS)} парам за {PERIOD}...")
+print(f"Starting multi-pair backtest across {len(PAIRS)} pairs over {PERIOD}...")
 
 for sym in PAIRS:
     try:
-        # repair=False отключает требование sklearn в yfinance
+        # repair=False disables optional sklearn requirement in yfinance
         loader = MarketDataLoader(sym, interval=TIMEFRAME, period=PERIOD, repair=False)
         data = loader.get_data()
 
         if data.empty or len(data) < 50:
-            print(f"[{sym}] Недостаточно данных, пропуск.")
+            print(f"[{sym}] Insufficient data, skipping.")
             continue
 
         tester = PatternRankingTester(
@@ -48,14 +48,14 @@ for sym in PAIRS:
             account_currency="USD",
             initial_capital=10000.0,
             position_size=1000.0,
-            execution="next_open",  # Честный вход на следующей свече
-            commission=0.05,  # Реалистичная ECN-комиссия $0.05 на микро-лот (0.01 лота / $1000)
-            slippage=0.0001,  # 1 пипс спреда
-            min_signals=5,  # Мин. 5 сделок
-            holding_period=5,  # Фиксированный горизонт удержания 5 свечей
+            execution="next_open",  # Unbiased execution on next open
+            commission=0.05,  # Realistic ECN commission: $0.05 per micro-lot ($1000)
+            slippage=0.0001,  # 1 pip slippage/spread
+            min_signals=5,  # Minimum 5 signals required
+            holding_period=5,  # Fixed 5-bar holding period
         )
 
-        # Тестируем все паттерны
+        # Test all candlestick patterns
         results = tester.test_all_patterns(sort_by="composite")
 
         for r in results:
@@ -79,13 +79,13 @@ for sym in PAIRS:
             )
 
     except Exception as e:
-        print(f"Ошибка при тестировании {sym}: {e}")
+        print(f"Error testing {sym}: {e}")
 
 if global_results:
     df_all = pd.DataFrame(global_results).sort_values(by="Score", ascending=False)
 
     print("\n" + "=" * 98)
-    print(" ТОП-10 ЛУЧШИХ СВЯЗОК (ПАРА + ПАТТЕРН) ЗА 2 ГОДА:")
+    print(" TOP-10 STRATEGIES (PAIR + PATTERN) OVER 2 YEARS:")
     print("=" * 98)
     print(
         df_all[
@@ -106,6 +106,6 @@ if global_results:
     )
 
     df_all.to_csv("all_pairs_ranked.csv", index=False)
-    print("\nСводный отчет сохранен в: all_pairs_ranked.csv")
+    print("\nRanked report exported to: all_pairs_ranked.csv")
 else:
-    print("Нет данных для отчета.")
+    print("No trade data available for report.")

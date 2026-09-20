@@ -110,6 +110,6 @@ def test_run_cli_multi_symbol_flow(capsys, mock_ohlcv_df):
         exit_code = run_cli(args)
         assert exit_code == 0
         captured = capsys.readouterr()
-        assert "СКАНИРОВАНИЕ 2 ВАЛЮТНЫХ ПАР" in captured.out
-        assert "Просканировано: 2 активных пар" in captured.out
+        assert "SCANNING 2 FOREX CURRENCY PAIRS" in captured.out
+        assert "Scanned: 2 active pairs" in captured.out
 
