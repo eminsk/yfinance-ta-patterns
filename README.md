@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/yfinance-ta-patterns?color=blue)](https://pypi.org/project/yfinance-ta-patterns/)
 [![Conda Version](https://img.shields.io/conda/vn/conda-forge/yfinance-ta-patterns.svg)](https://anaconda.org/conda-forge/yfinance-ta-patterns)
-[![Ubuntu / Debian](https://img.shields.io/badge/deb-Ubuntu%20%2F%20Debian-E95420?logo=ubuntu&logoColor=white)](https://github.com/eminsk/yfinance-ta-patterns/releases)
+[![Ubuntu / Debian PPA](https://img.shields.io/badge/Ubuntu%20%2F%20Debian-APT%20PPA-E95420?logo=ubuntu&logoColor=white)](https://eminsk.github.io/ppa/)
 [![MSYS2](https://img.shields.io/badge/MSYS2-MinGW64-blue?logo=windows&logoColor=white)](https://github.com/msys2/MINGW-packages/pull/31765)
 [![Arch Linux](https://img.shields.io/badge/AUR-Arch%20Linux-1793D1?logo=arch-linux&logoColor=white)](https://github.com/eminsk/yfinance-ta-patterns/tree/main/aur)
 [![Python](https://img.shields.io/pypi/pyversions/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
@@ -59,6 +59,7 @@ Universal runtime compatibility across **CPython 3.8 to 3.14, PyPy 3.8 to 3.11 w
 | **Conda / Mamba** | `conda install -c conda-forge yfinance-ta-patterns` | Recommended for Quant, Finance & Data Science |
 | **Conda + Native TA-Lib** | `conda install -c conda-forge yfinance-ta-patterns ta-lib` | Full C-accelerated TA-Lib with **zero compilation** |
 | **Pixi** | `pixi add yfinance-ta-patterns` | Modern high-speed reproducible Conda workflow |
+| **Ubuntu / Debian (APT PPA)** | `curl -sS https://eminsk.github.io/ppa/setup.sh \| sudo bash`<br>`sudo apt install python3-yfinance-ta-patterns` | Official PPA repository (pure apt, zero URLs) |
 | **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.35-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
 | **Ubuntu / Debian (pipx)** | `sudo apt install pipx && pipx install yfinance-ta-patterns` | Isolated global CLI tool install (PEP 668 compliant) |
 | **Windows (MSYS2)** | `pacman -S mingw-w64-x86_64-python-yfinance-ta-patterns` | Native MSYS2 MinGW package (zero C compiler needed) |
