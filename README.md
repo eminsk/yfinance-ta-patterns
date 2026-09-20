@@ -3,6 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/yfinance-ta-patterns?color=blue)](https://pypi.org/project/yfinance-ta-patterns/)
 [![Conda Version](https://img.shields.io/conda/vn/conda-forge/yfinance-ta-patterns.svg)](https://anaconda.org/conda-forge/yfinance-ta-patterns)
 [![Ubuntu / Debian PPA](https://img.shields.io/badge/Ubuntu%20%2F%20Debian-APT%20PPA-E95420?logo=ubuntu&logoColor=white)](https://eminsk.github.io/ppa/)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/eminsk/yfinance-ta-patterns/blob/main/notebooks/yfinance_ta_patterns_quickstart.ipynb)
 [![Python](https://img.shields.io/pypi/pyversions/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
 [![PyPy](https://img.shields.io/badge/PyPy-3.8%20--%203.11-orange.svg)](https://www.pypy.org/)
 [![No-GIL](https://img.shields.io/badge/No--GIL-3.14t%20--%203.15t-purple.svg)](https://peps.python.org/pep-0703/)
