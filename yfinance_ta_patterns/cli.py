@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import sys
+import unicodedata
 from collections.abc import Sequence
 from typing import Any
 
@@ -54,6 +55,18 @@ def normalize_timeframe(timeframe: str) -> str:
     return interval
 
 
+def _display_width(text: str) -> int:
+    """Calculate terminal display width of a string taking wide characters into account."""
+    return sum(2 if unicodedata.east_asian_width(c) in ("W", "F") else 1 for c in text)
+
+
+def _pad_cell(text: str, target_width: int) -> str:
+    """Pad a string with trailing spaces to match target display width."""
+    current_width = _display_width(text)
+    padding = max(0, target_width - current_width)
+    return text + (" " * padding)
+
+
 def _markdown_cell(value: Any) -> str:
     """Render a single markdown table cell, escaping pipes that would split the row."""
     text = "" if value is None else str(value)
@@ -61,21 +74,59 @@ def _markdown_cell(value: Any) -> str:
 
 
 def format_markdown_table(df: pd.DataFrame) -> str:
-    """Render a DataFrame as a GitHub-flavored markdown table.
+    """Render a DataFrame as an aligned GitHub-flavored markdown table.
 
     Rendered locally because pandas' `to_markdown` requires the optional `tabulate`
     dependency, which this package does not ship.
     """
+    if df.empty and len(df.columns) == 0:
+        return ""
+
     headers = [str(col) for col in df.columns]
-    lines = [
-        "| " + " | ".join(headers) + " |",
-        "| " + " | ".join("---" for _ in headers) + " |",
-    ]
-    lines.extend(
-        "| " + " | ".join(_markdown_cell(value) for value in row) + " |"
+    rows = [
+        [_markdown_cell(value) for value in row]
         for row in df.itertuples(index=False, name=None)
-    )
-    return "\n".join(lines)
+    ]
+
+    widths = [
+        max(_display_width(h), max((_display_width(r[i]) for r in rows), default=0), 3)
+        for i, h in enumerate(headers)
+    ]
+
+    header_line = "| " + " | ".join(_pad_cell(h, w) for h, w in zip(headers, widths)) + " |"
+    separator_line = "| " + " | ".join("-" * w for w in widths) + " |"
+    data_lines = [
+        "| " + " | ".join(_pad_cell(cell, w) for cell, w in zip(row, widths)) + " |"
+        for row in rows
+    ]
+
+    return "\n".join([header_line, separator_line, *data_lines])
+
+
+def format_price(val: Any) -> str:
+    """Format price with appropriate precision for financial assets."""
+    if val is None or val == "":
+        return "-"
+    try:
+        f = float(val)
+        if f == 0.0:
+            return "0.00"
+        abs_f = abs(f)
+        if abs_f < 0.001:
+            return f"{f:.6f}"
+        elif abs_f < 10.0:
+            return f"{f:.5f}"
+        elif abs_f < 1000.0:
+            formatted = f"{f:.4f}".rstrip("0")
+            if formatted.endswith("."):
+                formatted += "00"
+            elif len(formatted.split(".")[1]) < 2:
+                formatted += "0"
+            return formatted
+        else:
+            return f"{f:.2f}"
+    except (ValueError, TypeError):
+        return str(val)
 
 
 def resolve_symbols(symbol_arg: str | None, all_pairs_flag: bool = False) -> list[str]:
@@ -100,6 +151,103 @@ def resolve_symbols(symbol_arg: str | None, all_pairs_flag: bool = False) -> lis
     if "," in symbol_arg:
         return [s.strip() for s in symbol_arg.split(",") if s.strip()]
     return [symbol_arg.strip()]
+
+
+def render_rich_opportunity_ranking(
+    df: pd.DataFrame,
+    best: pd.Series,
+    best_entry: str,
+    best_sl: str,
+    best_tp1: str,
+    best_tp2: str,
+) -> None:
+    """Render Opportunity Ranking table and top setup panel using rich."""
+    from rich import box
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+
+    detected_width = Console().width or 135
+    console = Console(width=max(detected_width, 135))
+
+    table = Table(
+        title=f"📊 OPPORTUNITY RANKING ({len(df)} setups, sorted by confluence quality)",
+        title_style="bold cyan",
+        box=box.ROUNDED,
+        header_style="bold magenta",
+        expand=False,
+    )
+
+    table.add_column("Time", justify="center", style="dim", no_wrap=True)
+    table.add_column("Symbol", justify="center", style="bold yellow", no_wrap=True)
+    table.add_column("Direction", justify="center", no_wrap=True)
+    table.add_column("Pattern", justify="left", style="bold", no_wrap=True)
+    table.add_column("Confluence", justify="right", style="bold", no_wrap=True)
+    table.add_column("Grade", justify="center", no_wrap=True)
+    table.add_column("Entry", justify="right", no_wrap=True)
+    table.add_column("StopLoss", justify="right", style="red", no_wrap=True)
+    table.add_column("TP1", justify="right", style="green", no_wrap=True)
+    table.add_column("RR", justify="center", no_wrap=True)
+    table.add_column("Trend", justify="center", no_wrap=True)
+    table.add_column("RSI", justify="right", no_wrap=True)
+
+    for _, row in df.iterrows():
+        grade = str(row["Grade"])
+        grade_style = (
+            "bold green"
+            if grade in ("EXCELLENT", "HIGH")
+            else ("yellow" if grade == "MODERATE" else "dim")
+        )
+        conf_val = str(row["Confluence"])
+        try:
+            conf_num = float(conf_val.rstrip("%"))
+        except ValueError:
+            conf_num = 0.0
+        conf_style = (
+            "bold green" if conf_num >= 60 else ("yellow" if conf_num >= 50 else "white")
+        )
+        trend_val = str(row["Trend"])
+        trend_style = "green" if "BULL" in trend_val else ("red" if "BEAR" in trend_val else "dim")
+        tp1_val = str(row.get("TakeProfit_1", row.get("TP1", "-")))
+
+        table.add_row(
+            str(row["Time"]),
+            str(row["Symbol"]),
+            str(row["Direction"]),
+            str(row["Pattern"]),
+            f"[{conf_style}]{conf_val}[/{conf_style}]",
+            f"[{grade_style}]{grade}[/{grade_style}]",
+            str(row["Entry"]),
+            str(row["StopLoss"]),
+            tp1_val,
+            str(row["RR"]),
+            f"[{trend_style}]{trend_val}[/{trend_style}]",
+            str(row["RSI"]),
+        )
+
+    console.print()
+    console.print(table)
+
+    best_border = "green" if "BUY" in str(best["Direction"]) else "red"
+    panel_lines = [
+        f"  • [bold]Trade Direction:[/bold]    {best['Direction']} (Pattern: [bold cyan]{best['Pattern']}[/bold cyan])",
+        f"  • [bold]Confluence Score:[/bold]   [bold green]{best['Confluence']}[/bold green] [Grade: [cyan]{best['Grade']}[/cyan]]",
+        f"  • [bold]Trend Alignment:[/bold]    [green]{best['Trend']}[/green]",
+        f"  • [bold]RSI(14) Momentum:[/bold]   {best['RSI']}",
+        f"  • [bold]Entry Price:[/bold]        [bold]{best_entry}[/bold]",
+        f"  • [bold]Invalidation (SL):[/bold]  [red]{best_sl}[/red]",
+        f"  • [bold]Target 1 (TP1):[/bold]     [green]{best_tp1}[/green] (R/R {best['RR']})",
+        f"  • [bold]Target 2 (TP2):[/bold]     [green]{best_tp2}[/green]",
+        f"  • [bold]Signal Candle:[/bold]      {best['Time']}",
+    ]
+    panel = Panel(
+        "\n".join(panel_lines),
+        title=f"🏆 [bold gold1]TOP RECOMMENDED SETUP RIGHT NOW: {best['Symbol']}[/bold gold1]",
+        border_style=best_border,
+        expand=False,
+    )
+    console.print()
+    console.print(panel)
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -560,43 +708,58 @@ def run_cli(args: argparse.Namespace) -> int:
             print(json.dumps(export_data, indent=2, ensure_ascii=False))
             return 0
 
+        display_df = signals_df[display_cols].copy()
+        for price_col in ("Entry", "StopLoss", "TakeProfit_1"):
+            if price_col in display_df.columns:
+                display_df[price_col] = display_df[price_col].apply(format_price)
+
+        best_entry = format_price(best["Entry"])
+        best_sl = format_price(best["StopLoss"])
+        best_tp1 = format_price(best["TakeProfit_1"])
+        best_tp2 = format_price(best["TakeProfit_2"])
+
         if args.format == "markdown":
             print(
                 f"## 📊 Opportunity Ranking — {len(signals_df)} setups, "
                 "sorted by confluence quality\n"
             )
-            print(format_markdown_table(signals_df[display_cols]))
+            print(format_markdown_table(display_df))
             print(f"\n### 🏆 Top Recommended Setup: {best['Symbol']}\n")
             print(f"- **Trade Direction:** {best['Direction']} (Pattern: `{best['Pattern']}`)")
             print(f"- **Confluence Score:** {best['Confluence']} (Grade: `{best['Grade']}`)")
             print(f"- **Trend Alignment:** {best['Trend']}")
             print(f"- **RSI(14) Momentum:** {best['RSI']}")
-            print(f"- **Entry Price:** `{best['Entry']}`")
-            print(f"- **Invalidation (SL):** `{best['StopLoss']}`")
-            print(f"- **Target 1 (TP1):** `{best['TakeProfit_1']}` (R/R `{best['RR']}`)")
-            print(f"- **Target 2 (TP2):** `{best['TakeProfit_2']}`")
+            print(f"- **Entry Price:** `{best_entry}`")
+            print(f"- **Invalidation (SL):** `{best_sl}`")
+            print(f"- **Target 1 (TP1):** `{best_tp1}` (R/R `{best['RR']}`)")
+            print(f"- **Target 2 (TP2):** `{best_tp2}`")
             print(f"- **Signal Candle:** `{best['Time']}`")
         else:
-            print("\n" + "=" * 105)
-            print(
-                f"📊 OPPORTUNITY RANKING ({len(signals_df)} setups, sorted by confluence quality):"
-            )
-            print("=" * 105)
-            print(signals_df[display_cols].to_string(index=False))
+            try:
+                render_rich_opportunity_ranking(
+                    display_df, best, best_entry, best_sl, best_tp1, best_tp2
+                )
+            except Exception:
+                print("\n" + "=" * 105)
+                print(
+                    f"📊 OPPORTUNITY RANKING ({len(signals_df)} setups, sorted by confluence quality):"
+                )
+                print("=" * 105)
+                print(display_df.to_string(index=False))
 
-            print("\n" + "🔥" * 38)
-            print(f"  🏆 TOP RECOMMENDED SETUP RIGHT NOW: {best['Symbol']}")
-            print("🔥" * 38)
-            print(f"  • Trade Direction:    {best['Direction']} (Pattern: {best['Pattern']})")
-            print(f"  • Confluence Score:   {best['Confluence']} [Grade: {best['Grade']}]")
-            print(f"  • Trend Alignment:    {best['Trend']}")
-            print(f"  • RSI(14) Momentum:   {best['RSI']}")
-            print(f"  • Entry Price:        {best['Entry']}")
-            print(f"  • Invalidation (SL):  {best['StopLoss']}")
-            print(f"  • Target 1 (TP1):     {best['TakeProfit_1']} (R/R {best['RR']})")
-            print(f"  • Target 2 (TP2):     {best['TakeProfit_2']}")
-            print(f"  • Signal Candle:      {best['Time']}")
-            print("=" * 76)
+                print("\n" + "🔥" * 38)
+                print(f"  🏆 TOP RECOMMENDED SETUP RIGHT NOW: {best['Symbol']}")
+                print("🔥" * 38)
+                print(f"  • Trade Direction:    {best['Direction']} (Pattern: {best['Pattern']})")
+                print(f"  • Confluence Score:   {best['Confluence']} [Grade: {best['Grade']}]")
+                print(f"  • Trend Alignment:    {best['Trend']}")
+                print(f"  • RSI(14) Momentum:   {best['RSI']}")
+                print(f"  • Entry Price:        {best_entry}")
+                print(f"  • Invalidation (SL):  {best_sl}")
+                print(f"  • Target 1 (TP1):     {best_tp1} (R/R {best['RR']})")
+                print(f"  • Target 2 (TP2):     {best_tp2}")
+                print(f"  • Signal Candle:      {best['Time']}")
+                print("=" * 76)
 
         if args.ai_analyst:
             print("\n" + "=" * 76)

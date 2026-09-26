@@ -102,9 +102,9 @@ def test_format_markdown_table_renders_github_table():
     rendered = cli.format_markdown_table(df)
 
     assert rendered.splitlines() == [
-        "| Timestamp | Signal |",
-        "| --- | --- |",
-        "| 2025-01-06 | 100 |",
+        "| Timestamp  | Signal |",
+        "| ---------- | ------ |",
+        "| 2025-01-06 | 100    |",
     ]
 
 
@@ -113,7 +113,19 @@ def test_format_markdown_table_escapes_pipes_and_none():
 
     rendered = cli.format_markdown_table(df)
 
-    assert r"| A\|B |  |" in rendered
+    assert r"| A\|B   |      |" in rendered
+
+
+def test_format_price_precision():
+    assert cli.format_price(1.1397310495376587) == "1.13973"
+    assert cli.format_price(1.3245558738708496) == "1.32456"
+    assert cli.format_price(155.321) == "155.321"
+    assert cli.format_price(155.3) == "155.30"
+    assert cli.format_price(224.25) == "224.25"
+    assert cli.format_price(65100.5) == "65100.50"
+    assert cli.format_price(0.0) == "0.00"
+    assert cli.format_price(None) == "-"
+    assert cli.format_price("N/A") == "N/A"
 
 
 def test_markdown_format_is_no_longer_identical_to_text(monkeypatch, capsys):
@@ -128,9 +140,10 @@ def test_markdown_format_is_no_longer_identical_to_text(monkeypatch, capsys):
     cli.run_cli(cli.parse_args([*argv, "--format", "text"]))
     text_out = capsys.readouterr().out
 
-    assert "| Timestamp | Signal |" in markdown_out
-    assert "| --- | --- |" in markdown_out
-    assert "| --- | --- |" not in text_out
+    assert "| Timestamp" in markdown_out
+    assert "| Signal" in markdown_out
+    assert "| ---" in markdown_out
+    assert "| ---" not in text_out
     assert "MARUBOZU:" in text_out
 
 
@@ -149,8 +162,9 @@ def test_markdown_format_renders_opportunity_ranking(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "## 📊 Opportunity Ranking" in out
-    assert "| Time | Symbol |" in out
-    assert "| --- | --- |" in out
+    assert "| Time" in out
+    assert "| Symbol" in out
+    assert "| ---" in out
     assert "### 🏆 Top Recommended Setup:" in out
 
 

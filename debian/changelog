@@ -1,3 +1,9 @@
+yfinance-ta-patterns (0.3.37-1) unstable; urgency=medium
+
+  * Release v0.3.37: Rich terminal interface, table alignment, and price precision formatting.
+
+ -- eminsk <M_N_N@tut.by>  Sat, 26 Sep 2026 19:15:00 +0000
+
 yfinance-ta-patterns (0.3.36-1) unstable; urgency=medium
 
   * Release v0.3.36: Bug fixes, strict JSON compliance, tester isolation, and CLI markdown.
