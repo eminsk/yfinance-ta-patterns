@@ -13,6 +13,29 @@ from ..data import validate_asset_type
 from .scorer import PatternConfidenceResult, SignalGrade
 
 
+def _json_safe(obj: Any) -> Any:
+    """Recursively make a report JSON-safe.
+
+    `json.dumps` serializes non-finite floats as the bare tokens `NaN` / `Infinity`, which
+    are invalid strict JSON, and its `default` hook is never consulted for them. Market data
+    can legitimately carry NaN (e.g. a missing Volume on the forming bar), so every
+    non-finite float is mapped to `None` — matching how `PatternConfidenceResult.to_dict`
+    already treats NaN `rsi` / `atr`. NumPy scalars are normalized to native types so they
+    are emitted as numbers rather than falling through to `default=str`.
+    """
+    if isinstance(obj, (float, np.floating)):
+        return float(obj) if np.isfinite(obj) else None
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, dict):
+        return {key: _json_safe(value) for key, value in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(value) for value in obj]
+    return obj
+
+
 class AIMarketAnalyst:
     """Institutional-grade market intelligence synthesizer.
 
@@ -153,14 +176,24 @@ class AIMarketAnalyst:
         high_conv = sum(
             1 for r in results if r.grade in (SignalGrade.EXCELLENT, SignalGrade.STRONG)
         )
-        lines: list[str] = [
-            f"# AI Technical Intelligence Brief: {symbol} ({tf})",
-            f"**Current Price:** `{regime['current_price']}` | **20-Bar Return:** `{regime['return_20_bars_pct']:+.2f}%`",
-            f"**Signals Analyzed:** `{len(results)}` (High Conviction: `{high_conv}`)",
-            "",
-            "---",
-            "## Key Pattern Setups",
-        ]
+        lines: list[str] = [f"# AI Technical Intelligence Brief: {symbol} ({tf})"]
+        if regime.get("status") == "NO_DATA":
+            # get_market_regime_summary() returns only a status marker for an empty
+            # dataset, so the price/return fields must not be read unconditionally.
+            lines.append("**Market Data:** `unavailable` (empty dataset)")
+        else:
+            lines.append(
+                f"**Current Price:** `{regime['current_price']}` | "
+                f"**20-Bar Return:** `{regime['return_20_bars_pct']:+.2f}%`"
+            )
+        lines.extend(
+            [
+                f"**Signals Analyzed:** `{len(results)}` (High Conviction: `{high_conv}`)",
+                "",
+                "---",
+                "## Key Pattern Setups",
+            ]
+        )
 
         if not results:
             lines.append("No active patterns identified matching the selected criteria.")
@@ -219,9 +252,13 @@ class AIMarketAnalyst:
     ) -> str:
         """Serialize intelligence report to JSON string."""
         return json.dumps(
-            self.to_dict(symbol_or_results, timeframe),
+            _json_safe(self.to_dict(symbol_or_results, timeframe)),
             indent=indent,
             default=str,
+            # `_json_safe` removes every non-finite float, so this only guards against a
+            # serialization path that slips past it: fail loudly instead of emitting
+            # invalid JSON.
+            allow_nan=False,
         )
 
     def to_llm_prompt(

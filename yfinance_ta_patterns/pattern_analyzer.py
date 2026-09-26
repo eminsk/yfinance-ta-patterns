@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -131,7 +132,7 @@ class PatternAnalyzer:
                     mask &= day_index <= end_dt
                 signals = signals[mask]
 
-        return signals
+        return cast(pd.Series, signals)
 
     def analyze_all_for_date(self, date: str) -> Iterable[str]:
         """Analyze and format pattern signals for a specific date."""

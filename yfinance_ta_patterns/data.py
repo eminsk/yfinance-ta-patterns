@@ -172,7 +172,6 @@ _EXCHANGE_SUFFIX_MAP: dict[str, str] = {
     ".AT": "EUR",
     # UK
     ".L": "GBp",
-    ".IL": "USD",
     # Canada
     ".TO": "CAD",
     ".V": "CAD",
@@ -884,7 +883,7 @@ def _get_market_session_hours(
 ) -> tuple[str, datetime.time, datetime.time]:
     """Get exchange timezone, open time, and close time for an equity symbol."""
     clean_sym = symbol.strip().upper()
-    if clean_sym.endswith(".L") or clean_sym.endswith(".IL"):
+    if clean_sym.endswith(".L"):
         return "Europe/London", datetime.time(8, 0), datetime.time(16, 30)
     if any(
         clean_sym.endswith(sfx)
@@ -1463,6 +1462,9 @@ class MarketDataLoader:
             return data
 
         idx = data.index
+        # Calendar days of the raw index, in the exchange's own timezone. These are only
+        # trustworthy while the index is left untouched, so they are dropped when
+        # resampling rebuilds it (see below).
         orig_dates = list(idx.date) if isinstance(idx, pd.DatetimeIndex) else None
         if isinstance(idx, pd.DatetimeIndex):
             if idx.tz is None:
@@ -1473,6 +1475,12 @@ class MarketDataLoader:
         # Resample in UTC before local timezone conversion (Issue 8)
         if self._resample_rule:
             data = self._resample_if_needed(data, now_utc=now_utc)
+            # The resampled index is a fresh UTC-anchored grid, so the raw days captured
+            # above are no longer positionally aligned with `data.index` — indexing them
+            # returned a calendar day from the first hours of the download window and made
+            # the closed_only filtering below a no-op. Clearing them lets every branch fall
+            # back to its own `ts`-derived date, which is correct for a UTC-anchored grid.
+            orig_dates = None
 
         # Universal closed-only filtering in UTC / market session time before user timezone conversion
         if self.closed_only and not data.empty and isinstance(data.index, pd.DatetimeIndex):

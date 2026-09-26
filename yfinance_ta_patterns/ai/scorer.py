@@ -34,6 +34,23 @@ class SignalGrade(StrEnum):
     WEAK = "WEAK"  # >= 0.40
     FALSE_SIGNAL = "FALSE"  # < 0.40
 
+    @classmethod
+    def from_score(cls, score: float) -> SignalGrade:
+        """Map a confluence score in [0, 1] to its categorical grade.
+
+        Single source of truth for the thresholds above, so a result built from a bare
+        score can never disagree with the grade its score implies.
+        """
+        if score >= 0.80:
+            return cls.EXCELLENT
+        if score >= 0.70:
+            return cls.STRONG
+        if score >= 0.55:
+            return cls.MODERATE
+        if score >= 0.40:
+            return cls.WEAK
+        return cls.FALSE_SIGNAL
+
 
 @dataclass(**_DATACLASS_SLOTS_FROZEN)
 class TradeSetup:
@@ -201,6 +218,12 @@ class PatternConfidenceResult:
 
         object.__setattr__(self, "confidence_score", score)
         object.__setattr__(self, "confluence_score", score)
+
+        # An explicit grade always wins, but a result constructed from a bare score must not
+        # keep the dataclass default (WEAK) regardless of how high that score is. WEAK is
+        # also the default value, so it is indistinguishable from "not supplied" here.
+        if self.grade is SignalGrade.WEAK:
+            object.__setattr__(self, "grade", SignalGrade.from_score(score))
 
     def to_dict(self) -> dict[str, Any]:
         """Convert result to a structured dictionary for JSON / LLM consumption."""
@@ -606,16 +629,7 @@ class AIPatternScorer:
         final_confidence = max(0.05, min(0.98, confidence))
 
         # Categorize Signal Grade
-        if final_confidence >= 0.80:
-            grade = SignalGrade.EXCELLENT
-        elif final_confidence >= 0.70:
-            grade = SignalGrade.STRONG
-        elif final_confidence >= 0.55:
-            grade = SignalGrade.MODERATE
-        elif final_confidence >= 0.40:
-            grade = SignalGrade.WEAK
-        else:
-            grade = SignalGrade.FALSE_SIGNAL
+        grade = SignalGrade.from_score(final_confidence)
 
         # Determine pattern lookback window to find true pattern high/low extremes
         k = get_pattern_lookback(pattern_name)

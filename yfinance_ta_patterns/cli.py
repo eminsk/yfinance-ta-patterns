@@ -54,6 +54,30 @@ def normalize_timeframe(timeframe: str) -> str:
     return interval
 
 
+def _markdown_cell(value: Any) -> str:
+    """Render a single markdown table cell, escaping pipes that would split the row."""
+    text = "" if value is None else str(value)
+    return text.replace("|", "\\|")
+
+
+def format_markdown_table(df: pd.DataFrame) -> str:
+    """Render a DataFrame as a GitHub-flavored markdown table.
+
+    Rendered locally because pandas' `to_markdown` requires the optional `tabulate`
+    dependency, which this package does not ship.
+    """
+    headers = [str(col) for col in df.columns]
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
+    lines.extend(
+        "| " + " | ".join(_markdown_cell(value) for value in row) + " |"
+        for row in df.itertuples(index=False, name=None)
+    )
+    return "\n".join(lines)
+
+
 def resolve_symbols(symbol_arg: str | None, all_pairs_flag: bool = False) -> list[str]:
     """Resolve target symbols from CLI arguments.
 
@@ -345,6 +369,7 @@ def run_cli(args: argparse.Namespace) -> int:
 
         all_signals_records: list[dict[str, Any]] = []
         active_pairs_count = 0
+        skipped_symbols: list[tuple[str, str]] = []
         lookback = args.lookback_bars if args.lookback_bars is not None else 2
 
         for idx, sym in enumerate(symbols, 1):
@@ -364,6 +389,7 @@ def run_cli(args: argparse.Namespace) -> int:
                 )
                 df = loader.get_data()
                 if df.empty or len(df) < 20:
+                    skipped_symbols.append((clean_sym, "insufficient history (fewer than 20 bars)"))
                     continue
 
                 active_pairs_count += 1
@@ -464,12 +490,23 @@ def run_cli(args: argparse.Namespace) -> int:
                                     "df": df,
                                 }
                             )
-            except Exception:
+            except Exception as exc:
+                # A per-symbol failure must never vanish: the summary below lists it, so a
+                # systematic problem (bad interval, missing history, API change) is visible.
+                skipped_symbols.append((clean_sym, f"{type(exc).__name__}: {exc}"))
                 continue
 
         if sys.stdout and hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
             print(" " * 60, end="\r")
         print(f"✔ Scanned: {active_pairs_count} active pairs out of {len(symbols)}")
+
+        if skipped_symbols:
+            print(
+                f"⚠️ {len(skipped_symbols)} of {len(symbols)} symbols skipped:",
+                file=sys.stderr,
+            )
+            for skipped_sym, reason in skipped_symbols:
+                print(f"   • {skipped_sym}: {reason}", file=sys.stderr)
 
         if not all_signals_records:
             bars_info = (
@@ -497,22 +534,6 @@ def run_cli(args: argparse.Namespace) -> int:
             by=["Score_Raw", "RR_Raw"], ascending=[False, False]
         )
 
-        if args.format == "json":
-            import json
-
-            export_data = [
-                {k: v for k, v in row.items() if k not in ("df", "result")}
-                for row in signals_df.to_dict(orient="records")
-            ]
-            print(json.dumps(export_data, indent=2, ensure_ascii=False))
-            return 0
-
-        print("\n" + "=" * 105)
-        print(
-            f"📊 OPPORTUNITY RANKING ({len(signals_df)} setups, sorted by confluence quality):"
-        )
-        print("=" * 105)
-
         display_cols = [
             "Time",
             "Symbol",
@@ -527,23 +548,55 @@ def run_cli(args: argparse.Namespace) -> int:
             "Trend",
             "RSI",
         ]
-        print(signals_df[display_cols].to_string(index=False))
-
         best = signals_df.iloc[0]
 
-        print("\n" + "🔥" * 38)
-        print(f"  🏆 TOP RECOMMENDED SETUP RIGHT NOW: {best['Symbol']}")
-        print("🔥" * 38)
-        print(f"  • Trade Direction:    {best['Direction']} (Pattern: {best['Pattern']})")
-        print(f"  • Confluence Score:   {best['Confluence']} [Grade: {best['Grade']}]")
-        print(f"  • Trend Alignment:    {best['Trend']}")
-        print(f"  • RSI(14) Momentum:   {best['RSI']}")
-        print(f"  • Entry Price:        {best['Entry']}")
-        print(f"  • Invalidation (SL):  {best['StopLoss']}")
-        print(f"  • Target 1 (TP1):     {best['TakeProfit_1']} (R/R {best['RR']})")
-        print(f"  • Target 2 (TP2):     {best['TakeProfit_2']}")
-        print(f"  • Signal Candle:      {best['Time']}")
-        print("=" * 76)
+        if args.format == "json":
+            import json
+
+            export_data = [
+                {k: v for k, v in row.items() if k not in ("df", "result")}
+                for row in signals_df.to_dict(orient="records")
+            ]
+            print(json.dumps(export_data, indent=2, ensure_ascii=False))
+            return 0
+
+        if args.format == "markdown":
+            print(
+                f"## 📊 Opportunity Ranking — {len(signals_df)} setups, "
+                "sorted by confluence quality\n"
+            )
+            print(format_markdown_table(signals_df[display_cols]))
+            print(f"\n### 🏆 Top Recommended Setup: {best['Symbol']}\n")
+            print(f"- **Trade Direction:** {best['Direction']} (Pattern: `{best['Pattern']}`)")
+            print(f"- **Confluence Score:** {best['Confluence']} (Grade: `{best['Grade']}`)")
+            print(f"- **Trend Alignment:** {best['Trend']}")
+            print(f"- **RSI(14) Momentum:** {best['RSI']}")
+            print(f"- **Entry Price:** `{best['Entry']}`")
+            print(f"- **Invalidation (SL):** `{best['StopLoss']}`")
+            print(f"- **Target 1 (TP1):** `{best['TakeProfit_1']}` (R/R `{best['RR']}`)")
+            print(f"- **Target 2 (TP2):** `{best['TakeProfit_2']}`")
+            print(f"- **Signal Candle:** `{best['Time']}`")
+        else:
+            print("\n" + "=" * 105)
+            print(
+                f"📊 OPPORTUNITY RANKING ({len(signals_df)} setups, sorted by confluence quality):"
+            )
+            print("=" * 105)
+            print(signals_df[display_cols].to_string(index=False))
+
+            print("\n" + "🔥" * 38)
+            print(f"  🏆 TOP RECOMMENDED SETUP RIGHT NOW: {best['Symbol']}")
+            print("🔥" * 38)
+            print(f"  • Trade Direction:    {best['Direction']} (Pattern: {best['Pattern']})")
+            print(f"  • Confluence Score:   {best['Confluence']} [Grade: {best['Grade']}]")
+            print(f"  • Trend Alignment:    {best['Trend']}")
+            print(f"  • RSI(14) Momentum:   {best['RSI']}")
+            print(f"  • Entry Price:        {best['Entry']}")
+            print(f"  • Invalidation (SL):  {best['StopLoss']}")
+            print(f"  • Target 1 (TP1):     {best['TakeProfit_1']} (R/R {best['RR']})")
+            print(f"  • Target 2 (TP2):     {best['TakeProfit_2']}")
+            print(f"  • Signal Candle:      {best['Time']}")
+            print("=" * 76)
 
         if args.ai_analyst:
             print("\n" + "=" * 76)
@@ -663,6 +716,30 @@ def run_cli(args: argparse.Namespace) -> int:
             print(analyst.to_json(symbol, interval))
             return 0
 
+        if args.format == "markdown":
+            print(f"## 🧠 AI Pattern Intelligence: {symbol} ({interval}, {period}){range_info}\n")
+            for res in all_scored_results:
+                print(f"### {res.pattern_name} — `{res.grade.value}`\n")
+                print(f"- **Timestamp:** `{res.timestamp}`")
+                print(f"- **AI Confluence:** `{res.confidence * 100:.1f}/100`")
+                print(
+                    f"- **Regime:** `{res.trend_regime}` | RVOL: `{res.rvol:.2f}x` | "
+                    f"RSI: `{res.rsi:.1f}` | ATR: `{res.atr:.5f}`"
+                )
+                if res.trade_setup:
+                    ts = res.trade_setup
+                    print(
+                        f"- **Setup:** `{ts.direction}` @ `{ts.entry_price:.5f}` | "
+                        f"Stop: `{ts.stop_loss:.5f}` | TP1: `{ts.take_profit_1:.5f}` | "
+                        f"TP2: `{ts.take_profit_2:.5f}` (R/R `{ts.risk_reward_ratio:.1f}:1`)"
+                    )
+                if res.confluence_factors:
+                    print(f"- **Confluence:** {', '.join(res.confluence_factors)}")
+                if res.risk_factors:
+                    print(f"- **Risks:** {', '.join(res.risk_factors)}")
+                print()
+            return 0
+
         print(f"=== AI Pattern Intelligence: {symbol} ({interval}, {period}){range_info} ===")
         for res in all_scored_results:
             conf_score = f"{res.confidence * 100:.1f}/100"
@@ -695,6 +772,15 @@ def run_cli(args: argparse.Namespace) -> int:
             )
         else:
             print(f"No signals for any pattern on period {period} timeframe {interval}{range_info}")
+        return 0
+
+    if args.format == "markdown":
+        print(f"## 📈 Pattern Scan: {symbol} ({interval}, {period}){range_info}\n")
+        for pat_name, sig in classic_signals.items():
+            table = sig.rename("Signal").rename_axis("Timestamp").reset_index()
+            print(f"### {pat_name}\n")
+            print(format_markdown_table(table))
+            print()
         return 0
 
     print(f"Scanning patterns for {symbol} ({interval}, {period}){range_info}...")

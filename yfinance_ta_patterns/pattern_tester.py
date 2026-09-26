@@ -219,8 +219,8 @@ def resolve_periods_per_year(
         return HONG_KONG_PERIODS_PER_YEAR.get(tf, 250.0)
 
     # Equities / stocks
-    # LSE (.L, .IL) or European exchanges (.DE, .PA, etc.) have 8.5h trading sessions
-    if any(clean_sym.endswith(sfx) for sfx in (".L", ".IL")) or any(
+    # LSE (.L) or European exchanges (.DE, .PA, etc.) have 8.5h trading sessions
+    if clean_sym.endswith(".L") or any(
         clean_sym.endswith(sfx)
         for sfx in (
             ".DE",
@@ -361,11 +361,12 @@ def _safe_get_time(times: Any, idx: int | None) -> Any:
     if idx is None or times is None:
         return None
     try:
-      n = len(times)
-      if -n <= idx < n:
-        return times[idx]
-    except (AttributeError, Exception):
-      return None
+        n = len(times)
+        if -n <= idx < n:
+            return times[idx]
+    except Exception:
+        # e.g. a tslibs index that rejects len()/indexing on some PyPy/Cython builds.
+        return None
     return None
 
 
@@ -634,7 +635,7 @@ class PatternRankingTester:
                         as_of = last_ts.date()
                     if hasattr(first_ts, "date") and hasattr(last_ts, "date"):
                         d_range = (first_ts.date(), last_ts.date())
-                except (AttributeError, Exception):
+                except Exception:
                     as_of = None
                     d_range = None
             self._periods_per_year = resolve_periods_per_year(
@@ -685,7 +686,7 @@ class PatternRankingTester:
             elif s_tz is None and ts.tz is not None:
                 ts = ts.tz_convert(pytz.UTC).tz_localize(None)
 
-            sub = s.loc[:ts].dropna()
+            sub = s.loc[:ts].dropna()  # type: ignore[misc]
             if sub.empty:
                 return None
             last_ts = sub.index[-1]
@@ -1484,9 +1485,30 @@ class PatternRankingTester:
         return self._results[:n]
 
     def get_comparison_report(self) -> pd.DataFrame:
-        """Get comparison report with/without news filter, correctly matched by pattern."""
-        results_no_filter = self.test_all_patterns(filter_news=False)
-        results_with_filter = self.test_all_patterns(filter_news=True)
+        """Get comparison report with/without news filter, correctly matched by pattern.
+
+        Both rankings are recomputed internally, which resets the tester's own result and
+        trade buffers. The caller's previous run is snapshotted and restored afterwards, so
+        this read-only report does not change what `get_results()` or `export_results()`
+        return.
+        """
+        saved_results = self._results
+        saved_trades = list(self.trades)
+        saved_equity_curve = list(self.equity_curve)
+        saved_open_trade = self._last_open_trade
+        saved_approx_fx = self._used_approx_fx
+        try:
+            results_no_filter = list(self.test_all_patterns(filter_news=False))
+            results_with_filter = list(self.test_all_patterns(filter_news=True))
+            # Captured from the internal runs: the warning must describe this report's data,
+            # not the restored state of the caller's run.
+            report_approx_fx = self._used_approx_fx
+        finally:
+            self._results = saved_results
+            self.trades = saved_trades
+            self.equity_curve = saved_equity_curve
+            self._last_open_trade = saved_open_trade
+            self._used_approx_fx = saved_approx_fx
 
         map_with_filter = {r.pattern_name: r for r in results_with_filter}
 
@@ -1511,7 +1533,7 @@ class PatternRankingTester:
             )
 
         df = pd.DataFrame(data)
-        if self._used_approx_fx:
+        if report_approx_fx:
             df.attrs["fx_warning"] = (
                 "Static/approximate FX rates were used during currency conversion. "
                 "For historical accuracy, provide fx_history or enable strict_fx=True."
