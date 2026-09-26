@@ -111,7 +111,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pypy-version: ["pypy-3.11", "pypy-3.10", "pypy-3.9", "pypy-3.8"]
+        pypy-version: ["pypy-3.11.15", "pypy-3.10", "pypy-3.9", "pypy-3.8"]
     steps:
       - uses: actions/checkout@v4
 
@@ -140,7 +140,7 @@ jobs:
           & $pypyExe -m venv "$testDir\.venv"
           uv init --no-workspace $testDir
           Set-Location $testDir
-          if ("${{ matrix.pypy-version }}" -eq "pypy-3.11") {
+          if ("${{ matrix.pypy-version }}" -eq "pypy-3.11.15") {
             uv add "pandas<=3.0.5" --find-links C:\release_wheels
           }
           uv add "C:\release_wheels\yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links C:\release_wheels
@@ -156,7 +156,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pypy-version: ["pypy-3.11", "pypy-3.10", "pypy-3.9", "pypy-3.8"]
+        pypy-version: ["pypy-3.11.15", "pypy-3.10", "pypy-3.9", "pypy-3.8"]
     steps:
       - uses: actions/checkout@v4
 
@@ -182,7 +182,7 @@ jobs:
           uv init --no-workspace test_pypy --python ${{ matrix.pypy-version }}
           cd test_pypy
           uv python pin ${{ matrix.pypy-version }}
-          if [ "${{ matrix.pypy-version }}" = "pypy-3.11" ]; then
+          if [ "${{ matrix.pypy-version }}" = "pypy-3.11.15" ]; then
             uv add "pandas<=3.0.5" --find-links ../release_wheels
           fi
           uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
@@ -196,7 +196,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pypy-version: ["pypy-3.11", "pypy-3.10", "pypy-3.9", "pypy-3.8"]
+        pypy-version: ["pypy-3.11.15", "pypy-3.10", "pypy-3.9", "pypy-3.8"]
     steps:
       - uses: actions/checkout@v4
 
@@ -254,7 +254,7 @@ jobs:
           uv init --no-workspace test_pypy --python ${{ matrix.pypy-version }}
           cd test_pypy
           uv python pin ${{ matrix.pypy-version }}
-          if [ "${{ matrix.pypy-version }}" = "pypy-3.11" ]; then
+          if [ "${{ matrix.pypy-version }}" = "pypy-3.11.15" ]; then
             uv add "pandas<=3.0.5" --find-links ../release_wheels
           fi
           uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
