@@ -59,7 +59,7 @@ Universal runtime compatibility across **CPython 3.8 to 3.14, PyPy 3.8 to 3.11 w
 | **Conda + Native TA-Lib** | `conda install -c conda-forge yfinance-ta-patterns ta-lib` | Full C-accelerated TA-Lib with **zero compilation** |
 | **Pixi** | `pixi add yfinance-ta-patterns` | Modern high-speed reproducible Conda workflow |
 | **Ubuntu / Debian (APT PPA)** | `curl -sS https://eminsk.github.io/ppa/setup.sh \| sudo bash`<br>`sudo apt install python3-yfinance-ta-patterns` | Official PPA repository (pure apt, zero URLs) |
-| **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.37-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
+| **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.38-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
 | **Ubuntu / Debian (pipx)** | `sudo apt install pipx && pipx install yfinance-ta-patterns` | Isolated global CLI tool install (PEP 668 compliant) |
 | **uv (Python)** | `uv add yfinance-ta-patterns` | Sub-second pure Python installation |
 | **pip (Python)** | `pip install yfinance-ta-patterns` | Universal PyPI installation |

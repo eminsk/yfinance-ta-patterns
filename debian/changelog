@@ -1,3 +1,9 @@
+yfinance-ta-patterns (0.3.38-1) unstable; urgency=medium
+
+  * Release v0.3.38: Perfect monospace markdown table alignment, clean ASCII direction flags, and UTF-8 console output safety.
+
+ -- eminsk <M_N_N@tut.by>  Sat, 26 Sep 2026 23:45:00 +0000
+
 yfinance-ta-patterns (0.3.37-1) unstable; urgency=medium
 
   * Release v0.3.37: Rich terminal interface, table alignment, and price precision formatting.

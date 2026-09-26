@@ -69,7 +69,7 @@ def _pad_cell(text: str, target_width: int) -> str:
 
 def _markdown_cell(value: Any) -> str:
     """Render a single markdown table cell, escaping pipes that would split the row."""
-    text = "" if value is None else str(value)
+    text = "" if value is None else str(value).strip().replace("\r", "").replace("\n", " ")
     return text.replace("|", "\\|")
 
 
@@ -113,20 +113,20 @@ def format_price(val: Any) -> str:
             return "0.00"
         abs_f = abs(f)
         if abs_f < 0.001:
-            return f"{f:.6f}"
+            return f"{f:.6f}".strip()
         elif abs_f < 10.0:
-            return f"{f:.5f}"
+            return f"{f:.5f}".strip()
         elif abs_f < 1000.0:
             formatted = f"{f:.4f}".rstrip("0")
             if formatted.endswith("."):
                 formatted += "00"
             elif len(formatted.split(".")[1]) < 2:
                 formatted += "0"
-            return formatted
+            return formatted.strip()
         else:
-            return f"{f:.2f}"
+            return f"{f:.2f}".strip()
     except (ValueError, TypeError):
-        return str(val)
+        return str(val).strip()
 
 
 def resolve_symbols(symbol_arg: str | None, all_pairs_flag: bool = False) -> list[str]:
@@ -209,11 +209,17 @@ def render_rich_opportunity_ranking(
         trend_val = str(row["Trend"])
         trend_style = "green" if "BULL" in trend_val else ("red" if "BEAR" in trend_val else "dim")
         tp1_val = str(row.get("TakeProfit_1", row.get("TP1", "-")))
+        dir_val = str(row["Direction"])
+        dir_styled = (
+            "[bold green]BUY[/bold green]"
+            if "BUY" in dir_val
+            else "[bold red]SELL[/bold red]"
+        )
 
         table.add_row(
             str(row["Time"]),
             str(row["Symbol"]),
-            str(row["Direction"]),
+            dir_styled,
             str(row["Pattern"]),
             f"[{conf_style}]{conf_val}[/{conf_style}]",
             f"[{grade_style}]{grade}[/{grade_style}]",
@@ -228,9 +234,15 @@ def render_rich_opportunity_ranking(
     console.print()
     console.print(table)
 
-    best_border = "green" if "BUY" in str(best["Direction"]) else "red"
+    best_dir = str(best["Direction"])
+    best_dir_styled = (
+        "[bold green]BUY[/bold green]"
+        if "BUY" in best_dir
+        else "[bold red]SELL[/bold red]"
+    )
+    best_border = "green" if "BUY" in best_dir else "red"
     panel_lines = [
-        f"  • [bold]Trade Direction:[/bold]    {best['Direction']} (Pattern: [bold cyan]{best['Pattern']}[/bold cyan])",
+        f"  • [bold]Trade Direction:[/bold]    {best_dir_styled} (Pattern: [bold cyan]{best['Pattern']}[/bold cyan])",
         f"  • [bold]Confluence Score:[/bold]   [bold green]{best['Confluence']}[/bold green] [Grade: [cyan]{best['Grade']}[/cyan]]",
         f"  • [bold]Trend Alignment:[/bold]    [green]{best['Trend']}[/green]",
         f"  • [bold]RSI(14) Momentum:[/bold]   {best['RSI']}",
@@ -605,7 +617,7 @@ def run_cli(args: argparse.Namespace) -> int:
                                             if hasattr(ts, "strftime")
                                             else str(ts)
                                         ),
-                                        "Direction": "🟢 BUY" if direction == "BUY" else "🔴 SELL",
+                                        "Direction": direction,
                                         "Pattern": clean_pat,
                                         "Confluence": f"{score * 100:.1f}%",
                                         "Grade": grade_label,
@@ -632,7 +644,7 @@ def run_cli(args: argparse.Namespace) -> int:
                                         if hasattr(ts, "strftime")
                                         else str(ts)
                                     ),
-                                    "Direction": "🟢 BUY" if signal_val > 0 else "🔴 SELL",
+                                    "Direction": "BUY" if signal_val > 0 else "SELL",
                                     "Pattern": clean_pat,
                                     "Price": float(df.loc[ts, "Close"]),
                                     "df": df,
@@ -957,6 +969,12 @@ def run_cli(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str] | None = None) -> None:
     """Main CLI entrypoint."""
+    if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+        with contextlib.suppress(Exception):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+        with contextlib.suppress(Exception):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     parsed = parse_args(argv)
     try:
         sys.exit(run_cli(parsed))

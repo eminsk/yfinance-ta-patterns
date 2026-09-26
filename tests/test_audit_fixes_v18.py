@@ -167,6 +167,13 @@ def test_markdown_format_renders_opportunity_ranking(monkeypatch, capsys):
     assert "| ---" in out
     assert "### 🏆 Top Recommended Setup:" in out
 
+    table_lines = [line for line in out.splitlines() if line.startswith("|")]
+    assert len(table_lines) >= 3
+    first_pipes = [i for i, c in enumerate(table_lines[0]) if c == "|"]
+    for line in table_lines:
+        assert [i for i, c in enumerate(line) if c == "|"] == first_pipes
+        assert len(line) == len(table_lines[0])
+
 
 # --------------------------------------------------------------------------------------
 # 5. skipped symbols are reported
