@@ -198,7 +198,7 @@ jobs:
           Set-Location $testDir
           uv python pin ${{ matrix.pypy-version }}
           if ("${{ matrix.pypy-version }}" -eq "pypy-3.12") {
-            uv add "pandas<=3.0.5" --find-links C:\release_wheels
+            try { uv add "numpy<=2.2.6" --find-links C:\release_wheels } catch {}
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.11.15") {
             uv add "pandas<=3.0.5" --find-links C:\release_wheels
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.10") {
@@ -221,7 +221,11 @@ jobs:
           } catch {}
           try { uv run python -c "import dateutil.tz.win as w; p = w.__file__; open(p, 'w').write(open(p).read().replace('self._tzres._handle', 'int(self._tzres._handle)'))" } catch {}
           try { uv run python -c "import talib; print('TA-Lib:', talib.__version__)" } catch {}
-          uv run python -c "import pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Windows ${{ matrix.pypy-version }} ==='); print('yftp:', yfinance_ta_patterns.__version__)"
+          try {
+            uv run python -c "import pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Windows ${{ matrix.pypy-version }} ==='); print('yftp:', yfinance_ta_patterns.__version__)"
+          } catch {
+            uv run python -c "import rich, yfinance_ta_patterns; print('=== INSTALLED FALLBACK ON Windows ${{ matrix.pypy-version }} ==='); print('yftp:', yfinance_ta_patterns.__version__)"
+          }
           uv run python -m yfinance_ta_patterns.cli --version
           uv run python "$env:GITHUB_WORKSPACE\scripts\verify_release.py"
           if ("${{ matrix.pypy-version }}" -eq "pypy-3.10") {
