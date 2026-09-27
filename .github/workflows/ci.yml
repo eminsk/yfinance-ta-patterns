@@ -72,7 +72,7 @@ jobs:
           uv run yftp --version
           uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
           uv add pytest
-          uv run pytest "$GITHUB_WORKSPACE/tests" -q
+          uv run pytest "$GITHUB_WORKSPACE/tests" -q -W "ignore:.*urllib3 v2 only supports OpenSSL.*:Warning"
 
 
   verify-windows-experimental:
@@ -153,6 +153,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Build wheel for current workspace
+        run: |
+          uv build --wheel --out-dir "$env:GITHUB_WORKSPACE\dist"
+
       - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
         run: |
           Copy-Item -Recurse -Force release_wheels C:\release_wheels
@@ -172,14 +176,15 @@ jobs:
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.8") {
             uv add "pandas<=2.0.3" "numpy<2" --find-links C:\release_wheels
           }
-          uv add "$env:GITHUB_WORKSPACE[all]" --find-links C:\release_wheels
+          $currentWheel = (Get-Item "$env:GITHUB_WORKSPACE\dist\yfinance_ta_patterns-*.whl").FullName
+          uv add "${currentWheel}[all]" --find-links C:\release_wheels
           try { uv run python -c "import dateutil.tz.win as w; p = w.__file__; open(p, 'w').write(open(p).read().replace('self._tzres._handle', 'int(self._tzres._handle)'))" } catch {}
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Windows ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
           uv run python "$env:GITHUB_WORKSPACE\scripts\verify_release.py"
           if ("${{ matrix.pypy-version }}" -eq "pypy-3.10") {
             uv add pytest
-            uv run pytest "$env:GITHUB_WORKSPACE\tests" -q
+            uv run pytest "$env:GITHUB_WORKSPACE\tests" -q -W "ignore:.*urllib3 v2 only supports OpenSSL.*:Warning"
           }
 
 
@@ -207,6 +212,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Build wheel for current workspace
+        shell: bash
+        run: uv build --wheel --out-dir "$GITHUB_WORKSPACE/dist"
+
       - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
         shell: bash
         env:
@@ -222,13 +231,14 @@ jobs:
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.8" ]; then
             uv add "pandas<=2.0.3" "numpy<2" --find-links ../release_wheels
           fi
-          uv add "$GITHUB_WORKSPACE[all]" --find-links ../release_wheels
+          current_wheel=$(ls "$GITHUB_WORKSPACE/dist"/yfinance_ta_patterns-*.whl)
+          uv add "${current_wheel}[all]" --find-links ../release_wheels
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Linux ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
           uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
           if [ "${{ matrix.pypy-version }}" = "pypy-3.10" ]; then
             uv add pytest
-            uv run pytest "$GITHUB_WORKSPACE/tests" -q
+            uv run pytest "$GITHUB_WORKSPACE/tests" -q -W "ignore:.*urllib3 v2 only supports OpenSSL.*:Warning"
           fi
 
   verify-macos-pypy:
@@ -255,33 +265,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Ensure pandas wheel for macOS PyPy 3.8
-        if: matrix.pypy-version == 'pypy-3.8'
-        env:
-          CC: clang
-          CXX: clang++
-          LDSHARED: "clang -bundle -undefined dynamic_lookup"
-          LDCXXSHARED: "clang++ -bundle -undefined dynamic_lookup"
-          MACOSX_DEPLOYMENT_TARGET: "11.0"
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if ! ls release_wheels/pandas*pp38*.whl 1> /dev/null 2>&1; then
-            echo "Building pandas 2.0.3 wheel for macOS PyPy 3.8..."
-            uv python install pypy-3.8
-            pypyExe=$(uv python find pypy-3.8)
-            "$pypyExe" -m ensurepip || true
-            "$pypyExe" -m pip install --upgrade "pip>=23.3,<24.1" setuptools wheel "cython<3.0.0" build delocate || true
-
-            "$pypyExe" -m pip install --find-links release_wheels "numpy<2" || true
-            mkdir -p /tmp/pandas_src /tmp/raw_wheels
-            "$pypyExe" -m pip download --no-deps "pandas==2.0.3" -d /tmp/pandas_src
-            tar -xzf /tmp/pandas_src/pandas-*.tar.gz -C /tmp/pandas_src/
-            cd /tmp/pandas_src/pandas-*
-            "$pypyExe" -m build --wheel --no-isolation -o /tmp/raw_wheels/ || "$pypyExe" -m pip wheel . --no-deps --no-build-isolation -w /tmp/raw_wheels/ || true
-            cd "$GITHUB_WORKSPACE"
-            delocate-wheel --require-archs arm64 -w "$GITHUB_WORKSPACE/release_wheels/" -v /tmp/raw_wheels/pandas*.whl || cp /tmp/raw_wheels/pandas*.whl "$GITHUB_WORKSPACE/release_wheels/" || true
-            gh release upload v0.3.30 "$GITHUB_WORKSPACE/release_wheels/pandas"*pp38*.whl --clobber -R eminsk/yfinance-ta-patterns || true
-          fi
+      - name: Build wheel for current workspace
+        shell: bash
+        run: uv build --wheel --out-dir "$GITHUB_WORKSPACE/dist"
 
       - name: Test uv add yfinance-ta-patterns[all] with PyPy wheels
         shell: bash
@@ -302,13 +288,14 @@ jobs:
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.8" ]; then
             uv add "pandas<=2.0.3" "numpy<2" --find-links ../release_wheels
           fi
-          uv add "$GITHUB_WORKSPACE[all]" --find-links ../release_wheels
+          current_wheel=$(ls "$GITHUB_WORKSPACE/dist"/yfinance_ta_patterns-*.whl)
+          uv add "${current_wheel}[all]" --find-links ../release_wheels
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON macOS ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
           uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
           if [ "${{ matrix.pypy-version }}" = "pypy-3.10" ]; then
             uv add pytest
-            uv run pytest "$GITHUB_WORKSPACE/tests" -q
+            uv run pytest "$GITHUB_WORKSPACE/tests" -q -W "ignore:.*urllib3 v2 only supports OpenSSL.*:Warning"
           fi
 
 
@@ -343,4 +330,4 @@ jobs:
           uv run yftp --version
           uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
           uv add pytest
-          uv run pytest "$GITHUB_WORKSPACE/tests" -q
+          uv run pytest "$GITHUB_WORKSPACE/tests" -q -W "ignore:.*urllib3 v2 only supports OpenSSL.*:Warning"

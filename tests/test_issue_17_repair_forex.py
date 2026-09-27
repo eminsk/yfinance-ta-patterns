@@ -1,4 +1,4 @@
-﻿"""Unit tests for Issue #17:
+"""Unit tests for Issue #17:
 Prevent auto-enabling repair=True on intraday Forex tickers and provide resilient
 fallback retry when auto-repair yields empty data.
 """
