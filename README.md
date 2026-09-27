@@ -95,7 +95,7 @@ uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h
 > Python 3.13+ introduces experimental free-threaded (No-GIL) builds. `yfinance-ta-patterns` is verified on Windows, Linux, and macOS under free-threaded CPython. Here is what you need to know for a smooth No-GIL setup on Windows:
 >
 > #### 1. Python Version Selection & Wheel Availability
-> - **Python 3.13t, 3.14t & 3.15t (Recommended)**: PyPI provides official precompiled `cp313t`, `cp314t`, and `cp315t` Windows wheels for `lxml 6.1.3`, `numpy 2.5.3`, and `scipy 1.18.1`. Combining PyPI with our release wheelhouse (`pandas 3.0.5`, `curl_cffi`, and `ta-lib 0.7.1`) allows a 100% binary install with zero C compiler required.
+> - **Python 3.13t, 3.14t & 3.15t (Recommended)**: PyPI provides official precompiled Windows wheels for `numpy`, `scipy`, and `scikit-learn` across free-threaded runtimes. Combining PyPI with our release wheelhouse (`pandas 3.0.5`, `curl_cffi`, and `ta-lib 0.7.1`) allows a 100% binary install with zero C compiler required.
 >
 > #### 2. Understanding Automatic GIL Re-Enablement
 > In free-threaded interpreters, `sys._is_gil_enabled()` may return `True` for two common reasons:

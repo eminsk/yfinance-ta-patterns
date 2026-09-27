@@ -132,6 +132,10 @@ jobs:
                 gh release upload v0.3.30 $_.FullName --clobber -R eminsk/yfinance-ta-patterns
               }
             } catch {}
+          } elseif ("${{ matrix.python-version }}" -eq "3.13t") {
+            Remove-Item "$env:GITHUB_WORKSPACE\wheelhouse\yfinance-1.7.0*" -ErrorAction SilentlyContinue
+            uv add "yfinance<=1.5.2" "numpy<=2.4.6" "pandas==3.0.5" "scipy<=1.17.1" "scikit-learn<=1.8.0" --find-links "$env:GITHUB_WORKSPACE\wheelhouse" --no-build-package pandas --no-build-package curl-cffi --no-build-package ta-lib --no-build-package numpy --no-build-package scipy --no-build-package scikit-learn
+            uv add "${env:GITHUB_WORKSPACE}[all]" --find-links "$env:GITHUB_WORKSPACE\wheelhouse" --no-build-package pandas --no-build-package curl-cffi --no-build-package ta-lib --no-build-package numpy --no-build-package scipy --no-build-package scikit-learn
           } else {
             uv add "${env:GITHUB_WORKSPACE}[all]" --find-links "$env:GITHUB_WORKSPACE\wheelhouse" --no-build-package pandas --no-build-package curl-cffi --no-build-package ta-lib
           }
