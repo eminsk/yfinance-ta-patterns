@@ -5,7 +5,7 @@
 [![Ubuntu / Debian PPA](https://img.shields.io/badge/Ubuntu%20%2F%20Debian-APT%20PPA-E95420?logo=ubuntu&logoColor=white)](https://eminsk.github.io/ppa/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/eminsk/yfinance-ta-patterns/blob/main/notebooks/yfinance_ta_patterns_quickstart.ipynb)
 [![Python](https://img.shields.io/pypi/pyversions/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
-[![PyPy](https://img.shields.io/badge/PyPy-3.8%20--%203.11-orange.svg)](https://www.pypy.org/)
+[![PyPy](https://img.shields.io/badge/PyPy-3.8%20--%203.12-orange.svg)](https://www.pypy.org/)
 [![No-GIL](https://img.shields.io/badge/No--GIL-3.14t%20--%203.15t-purple.svg)](https://peps.python.org/pep-0703/)
 [![CI](https://github.com/eminsk/yfinance-ta-patterns/actions/workflows/ci.yml/badge.svg)](https://github.com/eminsk/yfinance-ta-patterns/actions)
 [![Downloads](https://static.pepy.tech/badge/yfinance-ta-patterns)](https://pepy.tech/project/yfinance-ta-patterns)
@@ -13,7 +13,7 @@
 
 High-performance Python library and CLI that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate multi-factor confluence scores (deterministic quantitative confluence heuristic, not uncalibrated win-rate probability), trade setups, and LLM-ready market briefs.
 
-Universal runtime compatibility across **CPython 3.8 to 3.14, PyPy 3.8 to 3.11 with high-speed JIT tracing, and legacy Windows 7+ support**. Free-threaded CPython 3.14t and 3.15.0rc2t are verified when the interpreter is started with its GIL disabled; standard CPython 3.15 remains preview-only until upstream Windows dependency wheels are available.
+Universal runtime compatibility across **CPython 3.8 to 3.14, PyPy 3.8 to 3.12 with high-speed JIT tracing, and legacy Windows 7+ support**. Free-threaded CPython 3.14t and 3.15.0rc2t are verified when the interpreter is started with its GIL disabled; standard CPython 3.15 remains preview-only until upstream Windows dependency wheels are available.
 
 ---
 
@@ -40,7 +40,7 @@ Universal runtime compatibility across **CPython 3.8 to 3.14, PyPy 3.8 to 3.11 w
 | **CPython (Standard preview)** | 3.15.0rc2 | Standard bytecode + GIL | ⚠️ Preview | Windows needs a pandas source build until upstream ships a cp315 wheel |
 | **CPython (Free-Threaded)** | 3.14t, 3.15.0rc2t | Multi-core No-GIL (PEP 703) | ✅ Verified with GIL disabled | Windows release wheelhouse for pandas, curl_cffi, and TA-Lib |
 | **CPython (Free-Threaded, legacy)** | 3.13t | Multi-core No-GIL (PEP 703) | Best effort | Depends on third-party wheel availability |
-| **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11 | High-speed JIT tracing | ✅ Fully Supported | Included in Release |
+| **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11, 3.12 | High-speed JIT tracing | ✅ Fully Supported | Included in Release |
 | **Operating Systems** | Windows (7, 8, 10, 11), Linux, macOS (Intel & Apple Silicon) | x86_64, ARM64 | ✅ Fully Supported | Universal & Native |
 
 ---
@@ -79,7 +79,7 @@ uv python pin 3.14t
 $env:PYTHON_GIL = "0"
 uv add "yfinance-ta-patterns[all]" --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.26 --no-config
 
-# 4. High-Performance PyPy JIT (PyPy 3.8, 3.9, 3.10, 3.11):
+# 4. High-Performance PyPy JIT (PyPy 3.8, 3.9, 3.10, 3.11, 3.12):
 uv python pin pypy-3.8
 uv add "yfinance-ta-patterns[all]" --no-config
 
@@ -170,7 +170,7 @@ pip install "yfinance-ta-patterns[talib]"
 
 All 37 binary wheels are pre-compiled and attached to **[Release v0.3.26](https://github.com/eminsk/yfinance-ta-patterns/releases/tag/v0.3.26)**:
 
-##### PyPy (High-Speed JIT 3.8 – 3.11):
+##### PyPy (High-Speed JIT 3.8 – 3.12):
 ```bash
 # PyPy 3.8 (Windows 7+ compatible):
 uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/ta_lib-0.7.1-pp38-pypy38_pp73-win_amd64.whl
