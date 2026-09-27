@@ -134,7 +134,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pypy-version: ["pypy-3.11.15", "pypy-3.10", "pypy-3.9", "pypy-3.8"]
+        include:
+          - pypy-version: "pypy-3.11.15"
+            abi: "pp311"
+          - pypy-version: "pypy-3.10"
+            abi: "pp310"
+          - pypy-version: "pypy-3.9"
+            abi: "pp39"
+          - pypy-version: "pypy-3.8"
+            abi: "pp38"
     steps:
       - uses: actions/checkout@v4
 
@@ -146,7 +154,7 @@ jobs:
       - name: Download PyPy wheels from release
         run: |
           for ($i = 1; $i -le 3; $i++) {
-            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*win*" -p "*yfinance_ta_patterns*"
+            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels --clobber -p "*${{ matrix.abi }}*win*"
             if ($LASTEXITCODE -eq 0) { break }
             Start-Sleep -Seconds 3
           }
@@ -194,7 +202,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pypy-version: ["pypy-3.11.15", "pypy-3.10", "pypy-3.9", "pypy-3.8"]
+        include:
+          - pypy-version: "pypy-3.11.15"
+            abi: "pp311"
+          - pypy-version: "pypy-3.10"
+            abi: "pp310"
+          - pypy-version: "pypy-3.9"
+            abi: "pp39"
+          - pypy-version: "pypy-3.8"
+            abi: "pp38"
     steps:
       - uses: actions/checkout@v4
 
@@ -207,7 +223,7 @@ jobs:
         shell: bash
         run: |
           for i in 1 2 3; do
-            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*linux*" -p "*yfinance_ta_patterns*" && break || sleep 3
+            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels --clobber -p "*${{ matrix.abi }}*linux*" && break || sleep 3
           done
         env:
           GH_TOKEN: ${{ github.token }}
@@ -249,7 +265,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pypy-version: ["pypy-3.11.15", "pypy-3.10", "pypy-3.9", "pypy-3.8"]
+        include:
+          - pypy-version: "pypy-3.11.15"
+            abi: "pp311"
+          - pypy-version: "pypy-3.10"
+            abi: "pp310"
+          - pypy-version: "pypy-3.9"
+            abi: "pp39"
+          - pypy-version: "pypy-3.8"
+            abi: "pp38"
     steps:
       - uses: actions/checkout@v4
 
@@ -262,7 +286,7 @@ jobs:
         shell: bash
         run: |
           for i in 1 2 3; do
-            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels -p "*macosx*" -p "*yfinance_ta_patterns*" && break || sleep 3
+            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels --clobber -p "*${{ matrix.abi }}*macosx*" && break || sleep 3
           done
         env:
           GH_TOKEN: ${{ github.token }}
