@@ -173,8 +173,9 @@ jobs:
           uv python install ${{ matrix.pypy-version }}
           $pypyExe = uv python find ${{ matrix.pypy-version }}
           & $pypyExe -m venv "$testDir\.venv"
-          uv init --no-workspace $testDir
+          uv init --no-workspace $testDir --python ${{ matrix.pypy-version }}
           Set-Location $testDir
+          uv python pin ${{ matrix.pypy-version }}
           if ("${{ matrix.pypy-version }}" -eq "pypy-3.11.15") {
             uv add "pandas<=3.0.5" --find-links C:\release_wheels
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.10") {
@@ -182,7 +183,7 @@ jobs:
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.9") {
             uv add "pandas<=2.3.3" "numpy<2" --find-links C:\release_wheels
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.8") {
-            uv add "pandas<=2.0.3" "numpy<2" --find-links C:\release_wheels
+            uv add "pandas<=2.0.3" "numpy<2" "lxml<=5.4.0" --find-links C:\release_wheels
           }
           $currentWheel = (Get-Item "$env:GITHUB_WORKSPACE\dist\yfinance_ta_patterns-*.whl").FullName
           uv add "${currentWheel}[all]" --find-links C:\release_wheels
