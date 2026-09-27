@@ -13,7 +13,7 @@
 
 High-performance Python library and CLI that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate multi-factor confluence scores (deterministic quantitative confluence heuristic, not uncalibrated win-rate probability), trade setups, and LLM-ready market briefs.
 
-Universal runtime compatibility across **CPython 3.8 to 3.14, PyPy 3.8 to 3.12 with high-speed JIT tracing, and legacy Windows 7+ support**. Free-threaded CPython 3.14t and 3.15.0rc2t are verified when the interpreter is started with its GIL disabled; standard CPython 3.15 remains preview-only until upstream Windows dependency wheels are available.
+Universal runtime compatibility across **CPython 3.8 to 3.15, PyPy 3.8 to 3.12 with high-speed JIT tracing, and legacy Windows 7+ support**. Free-threaded CPython 3.14t and 3.15.0rc2t are verified when the interpreter is started with its GIL disabled; standard CPython 3.15 is fully verified using our precompiled release wheelhouse for Windows (pandas 3.0.5 and TA-Lib 0.7.1).
 
 ---
 
@@ -37,7 +37,7 @@ Universal runtime compatibility across **CPython 3.8 to 3.14, PyPy 3.8 to 3.12 w
 | Runtime / Implementation | Supported Versions | Execution Mode | Status | Pre-built Wheels |
 |:---|:---|:---|:---:|:---:|
 | **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14 | Standard bytecode + GIL | ✅ Fully Supported | PyPI wheels |
-| **CPython (Standard preview)** | 3.15.0rc2 | Standard bytecode + GIL | ⚠️ Preview | Windows needs a pandas source build until upstream ships a cp315 wheel |
+| **CPython (Standard preview)** | 3.15.0rc2 | Standard bytecode + GIL | ✅ Fully Supported | Windows release wheelhouse for pandas and TA-Lib |
 | **CPython (Free-Threaded)** | 3.14t, 3.15.0rc2t | Multi-core No-GIL (PEP 703) | ✅ Verified with GIL disabled | Windows release wheelhouse for pandas, curl_cffi, and TA-Lib |
 | **CPython (Free-Threaded, legacy)** | 3.13t | Multi-core No-GIL (PEP 703) | Best effort | Depends on third-party wheel availability |
 | **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11, 3.12 | High-speed JIT tracing | ✅ Fully Supported | Included in Release |
@@ -235,7 +235,7 @@ Use the `uv add ... --find-links` command from Quick Start. It selects the match
 | **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **Verified** | Start with `PYTHON_GIL=0` or `-X gil=0`; use the Windows TA-Lib release wheelhouse. |
 | **Python 3.13t** | **Free-Threaded (No-GIL)** | Best effort | Use the fallback or provide compatible third-party wheels for the desired extras. |
 | **Python 3.15t** | **Free-Threaded (No-GIL)** | ✅ **Verified on 3.15.0rc2** | Use the matching release wheel and revalidate after the final release. |
-| **Python 3.15** | **Standard (GIL)** | Preview | On Windows, wait for an upstream `pandas` cp315 wheel or build pandas from source. |
+| **Python 3.15** | **Standard (GIL)** | ✅ **Verified on 3.15.0rc2** | Precompiled `pandas` and `ta-lib` wheels available in Windows release wheelhouse (zero compilation). |
 | **Python 3.13** | **Standard (GIL)** | ✅ **100% Supported** | Current stable Python release. Full support for native TA-Lib and pre-built wheels. |
 | **Python 3.12** | **Standard (GIL)** | ✅ **100% Supported** | Long-Term Support release with instant sub-second wheel installation. |
 
