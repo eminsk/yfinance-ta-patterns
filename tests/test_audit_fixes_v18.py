@@ -32,18 +32,22 @@ from yfinance_ta_patterns.pattern_tester import PatternRankingTester, _safe_get_
 
 
 def _marubozu_frame(periods: int = 30) -> pd.DataFrame:
-    """Daily frame of textbook bullish marubozu: open == low, close == high, long body.
-
-    A gentle upward drift keeps ATR/RSI finite for the AI scorer.
-    """
+    """Daily frame with baseline candles and textbook bullish marubozu at the end."""
     dates = pd.date_range("2025-01-01", periods=periods, freq="1d", tz="UTC")
     opens = 100.0 + np.arange(periods) * 0.1
-    closes = opens + 2.0
+    closes = opens + 0.2
+    highs = closes + 0.05
+    lows = opens - 0.05
+    # Strong marubozu candles at the end (exceeds TA-Lib BodyLong average):
+    for i in range(-5, 0):
+        closes[i] = opens[i] + 3.0
+        highs[i] = closes[i]
+        lows[i] = opens[i]
     return pd.DataFrame(
         {
             "Open": opens,
-            "High": closes,
-            "Low": opens,
+            "High": highs,
+            "Low": lows,
             "Close": closes,
             "Volume": np.full(periods, 1000.0),
         },
