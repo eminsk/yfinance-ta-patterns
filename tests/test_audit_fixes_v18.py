@@ -13,6 +13,8 @@ Covers:
    silently changing what `get_results()` and `export_results()` returned afterwards.
 """
 
+from __future__ import annotations
+
 import datetime
 import warnings
 

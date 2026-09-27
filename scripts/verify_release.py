@@ -249,6 +249,7 @@ def check_7_multithreaded_concurrency() -> None:
 def check_8_safe_timestamp_and_indexing() -> None:
     """Check 8: Timestamp retrieval and indexing safety across CPython/PyPy."""
     import pandas as pd
+
     from yfinance_ta_patterns.pattern_tester import _safe_get_time
 
     # Standard DatetimeIndex
