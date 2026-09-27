@@ -71,6 +71,8 @@ jobs:
           uv run python -c "import talib, pandas, numpy, rich, sklearn, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON ${{ matrix.os }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run yftp --version
           uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
+          uv add pytest
+          uv run pytest "$GITHUB_WORKSPACE/tests" -q
 
 
   verify-windows-experimental:
@@ -170,11 +172,15 @@ jobs:
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.8") {
             uv add "pandas<=2.0.3" "numpy<2" --find-links C:\release_wheels
           }
-          uv add "C:\release_wheels\yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links C:\release_wheels
+          uv add "$env:GITHUB_WORKSPACE[all]" --find-links C:\release_wheels
           try { uv run python -c "import dateutil.tz.win as w; p = w.__file__; open(p, 'w').write(open(p).read().replace('self._tzres._handle', 'int(self._tzres._handle)'))" } catch {}
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Windows ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
           uv run python "$env:GITHUB_WORKSPACE\scripts\verify_release.py"
+          if ("${{ matrix.pypy-version }}" -eq "pypy-3.10") {
+            uv add pytest
+            uv run pytest "$env:GITHUB_WORKSPACE\tests" -q
+          }
 
 
   verify-linux-pypy:
@@ -216,10 +222,14 @@ jobs:
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.8" ]; then
             uv add "pandas<=2.0.3" "numpy<2" --find-links ../release_wheels
           fi
-          uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
+          uv add "$GITHUB_WORKSPACE[all]" --find-links ../release_wheels
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Linux ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
           uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
+          if [ "${{ matrix.pypy-version }}" = "pypy-3.10" ]; then
+            uv add pytest
+            uv run pytest "$GITHUB_WORKSPACE/tests" -q
+          fi
 
   verify-macos-pypy:
     name: Verify [all] on macos-latest (${{ matrix.pypy-version }})
@@ -292,10 +302,14 @@ jobs:
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.8" ]; then
             uv add "pandas<=2.0.3" "numpy<2" --find-links ../release_wheels
           fi
-          uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
+          uv add "$GITHUB_WORKSPACE[all]" --find-links ../release_wheels
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON macOS ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
           uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
+          if [ "${{ matrix.pypy-version }}" = "pypy-3.10" ]; then
+            uv add pytest
+            uv run pytest "$GITHUB_WORKSPACE/tests" -q
+          fi
 
 
   verify-38-all:
@@ -324,7 +338,9 @@ jobs:
         run: |
           uv init --no-workspace test_py38 --python 3.8
           cd test_py38
-          uv add "../release_wheels/yfinance_ta_patterns-0.3.30-py3-none-any.whl[all]" --find-links ../release_wheels
+          uv add "$GITHUB_WORKSPACE[all]" --find-links ../release_wheels
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON ${{ matrix.os }} (py3.8) ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run yftp --version
           uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
+          uv add pytest
+          uv run pytest "$GITHUB_WORKSPACE/tests" -q
