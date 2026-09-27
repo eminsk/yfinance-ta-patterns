@@ -92,7 +92,7 @@ jobs:
             verify_script: "scripts/verify_free_threaded.py"
           - python-version: "3.15"
             gil-desc: " (standard GIL)"
-            wheel_glob: "*cp315-cp315*"
+            wheel_glob: "*cp315-cp315-*"
             python_gil: "1"
             verify_script: "scripts/verify_release.py"
     steps:
@@ -117,6 +117,7 @@ jobs:
           uv init --no-workspace test_experimental --python ${{ matrix.python-version }}
           Set-Location test_experimental
           if ("${{ matrix.python-version }}" -eq "3.15") {
+            Remove-Item "$env:GITHUB_WORKSPACE\wheelhouse\*cp315t*" -ErrorAction SilentlyContinue
             uv add "${env:GITHUB_WORKSPACE}[all]" --find-links "$env:GITHUB_WORKSPACE\wheelhouse" --no-build-package ta-lib
           } else {
             uv add "${env:GITHUB_WORKSPACE}[all]" --find-links "$env:GITHUB_WORKSPACE\wheelhouse" --no-build-package pandas --no-build-package curl-cffi --no-build-package ta-lib
