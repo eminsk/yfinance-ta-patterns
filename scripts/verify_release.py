@@ -246,6 +246,29 @@ def check_7_multithreaded_concurrency() -> None:
     assert len(counts) == len(patterns), "Concurrency thread task drop detected"
 
 
+def check_8_safe_timestamp_and_indexing() -> None:
+    """Check 8: Timestamp retrieval and indexing safety across CPython/PyPy."""
+    import pandas as pd
+    from yfinance_ta_patterns.pattern_tester import _safe_get_time
+
+    # Standard DatetimeIndex
+    dti = pd.date_range("2025-01-01", periods=10, freq="D")
+    assert _safe_get_time(dti, 0) == dti[0]
+    assert _safe_get_time(dti, -1) == dti[-1]
+    assert _safe_get_time(dti, 999) is None
+    assert _safe_get_time(dti, -999) is None
+    assert _safe_get_time(dti, None) is None
+
+    # Empty index
+    empty_idx = pd.Index([])
+    assert _safe_get_time(empty_idx, 0) is None
+    assert _safe_get_time(None, 0) is None
+
+    # String index
+    str_idx = pd.Index(["2025-01-01", "2025-01-02", "2025-01-03"])
+    assert _safe_get_time(str_idx, 1) == "2025-01-02"
+
+
 CHECKS: list[tuple[str, Callable[[], None]]] = [
     ("Package Metadata & Semantic Version", check_1_metadata),
     ("Core Dependencies & TA-Lib Mode", check_2_dependencies),
@@ -254,6 +277,7 @@ CHECKS: list[tuple[str, Callable[[], None]]] = [
     ("Candlestick Pattern Analyzer Engine", check_5_pattern_analyzer),
     ("Backtesting Pipeline & AI Confluence Scorer", check_6_backtest_and_ai_scoring),
     ("Multi-Threaded Concurrency (PEP 703 Safety)", check_7_multithreaded_concurrency),
+    ("Safe Timestamp & Indexing (PyPy/CPython)", check_8_safe_timestamp_and_indexing),
 ]
 
 
