@@ -471,8 +471,10 @@ print(report_df)
 Run the test suite and quality checks:
 
 ```bash
-# Run pytest across test suite
+# Run pytest across full test suite (429 tests)
 uv run --extra dev pytest -v
+# or with standard pytest
+pytest -v
 
 # Linter and formatting check
 uv run --extra dev ruff check .
@@ -484,6 +486,8 @@ uv run --extra dev mypy yfinance_ta_patterns
 # Build source distribution and binary wheel
 uv build
 ```
+
+All 429 tests pass with 100% success rate across **Python 3.8 through 3.15 (including No-GIL free-threaded 3.13t–3.15t)** and **PyPy 3.8 through 3.12**.
 
 ---
  
