@@ -211,7 +211,8 @@ jobs:
             }
           } catch {}
           try { uv run python -c "import dateutil.tz.win as w; p = w.__file__; open(p, 'w').write(open(p).read().replace('self._tzres._handle', 'int(self._tzres._handle)'))" } catch {}
-          uv run python -c "try:`n    import talib; talib_ver = talib.__version__`nexcept ImportError:`n    talib_ver = 'pure-python fallback'`nimport pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Windows ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib_ver); print('yftp:', yfinance_ta_patterns.__version__)"
+          try { uv run python -c "import talib; print('TA-Lib:', talib.__version__)" } catch {}
+          uv run python -c "import pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Windows ${{ matrix.pypy-version }} ==='); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
           uv run python "$env:GITHUB_WORKSPACE\scripts\verify_release.py"
           if ("${{ matrix.pypy-version }}" -eq "pypy-3.10") {
@@ -284,14 +285,8 @@ jobs:
           current_wheel=$(ls "$GITHUB_WORKSPACE/dist"/yfinance_ta_patterns-*.whl)
           uv add "${current_wheel}[all]" --find-links ../release_wheels || uv add "${current_wheel}" --find-links ../release_wheels
           find "$(uv cache dir)" -name "*pp312*.whl" -exec gh release upload v0.3.30 {} --clobber -R eminsk/yfinance-ta-patterns \; 2>/dev/null || true
-          uv run python -c "try:
-    import talib; talib_ver = talib.__version__
-except ImportError:
-    talib_ver = 'pure-python fallback'
-import pandas, numpy, rich, yfinance_ta_patterns
-print('=== INSTALLED CLEANLY ON Linux ${{ matrix.pypy-version }} ===')
-print('TA-Lib:', talib_ver)
-print('yftp:', yfinance_ta_patterns.__version__)"
+          uv run python -c "import talib; print('TA-Lib:', talib.__version__)" 2>/dev/null || true
+          uv run python -c "import pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON Linux ${{ matrix.pypy-version }} ==='); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
           uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
           if [ "${{ matrix.pypy-version }}" = "pypy-3.10" ]; then
@@ -371,14 +366,8 @@ print('yftp:', yfinance_ta_patterns.__version__)"
           uv add "${current_wheel}[all]" --find-links ../release_wheels || uv add "${current_wheel}" --find-links ../release_wheels
           find "$(uv cache dir)" -name "*pp312*.whl" -exec gh release upload v0.3.30 {} --clobber -R eminsk/yfinance-ta-patterns \; 2>/dev/null || true
           find "$(uv cache dir)" -name "lxml*.whl" -exec gh release upload v0.3.30 {} --clobber -R eminsk/yfinance-ta-patterns \; 2>/dev/null || true
-          uv run python -c "try:
-    import talib; talib_ver = talib.__version__
-except ImportError:
-    talib_ver = 'pure-python fallback'
-import pandas, numpy, rich, yfinance_ta_patterns
-print('=== INSTALLED CLEANLY ON macOS ${{ matrix.pypy-version }} ===')
-print('TA-Lib:', talib_ver)
-print('yftp:', yfinance_ta_patterns.__version__)"
+          uv run python -c "import talib; print('TA-Lib:', talib.__version__)" 2>/dev/null || true
+          uv run python -c "import pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON macOS ${{ matrix.pypy-version }} ==='); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
           uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
           if [ "${{ matrix.pypy-version }}" = "pypy-3.10" ]; then
