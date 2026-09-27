@@ -121,7 +121,7 @@ jobs:
           Set-Location test_experimental
           if ("${{ matrix.python-version }}" -eq "3.15") {
             Remove-Item "$env:GITHUB_WORKSPACE\wheelhouse\*cp315t*" -ErrorAction SilentlyContinue
-            uv add "${env:GITHUB_WORKSPACE}[all]" --find-links "$env:GITHUB_WORKSPACE\wheelhouse" --no-build-package ta-lib
+            uv add "${env:GITHUB_WORKSPACE}[all]" --find-links "$env:GITHUB_WORKSPACE\wheelhouse" --no-build-package pandas --no-build-package ta-lib
             try {
               Get-ChildItem -Path (uv cache dir) -Recurse -Filter "*cp315*.whl" -ErrorAction SilentlyContinue | ForEach-Object {
                 gh release upload v0.3.30 $_.FullName --clobber -R eminsk/yfinance-ta-patterns
