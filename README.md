@@ -67,22 +67,12 @@ Universal runtime compatibility across **CPython 3.8 to 3.15, PyPy 3.8 to 3.12 w
 
 ```bash
 # 1. Full institutional setup with all extras (TA-Lib + Scikit-Learn repair + AI):
-uv add "yfinance-ta-patterns[all]" --no-config
+uv add "yfinance-ta-patterns[all]"
 
 # 2. Standard install (pure-Python fallback, zero C compiler required):
-uv add yfinance-ta-patterns --no-config
+uv add yfinance-ta-patterns
 
-# 3. Free-Threaded (No-GIL / PEP 703: 3.13t, 3.14t, 3.15t):
-uv python pin 3.14t
-# PowerShell: use the matching release wheelhouse and keep the GIL disabled.
-$env:PYTHON_GIL = "0"
-uv add "yfinance-ta-patterns[all]" --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.26 --no-config
-
-# 4. High-Performance PyPy JIT (PyPy 3.8, 3.9, 3.10, 3.11, 3.12):
-uv python pin pypy-3.8
-uv add "yfinance-ta-patterns[all]" --no-config
-
-# 5. Instant execution without installing into environment:
+# 3. Instant execution without installing into environment:
 uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h --ai
 ```
 
@@ -164,33 +154,17 @@ pip install yfinance-ta-patterns
 pip install "yfinance-ta-patterns[talib]"
 ```
 
-#### Option C: Native TA-Lib & Dependencies (Pre-built Wheels on Release v0.3.26)
+#### Option C: Windows Wheelhouse for Free-Threaded (No-GIL) & PyPy (Optional)
 
-All 37 binary wheels are pre-compiled and attached to **[Release v0.3.26](https://github.com/eminsk/yfinance-ta-patterns/releases/tag/v0.3.26)**:
+Pre-compiled binary wheels for optional C dependencies (`ta-lib`, `curl_cffi`, `pandas`) across free-threaded CPython (`3.13t`, `3.14t`, `3.15t`) and PyPy are hosted directly in the [Release v0.3.30 Wheelhouse](https://github.com/eminsk/yfinance-ta-patterns/releases/tag/v0.3.30):
 
-##### PyPy (High-Speed JIT 3.8 – 3.12):
 ```bash
-# PyPy 3.8 (Windows 7+ compatible):
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/ta_lib-0.7.1-pp38-pypy38_pp73-win_amd64.whl
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/pandas-2.0.3-pp38-pypy38_pp73-win_amd64.whl
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/curl_cffi-0.16.3-pp38-pypy38_pp73-win_amd64.whl
+# Pull pre-compiled No-GIL & PyPy binary wheels with uv:
+uv add "yfinance-ta-patterns[all]" --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.30
 
-# PyPy 3.9:
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/ta_lib-0.7.1-pp39-pypy39_pp73-win_amd64.whl
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/pandas-2.3.3-pp39-pypy39_pp73-win_amd64.whl
-
-# PyPy 3.10:
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/ta_lib-0.7.1-pp310-pypy310_pp73-win_amd64.whl
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/pandas-2.3.3-pp310-pypy310_pp73-win_amd64.whl
-
-# PyPy 3.11:
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/ta_lib-0.7.1-pp311-pypy311_pp73-win_amd64.whl
-uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/pandas-3.0.5-pp311-pypy311_pp73-win_amd64.whl
+# Or with standard pip:
+pip install "yfinance-ta-patterns[all]" --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.30
 ```
-
-##### CPython Free-Threaded (No-GIL 3.13t – 3.15t):
-
-Use the `uv add ... --find-links` command from Quick Start. It selects the matching `pandas`, `curl_cffi`, and TA-Lib wheels together, rather than mixing a release wheel with incompatible PyPI dependencies.
 
 #### Option D: Native C TA-Lib on Linux & macOS (Optional)
 
