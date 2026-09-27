@@ -223,6 +223,46 @@ def validate_asset_type(asset_type: str | None) -> str:
     return kind
 
 
+def format_price(val: Any) -> str:
+    """Format price with appropriate precision for financial assets."""
+    if val is None or val == "":
+        return "-"
+    try:
+        f = float(val)
+        if f == 0.0:
+            return "0.00"
+        abs_f = abs(f)
+        if abs_f < 0.001:
+            return f"{f:.6f}".strip()
+        elif abs_f < 10.0:
+            return f"{f:.5f}".strip()
+        elif abs_f < 1000.0:
+            formatted = f"{f:.4f}".rstrip("0")
+            if formatted.endswith("."):
+                formatted += "00"
+            elif len(formatted.split(".")[1]) < 2:
+                formatted += "0"
+            return formatted.strip()
+        else:
+            return f"{f:.2f}".strip()
+    except (ValueError, TypeError):
+        return str(val).strip()
+
+
+def format_timestamp(ts: Any, timeframe: str = "") -> str:
+    """Format timestamp into a clean, human-readable string without noisy offsets."""
+    if ts is None:
+        return "-"
+    try:
+        dt = pd.to_datetime(ts)
+        tf_lower = str(timeframe).lower()
+        if tf_lower in ("1d", "1w", "1wk", "1mo", "d1", "w1", "m1"):
+            return str(dt.strftime("%Y-%m-%d"))
+        return str(dt.strftime("%Y-%m-%d %H:%M"))
+    except Exception:
+        return str(ts)
+
+
 def normalize_ticker(symbol: str, asset_type: str = "auto", strict: bool = True) -> str:
     """Intelligently normalize symbol for Yahoo Finance API.
 

@@ -113,3 +113,36 @@ def test_run_cli_multi_symbol_flow(capsys, mock_ohlcv_df):
         assert "SCANNING 2 FOREX CURRENCY PAIRS" in captured.out
         assert "Scanned: 2 active pairs" in captured.out
 
+
+def test_run_cli_single_symbol_lookback_and_formats(capsys, mock_ohlcv_df):
+    with patch("yfinance_ta_patterns.cli.MarketDataLoader.get_data", return_value=mock_ohlcv_df):
+        # Test markdown format with lookback
+        args = parse_args(["--symbol", "EURUSD", "--ai-analyst", "--lookback-bars", "5", "--format", "markdown"])
+        exit_code = run_cli(args)
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "# AI Technical Intelligence Brief: EURUSD" in captured.out
+
+        # Test json format
+        args_json = parse_args(["--symbol", "EURUSD", "--ai-analyst", "--lookback-bars", "5", "--format", "json"])
+        exit_code_json = run_cli(args_json)
+        assert exit_code_json == 0
+        captured_json = capsys.readouterr()
+        assert '"symbol": "EURUSD"' in captured_json.out
+
+
+def test_format_price_and_timestamp():
+    from yfinance_ta_patterns.data import format_price, format_timestamp
+
+    assert format_price(None) == "-"
+    assert format_price("") == "-"
+    assert format_price(0.0) == "0.00"
+    assert format_price(1.1420739889) == "1.14207"
+    assert format_price(125.0) == "125.00"
+    assert format_price(45123.456) == "45123.46"
+    assert format_price(0.0002234) == "0.000223"
+
+    assert format_timestamp(None) == "-"
+    assert format_timestamp(pd.Timestamp("2026-09-26 15:30:00+03:00"), "5m") == "2026-09-26 15:30"
+    assert format_timestamp(pd.Timestamp("2026-09-26 00:00:00"), "1d") == "2026-09-26"
+

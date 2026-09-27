@@ -70,7 +70,7 @@ def test_analyst_generate_brief(
     assert "# AI Technical Intelligence Brief: EURUSD (1h)" in brief
     assert "HAMMER" in brief
     assert "[EXCELLENT]" in brief
-    assert "`BUY` @ `125.0`" in brief
+    assert "`BUY` @ `125.00`" in brief
 
 
 def test_analyst_to_dict_and_json(

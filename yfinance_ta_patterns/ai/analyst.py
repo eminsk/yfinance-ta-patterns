@@ -9,8 +9,18 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ..data import validate_asset_type
+from ..data import format_price, format_timestamp, validate_asset_type
 from .scorer import PatternConfidenceResult, SignalGrade
+
+
+def _sort_key(r: PatternConfidenceResult) -> tuple[float, float]:
+    ts_val = 0.0
+    if r.timestamp is not None:
+        try:
+            ts_val = pd.to_datetime(r.timestamp).timestamp()
+        except Exception:
+            ts_val = 0.0
+    return (float(r.confidence), ts_val)
 
 
 def _json_safe(obj: Any) -> Any:
@@ -68,7 +78,7 @@ class AIMarketAnalyst:
         self.timeframe = timeframe
         self.asset_type: str = validate_asset_type(asset_type)
         self.scored_results: list[PatternConfidenceResult] = (
-            sorted(scored_results, key=lambda r: r.confidence, reverse=True)
+            sorted(scored_results, key=_sort_key, reverse=True)
             if scored_results is not None
             else []
         )
@@ -110,6 +120,7 @@ class AIMarketAnalyst:
             date=date,
             lookback_bars=lookback_bars,
         )
+        self.scored_results.sort(key=_sort_key, reverse=True)
         return self.scored_results
 
     def get_market_regime_summary(self) -> dict[str, Any]:
@@ -182,8 +193,9 @@ class AIMarketAnalyst:
             # dataset, so the price/return fields must not be read unconditionally.
             lines.append("**Market Data:** `unavailable` (empty dataset)")
         else:
+            curr_price_str = format_price(regime["current_price"])
             lines.append(
-                f"**Current Price:** `{regime['current_price']}` | "
+                f"**Current Price:** `{curr_price_str}` | "
                 f"**20-Bar Return:** `{regime['return_20_bars_pct']:+.2f}%`"
             )
         lines.extend(
@@ -203,9 +215,11 @@ class AIMarketAnalyst:
             grade_badge = f"[{res.grade.value}]"
             conf_pct = f"{res.confidence * 100:.1f}%"
             lines.append(f"### {i}. {res.pattern_name} - {grade_badge} (Confluence: {conf_pct})")
-            lines.append(f"- **Timestamp:** `{res.timestamp}` | **Regime:** `{res.trend_regime}`")
+            ts_str = format_timestamp(res.timestamp, tf)
+            lines.append(f"- **Timestamp:** `{ts_str}` | **Regime:** `{res.trend_regime}`")
+            atr_str = format_price(res.atr) if res.atr is not None else "-"
             lines.append(
-                f"- **Metrics:** RVOL: `{res.rvol:.2f}x` | RSI(14): `{res.rsi:.1f}` | ATR: `{res.atr:.5f}`"
+                f"- **Metrics:** RVOL: `{res.rvol:.2f}x` | RSI(14): `{res.rsi:.1f}` | ATR: `{atr_str}`"
             )
 
             if res.confluence_factors:
@@ -220,10 +234,14 @@ class AIMarketAnalyst:
 
             if res.trade_setup:
                 ts = res.trade_setup
+                entry_str = format_price(ts.entry_price)
+                sl_str = format_price(ts.stop_loss)
+                tp1_str = format_price(ts.take_profit_1)
+                tp2_str = format_price(ts.take_profit_2)
                 lines.append(
-                    f"- **Trade Setup:** `{ts.direction}` @ `{ts.entry_price}` | "
-                    f"Stop: `{ts.stop_loss}` | TP1: `{ts.take_profit_1}` | TP2: `{ts.take_profit_2}` "
-                    f"(R/R: `{ts.risk_reward_ratio}:1`)"
+                    f"- **Trade Setup:** `{ts.direction}` @ `{entry_str}` | "
+                    f"Stop: `{sl_str}` | TP1: `{tp1_str}` | TP2: `{tp2_str}` "
+                    f"(R/R: `{ts.risk_reward_ratio:.1f}:1`)"
                 )
             lines.append("")
 

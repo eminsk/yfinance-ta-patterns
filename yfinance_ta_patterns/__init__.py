@@ -7,7 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("yfinance-ta-patterns")
 except PackageNotFoundError:  # pragma: no cover - during editable installs
-    __version__ = "0.3.38"
+    __version__ = "0.3.39"
 
 import sys
 
@@ -26,6 +26,8 @@ from .data import (
     ALLOWED_ASSET_TYPES,
     MarketDataLoader,
     classify_asset,
+    format_price,
+    format_timestamp,
     normalize_ticker,
     resolve_asset_currencies,
     validate_asset_type,
@@ -64,6 +66,8 @@ __all__ = [
     "TradeSetup",
     "__version__",
     "classify_asset",
+    "format_price",
+    "format_timestamp",
     "get_talib_install_hint",
     "get_talib_status",
     "is_freethreaded",

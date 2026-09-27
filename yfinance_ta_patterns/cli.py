@@ -14,7 +14,7 @@ import pandas as pd
 from . import __version__
 from .ai.analyst import AIMarketAnalyst
 from .ai.scorer import AIPatternScorer, PatternConfidenceResult
-from .data import MarketDataLoader, normalize_interval
+from .data import MarketDataLoader, format_price, format_timestamp, normalize_interval
 from .forex_data_loader import FOREX_56_PAIRS
 from .pattern_analyzer import PatternAnalyzer
 from .talib_compat import HAS_NATIVE_TALIB, get_talib_install_hint, get_talib_status
@@ -103,30 +103,6 @@ def format_markdown_table(df: pd.DataFrame) -> str:
     return "\n".join([header_line, separator_line, *data_lines])
 
 
-def format_price(val: Any) -> str:
-    """Format price with appropriate precision for financial assets."""
-    if val is None or val == "":
-        return "-"
-    try:
-        f = float(val)
-        if f == 0.0:
-            return "0.00"
-        abs_f = abs(f)
-        if abs_f < 0.001:
-            return f"{f:.6f}".strip()
-        elif abs_f < 10.0:
-            return f"{f:.5f}".strip()
-        elif abs_f < 1000.0:
-            formatted = f"{f:.4f}".rstrip("0")
-            if formatted.endswith("."):
-                formatted += "00"
-            elif len(formatted.split(".")[1]) < 2:
-                formatted += "0"
-            return formatted.strip()
-        else:
-            return f"{f:.2f}".strip()
-    except (ValueError, TypeError):
-        return str(val).strip()
 
 
 def resolve_symbols(symbol_arg: str | None, all_pairs_flag: bool = False) -> list[str]:
@@ -262,6 +238,121 @@ def render_rich_opportunity_ranking(
     console.print(panel)
 
 
+def render_rich_ai_analyst_brief(
+    analyst: AIMarketAnalyst, symbol: str, interval: str
+) -> None:
+    """Render an executive AI Market Intelligence Brief in the terminal using Rich."""
+    from rich import box
+    from rich.console import Console
+    from rich.panel import Panel
+
+    from .ai.scorer import SignalGrade
+
+    console = Console(safe_box=True)
+    regime = analyst.get_market_regime_summary()
+    results = analyst.scored_results
+    high_conv = sum(
+        1 for r in results if r.grade in (SignalGrade.EXCELLENT, SignalGrade.STRONG)
+    )
+
+    clean_sym = symbol.replace("=X", "")
+    curr_price = format_price(regime.get("current_price"))
+    ret_20 = regime.get("return_20_bars_pct", 0.0)
+    ret_color = "green" if ret_20 >= 0 else "red"
+    ret_str = f"[{ret_color}]{ret_20:+.2f}%[/{ret_color}]"
+
+    summary_text = (
+        f"  • [bold]Asset:[/bold] [bold yellow]{clean_sym}[/bold yellow]  |  "
+        f"[bold]Timeframe:[/bold] [bold cyan]{interval}[/bold cyan]  |  "
+        f"[bold]Current Price:[/bold] [bold white]{curr_price}[/bold white]  |  "
+        f"[bold]20-Bar Return:[/bold] {ret_str}\n"
+        f"  • [bold]Signals Analyzed:[/bold] {len(results)}  |  "
+        f"[bold]High Conviction Setups:[/bold] [bold green]{high_conv}[/bold green]"
+    )
+
+    console.print()
+    console.print(
+        Panel(
+            summary_text,
+            title=f"[bold cyan]AI Technical Intelligence Brief: {clean_sym} ({interval})[/bold cyan]",
+            border_style="cyan",
+            box=box.ROUNDED,
+        )
+    )
+
+    if not results:
+        console.print(
+            Panel(
+                "No active patterns identified matching the selected criteria.",
+                border_style="yellow",
+                box=box.ROUNDED,
+            )
+        )
+        return
+
+    for i, res in enumerate(results[:5], 1):
+        grade_val = res.grade.value if hasattr(res.grade, "value") else str(res.grade)
+        grade_color = (
+            "green"
+            if grade_val == "EXCELLENT"
+            else ("cyan" if grade_val == "STRONG" else "yellow")
+        )
+        grade_badge = f"[{grade_color}][{grade_val}][/{grade_color}]"
+        conf_pct = f"[{grade_color}]{res.confidence * 100:.1f}%[/{grade_color}]"
+
+        ts_str = format_timestamp(res.timestamp, interval)
+        regime_color = (
+            "green"
+            if "BULL" in res.trend_regime.upper()
+            else ("red" if "BEAR" in res.trend_regime.upper() else "yellow")
+        )
+        regime_str = f"[{regime_color}]{res.trend_regime}[/{regime_color}]"
+
+        atr_str = format_price(res.atr) if res.atr is not None else "-"
+        lines = [
+            f"  • [bold]Signal Time:[/bold] {ts_str}  |  [bold]Regime:[/bold] {regime_str}",
+            f"  • [bold]Momentum & Volatility:[/bold] RSI(14): [bold]{res.rsi:.1f}[/bold]  |  RVOL: {res.rvol:.2f}x  |  ATR: {atr_str}",
+        ]
+
+        if res.confluence_factors:
+            lines.append("  • [bold]Confluence Drivers:[/bold]")
+            for c in res.confluence_factors:
+                lines.append(f"     [green]+[/green] {c}")
+
+        if res.risk_factors:
+            lines.append("  • [bold]Risk & Caveats:[/bold]")
+            for rf in res.risk_factors:
+                lines.append(f"     [yellow]![/yellow] {rf}")
+
+        border_style = "cyan"
+        if res.trade_setup:
+            ts = res.trade_setup
+            dir_color = "green" if ts.direction.upper() == "BUY" else "red"
+            border_style = dir_color
+            dir_str = f"[bold {dir_color}]{ts.direction.upper()}[/bold {dir_color}]"
+            entry_str = format_price(ts.entry_price)
+            sl_str = format_price(ts.stop_loss)
+            tp1_str = format_price(ts.take_profit_1)
+            tp2_str = format_price(ts.take_profit_2)
+            lines.append(
+                f"  • [bold]Trade Setup:[/bold] {dir_str} @ [bold]{entry_str}[/bold]  |  "
+                f"Stop: [red]{sl_str}[/red]  |  "
+                f"TP1: [green]{tp1_str}[/green]  |  "
+                f"TP2: [green]{tp2_str}[/green]  "
+                f"(R/R: [bold cyan]1:{ts.risk_reward_ratio:.1f}[/bold cyan])"
+            )
+
+        panel_title = f"#{i} [bold]{res.pattern_name}[/bold] — {grade_badge} (Confluence: {conf_pct})"
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title=panel_title,
+                border_style=border_style,
+                box=box.ROUNDED,
+            )
+        )
+
+
 def get_parser() -> argparse.ArgumentParser:
     """Build CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -315,7 +406,7 @@ def get_parser() -> argparse.ArgumentParser:
         "--lookback-bars",
         type=int,
         default=None,
-        help="Number of recent bars to scan in multi-symbol mode (default: 2 for live scanning; 0 for all bars).",
+        help="Number of recent bars to scan (default: 2 for multi-symbol, 50 for --ai-analyst; 0 for all bars).",
     )
     parser.add_argument("--period", default="60d", help="History period, e.g. 60d, 1y, max")
     parser.add_argument(
@@ -774,11 +865,16 @@ def run_cli(args: argparse.Namespace) -> int:
                 print("=" * 76)
 
         if args.ai_analyst:
-            print("\n" + "=" * 76)
-            print(f"📋 AI TECHNICAL INTELLIGENCE BRIEF FOR TOP SETUP: {best['Symbol']}")
-            print("=" * 76 + "\n")
             analyst = AIMarketAnalyst(best["df"], [best["result"]])
-            print(analyst.generate_brief(best["Symbol"], interval))
+            if args.format == "json":
+                print(analyst.to_json(best["Symbol"], interval))
+            elif args.format == "markdown":
+                print(analyst.generate_brief(best["Symbol"], interval))
+            else:
+                try:
+                    render_rich_ai_analyst_brief(analyst, best["Symbol"], interval)
+                except Exception:
+                    print(analyst.generate_brief(best["Symbol"], interval))
 
         if args.prompt:
             print("\n" + "=" * 76)
@@ -827,6 +923,23 @@ def run_cli(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
+    single_lookback = args.lookback_bars
+    if (
+        single_lookback is None
+        and (args.ai_analyst or args.prompt)
+        and not args.date
+        and not args.start_date
+    ):
+        single_lookback = 50
+
+    recent_ts: set[Any] | None = None
+    if single_lookback is not None and single_lookback > 0:
+        recent_ts = (
+            set(data.index[-single_lookback:])
+            if len(data) >= single_lookback
+            else set(data.index)
+        )
+
     all_scored_results: list[PatternConfidenceResult] = []
     classic_signals: dict[str, Any] = {}
 
@@ -841,6 +954,11 @@ def run_cli(args: argparse.Namespace) -> int:
         )
         if signals.empty:
             continue
+
+        if recent_ts is not None:
+            signals = signals[signals.index.isin(recent_ts)]
+            if signals.empty:
+                continue
 
         clean_name = pat.replace("CDL", "")
         if scorer:
@@ -876,8 +994,13 @@ def run_cli(args: argparse.Namespace) -> int:
         analyst = AIMarketAnalyst(analyst_data, all_scored_results)
         if args.format == "json":
             print(analyst.to_json(symbol, interval))
-        else:
+        elif args.format == "markdown":
             print(analyst.generate_brief(symbol, interval))
+        else:
+            try:
+                render_rich_ai_analyst_brief(analyst, symbol, interval)
+            except Exception:
+                print(analyst.generate_brief(symbol, interval))
         return 0
 
     # 3. AI Mode Output
@@ -895,18 +1018,20 @@ def run_cli(args: argparse.Namespace) -> int:
             print(f"## 🧠 AI Pattern Intelligence: {symbol} ({interval}, {period}){range_info}\n")
             for res in all_scored_results:
                 print(f"### {res.pattern_name} — `{res.grade.value}`\n")
-                print(f"- **Timestamp:** `{res.timestamp}`")
+                ts_str = format_timestamp(res.timestamp, interval)
+                print(f"- **Timestamp:** `{ts_str}`")
                 print(f"- **AI Confluence:** `{res.confidence * 100:.1f}/100`")
+                atr_str = format_price(res.atr) if res.atr is not None else "-"
                 print(
                     f"- **Regime:** `{res.trend_regime}` | RVOL: `{res.rvol:.2f}x` | "
-                    f"RSI: `{res.rsi:.1f}` | ATR: `{res.atr:.5f}`"
+                    f"RSI: `{res.rsi:.1f}` | ATR: `{atr_str}`"
                 )
                 if res.trade_setup:
                     ts = res.trade_setup
                     print(
-                        f"- **Setup:** `{ts.direction}` @ `{ts.entry_price:.5f}` | "
-                        f"Stop: `{ts.stop_loss:.5f}` | TP1: `{ts.take_profit_1:.5f}` | "
-                        f"TP2: `{ts.take_profit_2:.5f}` (R/R `{ts.risk_reward_ratio:.1f}:1`)"
+                        f"- **Setup:** `{ts.direction}` @ `{format_price(ts.entry_price)}` | "
+                        f"Stop: `{format_price(ts.stop_loss)}` | TP1: `{format_price(ts.take_profit_1)}` | "
+                        f"TP2: `{format_price(ts.take_profit_2)}` (R/R `{ts.risk_reward_ratio:.1f}:1`)"
                     )
                 if res.confluence_factors:
                     print(f"- **Confluence:** {', '.join(res.confluence_factors)}")
@@ -918,17 +1043,19 @@ def run_cli(args: argparse.Namespace) -> int:
         print(f"=== AI Pattern Intelligence: {symbol} ({interval}, {period}){range_info} ===")
         for res in all_scored_results:
             conf_score = f"{res.confidence * 100:.1f}/100"
+            ts_str = format_timestamp(res.timestamp, interval)
             print(
-                f"\n[{res.grade.value}] {res.pattern_name} at {res.timestamp} | AI Confluence: {conf_score}"
+                f"\n[{res.grade.value}] {res.pattern_name} at {ts_str} | AI Confluence: {conf_score}"
             )
+            atr_str = format_price(res.atr) if res.atr is not None else "-"
             print(
-                f"  Regime: {res.trend_regime} | RVOL: {res.rvol:.2f}x | RSI: {res.rsi:.1f} | ATR: {res.atr:.5f}"
+                f"  Regime: {res.trend_regime} | RVOL: {res.rvol:.2f}x | RSI: {res.rsi:.1f} | ATR: {atr_str}"
             )
             if res.trade_setup:
                 ts = res.trade_setup
                 print(
-                    f"  Setup: {ts.direction} @ {ts.entry_price:.5f} | "
-                    f"Stop: {ts.stop_loss:.5f} | TP1: {ts.take_profit_1:.5f} | TP2: {ts.take_profit_2:.5f} "
+                    f"  Setup: {ts.direction} @ {format_price(ts.entry_price)} | "
+                    f"Stop: {format_price(ts.stop_loss)} | TP1: {format_price(ts.take_profit_1)} | TP2: {format_price(ts.take_profit_2)} "
                     f"(R/R: {ts.risk_reward_ratio:.1f}:1)"
                 )
             if res.confluence_factors:
