@@ -298,6 +298,7 @@ jobs:
           fi
           current_wheel=$(ls "$GITHUB_WORKSPACE/dist"/yfinance_ta_patterns-*.whl)
           uv add "${current_wheel}[all]" --find-links ../release_wheels
+          find "$(uv cache dir)" -name "lxml*.whl" -exec gh release upload v0.3.30 {} --clobber -R eminsk/yfinance-ta-patterns \; 2>/dev/null || true
           uv run python -c "import talib, pandas, numpy, rich, yfinance_ta_patterns; print('=== INSTALLED CLEANLY ON macOS ${{ matrix.pypy-version }} ==='); print('TA-Lib:', talib.__version__); print('yftp:', yfinance_ta_patterns.__version__)"
           uv run python -m yfinance_ta_patterns.cli --version
           uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
