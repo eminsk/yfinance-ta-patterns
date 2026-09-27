@@ -82,6 +82,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - python-version: "3.13t"
+            gil-desc: " No-GIL"
+            wheel_glob: "*cp313t*"
+            python_gil: "0"
+            verify_script: "scripts/verify_free_threaded.py"
           - python-version: "3.14t"
             gil-desc: " No-GIL"
             wheel_glob: "*cp314t*"

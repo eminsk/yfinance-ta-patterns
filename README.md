@@ -6,14 +6,14 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/eminsk/yfinance-ta-patterns/blob/main/notebooks/yfinance_ta_patterns_quickstart.ipynb)
 [![Python](https://img.shields.io/pypi/pyversions/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
 [![PyPy](https://img.shields.io/badge/PyPy-3.8%20--%203.12-orange.svg)](https://www.pypy.org/)
-[![No-GIL](https://img.shields.io/badge/No--GIL-3.14t%20--%203.15t-purple.svg)](https://peps.python.org/pep-0703/)
+[![No-GIL](https://img.shields.io/badge/No--GIL-3.13t%20--%203.15t-purple.svg)](https://peps.python.org/pep-0703/)
 [![CI](https://github.com/eminsk/yfinance-ta-patterns/actions/workflows/ci.yml/badge.svg)](https://github.com/eminsk/yfinance-ta-patterns/actions)
 [![Downloads](https://static.pepy.tech/badge/yfinance-ta-patterns)](https://pepy.tech/project/yfinance-ta-patterns)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 High-performance Python library and CLI that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate multi-factor confluence scores (deterministic quantitative confluence heuristic, not uncalibrated win-rate probability), trade setups, and LLM-ready market briefs.
 
-Universal runtime compatibility across **CPython 3.8 to 3.15, PyPy 3.8 to 3.12 with high-speed JIT tracing, and legacy Windows 7+ support**. Free-threaded CPython 3.14t and 3.15.0rc2t are verified when the interpreter is started with its GIL disabled; standard CPython 3.15 is fully verified using our precompiled release wheelhouse for Windows (pandas 3.0.5 and TA-Lib 0.7.1).
+Universal runtime compatibility across **CPython 3.8 to 3.15, PyPy 3.8 to 3.12 with high-speed JIT tracing, and legacy Windows 7+ support**. Free-threaded CPython 3.13t, 3.14t, and 3.15.0rc2t are verified when the interpreter is started with its GIL disabled; standard CPython 3.15 is fully verified using our precompiled release wheelhouse for Windows (pandas 3.0.5 and TA-Lib 0.7.1).
 
 ---
 
@@ -38,8 +38,7 @@ Universal runtime compatibility across **CPython 3.8 to 3.15, PyPy 3.8 to 3.12 w
 |:---|:---|:---|:---:|:---:|
 | **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14 | Standard bytecode + GIL | ✅ Fully Supported | PyPI wheels |
 | **CPython (Standard preview)** | 3.15.0rc2 | Standard bytecode + GIL | ✅ Fully Supported | Windows release wheelhouse for pandas and TA-Lib |
-| **CPython (Free-Threaded)** | 3.14t, 3.15.0rc2t | Multi-core No-GIL (PEP 703) | ✅ Verified with GIL disabled | Windows release wheelhouse for pandas, curl_cffi, and TA-Lib |
-| **CPython (Free-Threaded, legacy)** | 3.13t | Multi-core No-GIL (PEP 703) | Best effort | Depends on third-party wheel availability |
+| **CPython (Free-Threaded)** | 3.13t, 3.14t, 3.15.0rc2t | Multi-core No-GIL (PEP 703) | ✅ Verified with GIL disabled | Windows release wheelhouse for pandas, curl_cffi, and TA-Lib |
 | **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11, 3.12 | High-speed JIT tracing | ✅ Fully Supported | Included in Release |
 | **Operating Systems** | Windows (7, 8, 10, 11), Linux, macOS (Intel & Apple Silicon) | x86_64, ARM64 | ✅ Fully Supported | Universal & Native |
 
@@ -73,7 +72,7 @@ uv add "yfinance-ta-patterns[all]" --no-config
 # 2. Standard install (pure-Python fallback, zero C compiler required):
 uv add yfinance-ta-patterns --no-config
 
-# 3. Free-Threaded (No-GIL / PEP 703: 3.14t, 3.15t):
+# 3. Free-Threaded (No-GIL / PEP 703: 3.13t, 3.14t, 3.15t):
 uv python pin 3.14t
 # PowerShell: use the matching release wheelhouse and keep the GIL disabled.
 $env:PYTHON_GIL = "0"
@@ -91,13 +90,12 @@ uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h
 > **Why `--no-config`?** Passing `--no-config` tells `uv` to ignore any local or parent `uv.toml` settings (such as local wheel registries or find-links overrides), ensuring a clean, isolated, and reproducible installation directly from PyPI in any project directory.
 
 > [!IMPORTANT]
-> ### ⚡ Free-Threaded Python / No-GIL Guide (PEP 703: 3.14t, 3.15t)
+> ### ⚡ Free-Threaded Python / No-GIL Guide (PEP 703: 3.13t, 3.14t, 3.15t)
 >
 > Python 3.13+ introduces experimental free-threaded (No-GIL) builds. `yfinance-ta-patterns` is verified on Windows, Linux, and macOS under free-threaded CPython. Here is what you need to know for a smooth No-GIL setup on Windows:
 >
 > #### 1. Python Version Selection & Wheel Availability
-> - **Python 3.14t & 3.15t (Recommended)**: PyPI provides official precompiled `cp314t` and `cp315t` Windows wheels for `lxml 6.1.3`, `numpy 2.5.3`, and `scipy 1.18.1`. Combining PyPI with our release wheelhouse (`pandas 3.0.5`, `curl_cffi`, and `ta-lib 0.7.1`) allows a 100% binary install with zero C compiler required.
-> - **Python 3.13t (Legacy / Experimental)**: PyPI lacks precompiled `cp313t-win_amd64` wheels for `lxml`, `numpy`, and `scipy`. Building `lxml` from source on Windows requires MSVC and `libxml2`/`libxslt` headers. If using Python 3.13t on Windows, install without the `[all]` extra to use the pure-Python vectorized engine: `uv add yfinance-ta-patterns`.
+> - **Python 3.13t, 3.14t & 3.15t (Recommended)**: PyPI provides official precompiled `cp313t`, `cp314t`, and `cp315t` Windows wheels for `lxml 6.1.3`, `numpy 2.5.3`, and `scipy 1.18.1`. Combining PyPI with our release wheelhouse (`pandas 3.0.5`, `curl_cffi`, and `ta-lib 0.7.1`) allows a 100% binary install with zero C compiler required.
 >
 > #### 2. Understanding Automatic GIL Re-Enablement
 > In free-threaded interpreters, `sys._is_gil_enabled()` may return `True` for two common reasons:
@@ -190,7 +188,7 @@ uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/
 uv pip install https://github.com/eminsk/yfinance-ta-patterns/releases/download/v0.3.26/pandas-3.0.5-pp311-pypy311_pp73-win_amd64.whl
 ```
 
-##### CPython Free-Threaded (No-GIL 3.14t – 3.15t):
+##### CPython Free-Threaded (No-GIL 3.13t – 3.15t):
 
 Use the `uv add ... --find-links` command from Quick Start. It selects the matching `pandas`, `curl_cffi`, and TA-Lib wheels together, rather than mixing a release wheel with incompatible PyPI dependencies.
 
@@ -233,7 +231,7 @@ Use the `uv add ... --find-links` command from Quick Start. It selects the match
 | Python Version | Execution Mode | Installation Status | Recommendation |
 |:---:|:---:|:---:|---|
 | **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **Verified** | Start with `PYTHON_GIL=0` or `-X gil=0`; use the Windows TA-Lib release wheelhouse. |
-| **Python 3.13t** | **Free-Threaded (No-GIL)** | Best effort | Use the fallback or provide compatible third-party wheels for the desired extras. |
+| **Python 3.13t** | **Free-Threaded (No-GIL)** | ✅ **Verified** | Start with `PYTHON_GIL=0` or `-X gil=0`; full 100% binary install via release wheelhouse. |
 | **Python 3.15t** | **Free-Threaded (No-GIL)** | ✅ **Verified on 3.15.0rc2** | Use the matching release wheel and revalidate after the final release. |
 | **Python 3.15** | **Standard (GIL)** | ✅ **Verified on 3.15.0rc2** | Precompiled `pandas` and `ta-lib` wheels available in Windows release wheelhouse (zero compilation). |
 | **Python 3.13** | **Standard (GIL)** | ✅ **100% Supported** | Current stable Python release. Full support for native TA-Lib and pre-built wheels. |
