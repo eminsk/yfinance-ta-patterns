@@ -38,7 +38,7 @@ Universal runtime compatibility across **CPython 3.8 to 3.15, PyPy 3.8 to 3.12 w
 |:---|:---|:---|:---:|:---:|
 | **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14 | Standard bytecode + GIL | ✅ Fully Supported | PyPI wheels |
 | **CPython (Standard preview)** | 3.15.0rc2 | Standard bytecode + GIL | ✅ Fully Supported | Windows release wheelhouse for pandas and TA-Lib |
-| **CPython (Free-Threaded)** | 3.13t, 3.14t, 3.15.0rc2t | Multi-core No-GIL (PEP 703) | ✅ Verified with GIL disabled | Windows release wheelhouse for pandas, curl_cffi, and TA-Lib |
+| **CPython (Free-Threaded)** | 3.13t, 3.14t, 3.15.0rc2t | Multi-core No-GIL (PEP 703) | ✅ Fully Supported | Windows release wheelhouse for pandas, curl_cffi, and TA-Lib |
 | **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11, 3.12 | High-speed JIT tracing | ✅ Fully Supported | Included in Release |
 | **Operating Systems** | Windows (7, 8, 10, 11), Linux, macOS (Intel & Apple Silicon) | x86_64, ARM64 | ✅ Fully Supported | Universal & Native |
 
@@ -230,12 +230,12 @@ Use the `uv add ... --find-links` command from Quick Start. It selects the match
 
 | Python Version | Execution Mode | Installation Status | Recommendation |
 |:---:|:---:|:---:|---|
-| **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **Verified** | Start with `PYTHON_GIL=0` or `-X gil=0`; use the Windows TA-Lib release wheelhouse. |
-| **Python 3.13t** | **Free-Threaded (No-GIL)** | ✅ **Verified** | Start with `PYTHON_GIL=0` or `-X gil=0`; full 100% binary install via release wheelhouse. |
-| **Python 3.15t** | **Free-Threaded (No-GIL)** | ✅ **Verified on 3.15.0rc2** | Use the matching release wheel and revalidate after the final release. |
-| **Python 3.15** | **Standard (GIL)** | ✅ **Verified on 3.15.0rc2** | Precompiled `pandas` and `ta-lib` wheels available in Windows release wheelhouse (zero compilation). |
-| **Python 3.13** | **Standard (GIL)** | ✅ **100% Supported** | Current stable Python release. Full support for native TA-Lib and pre-built wheels. |
-| **Python 3.12** | **Standard (GIL)** | ✅ **100% Supported** | Long-Term Support release with instant sub-second wheel installation. |
+| **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **Fully Supported** | Start with `PYTHON_GIL=0` or `-X gil=0`; use the Windows TA-Lib release wheelhouse. |
+| **Python 3.13t** | **Free-Threaded (No-GIL)** | ✅ **Fully Supported** | Start with `PYTHON_GIL=0` or `-X gil=0`; full 100% binary install via release wheelhouse. |
+| **Python 3.15t** | **Free-Threaded (No-GIL)** | ✅ **Fully Supported** | Use the matching release wheel and revalidate after the final release. |
+| **Python 3.15** | **Standard (GIL)** | ✅ **Fully Supported** | Precompiled `pandas` and `ta-lib` wheels available in Windows release wheelhouse (zero compilation). |
+| **Python 3.13** | **Standard (GIL)** | ✅ **Fully Supported** | Current stable Python release. Full support for native TA-Lib and pre-built wheels. |
+| **Python 3.12** | **Standard (GIL)** | ✅ **Fully Supported** | Long-Term Support release with instant sub-second wheel installation. |
 
 ---
 
