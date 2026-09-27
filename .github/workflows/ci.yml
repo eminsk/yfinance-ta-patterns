@@ -198,13 +198,13 @@ jobs:
           Set-Location $testDir
           uv python pin ${{ matrix.pypy-version }}
           if ("${{ matrix.pypy-version }}" -eq "pypy-3.12") {
-            try { uv add "numpy<=2.2.6" --find-links C:\release_wheels } catch {}
+            try { uv add "numpy<=2.2.6" "yfinance<=1.2.0" --find-links C:\release_wheels } catch {}
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.11.15") {
-            uv add "pandas<=3.0.5" --find-links C:\release_wheels
+            uv add "pandas<=3.0.5" "yfinance<=1.2.0" --find-links C:\release_wheels
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.10") {
-            uv add "pandas<=2.3.3" "numpy==2.2.6" --find-links C:\release_wheels
+            uv add "pandas<=2.3.3" "numpy==2.2.6" "yfinance<=1.2.0" --find-links C:\release_wheels
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.9") {
-            uv add "pandas<=2.3.3" "numpy<2" --find-links C:\release_wheels
+            uv add "pandas<=2.3.3" "numpy<2" "yfinance<=1.2.0" --find-links C:\release_wheels
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.8") {
             uv add "pandas<=2.0.3" "numpy<2" "yfinance<=1.2.0" --find-links C:\release_wheels
           }
