@@ -170,7 +170,7 @@ jobs:
           if ("${{ matrix.pypy-version }}" -eq "pypy-3.11.15") {
             uv add "pandas<=3.0.5" --find-links C:\release_wheels
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.10") {
-            uv add "pandas<=2.3.3" "numpy==2.2.3" --find-links C:\release_wheels
+            uv add "pandas<=2.3.3" "numpy==2.2.6" --find-links C:\release_wheels
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.9") {
             uv add "pandas<=2.3.3" "numpy<2" --find-links C:\release_wheels
           } elseif ("${{ matrix.pypy-version }}" -eq "pypy-3.8") {
@@ -227,7 +227,7 @@ jobs:
           if [ "${{ matrix.pypy-version }}" = "pypy-3.11.15" ]; then
             uv add "pandas<=3.0.5" --find-links ../release_wheels
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.10" ]; then
-            uv add "pandas<=2.2.3" "numpy==2.2.3" --find-links ../release_wheels
+            uv add "pandas<=2.2.3" "numpy==2.2.6" --find-links ../release_wheels
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.9" ]; then
             uv add "pandas<=2.2.3" "numpy<2" --find-links ../release_wheels
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.8" ]; then
@@ -289,7 +289,7 @@ jobs:
           if [ "${{ matrix.pypy-version }}" = "pypy-3.11.15" ]; then
             uv add "pandas<=3.0.5" --find-links ../release_wheels
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.10" ]; then
-            uv add "pandas<=2.2.3" "numpy==2.2.3" --find-links ../release_wheels
+            uv add "pandas<=2.2.3" "numpy==2.2.6" --find-links ../release_wheels
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.9" ]; then
             uv add "pandas<=2.2.3" "numpy<2" --find-links ../release_wheels
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.8" ]; then
