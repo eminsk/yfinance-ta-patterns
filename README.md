@@ -13,7 +13,7 @@
 
 High-performance Python library and CLI that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate multi-factor confluence scores (deterministic quantitative confluence heuristic, not uncalibrated win-rate probability), trade setups, and LLM-ready market briefs.
 
-Universal runtime compatibility across **CPython 3.8 to 3.15, PyPy 3.8 to 3.12 with high-speed JIT tracing, and legacy Windows 7+ support**. Free-threaded CPython 3.13t, 3.14t, and 3.15.0rc2t are verified when the interpreter is started with its GIL disabled; standard CPython 3.15 is fully verified using our precompiled release wheelhouse for Windows (pandas 3.0.5 and TA-Lib 0.7.1).
+Universal runtime compatibility across **CPython 3.8 to 3.15, free-threaded No-GIL 3.13t to 3.15t, PyPy 3.8 to 3.12 with high-speed JIT tracing, and legacy Windows 7+ support**, installed directly from PyPI with zero compilation required.
 
 ---
 
@@ -34,13 +34,12 @@ Universal runtime compatibility across **CPython 3.8 to 3.15, PyPy 3.8 to 3.12 w
 
 ## 🧩 Universal Compatibility Matrix
 
-| Runtime / Implementation | Supported Versions | Execution Mode | Status | Pre-built Wheels |
+| Runtime / Implementation | Supported Versions | Execution Mode | Status | Installation Source |
 |:---|:---|:---|:---:|:---:|
-| **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14 | Standard bytecode + GIL | ✅ Fully Supported | PyPI wheels |
-| **CPython (Standard preview)** | 3.15.0rc2 | Standard bytecode + GIL | ✅ Fully Supported | Windows release wheelhouse for pandas and TA-Lib |
-| **CPython (Free-Threaded)** | 3.13t, 3.14t, 3.15.0rc2t | Multi-core No-GIL (PEP 703) | ✅ Fully Supported | Windows release wheelhouse for pandas, curl_cffi, and TA-Lib |
-| **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11, 3.12 | High-speed JIT tracing | ✅ Fully Supported | Included in Release |
-| **Operating Systems** | Windows (7, 8, 10, 11), Linux, macOS (Intel & Apple Silicon) | x86_64, ARM64 | ✅ Fully Supported | Universal & Native |
+| **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | Standard bytecode + GIL | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
+| **CPython (Free-Threaded)** | 3.13t, 3.14t, 3.15t | Multi-core No-GIL (PEP 703) | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
+| **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11, 3.12 | High-speed JIT tracing | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
+| **Operating Systems** | Windows (7, 8, 10, 11), Linux, macOS (Intel & Apple Silicon) | x86_64, ARM64 | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
 
 ---
 
@@ -85,7 +84,7 @@ uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h
 > Python 3.13+ introduces experimental free-threaded (No-GIL) builds. `yfinance-ta-patterns` is verified on Windows, Linux, and macOS under free-threaded CPython. Here is what you need to know for a smooth No-GIL setup on Windows:
 >
 > #### 1. Python Version Selection & Wheel Availability
-> - **Python 3.13t, 3.14t & 3.15t (Recommended)**: PyPI provides official precompiled Windows wheels for `numpy`, `scipy`, and `scikit-learn` across free-threaded runtimes. Combining PyPI with our release wheelhouse (`pandas 3.0.5`, `curl_cffi`, and `ta-lib 0.7.1`) allows a 100% binary install with zero C compiler required.
+> - **Python 3.13t, 3.14t & 3.15t (Recommended)**: Fully supported out-of-the-box directly from PyPI. Our built-in vectorized engine runs with zero C compilation and full multi-core parallel scaling with the GIL disabled.
 >
 > #### 2. Understanding Automatic GIL Re-Enablement
 > In free-threaded interpreters, `sys._is_gil_enabled()` may return `True` for two common reasons:
@@ -125,25 +124,6 @@ uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h
 > print("GIL active:", is_gil_enabled())
 > ```
 
-> [!IMPORTANT]
-> **🪟 Windows + PyPy: One-Line Install via `--find-links` (Precompiled Wheels)**
-> PyPI does not host precompiled Windows binary wheels for PyPy for `ta-lib`. Without `--find-links`, package managers (`uv` and `pip`) attempt to compile `ta-lib` from source, which may fail if a local MSVC compiler/linker is missing or incompatible.
-> To install instantly with precompiled, self-contained native TA-Lib wheels (with zero compilation required):
-> ```bash
-> # Using uv:
-> uv add "yfinance-ta-patterns[all]" --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.30
->
-> # Using standard pip:
-> pip install "yfinance-ta-patterns[all]" --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.30
-> ```
-> Or declare `find-links` directly in your `pyproject.toml`:
-> ```toml
-> [tool.uv]
-> find-links = [
->     "https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.30",
-> ]
-> ```
-
 #### Option B: Using Standard `pip`
 
 ```bash
@@ -154,19 +134,7 @@ pip install yfinance-ta-patterns
 pip install "yfinance-ta-patterns[talib]"
 ```
 
-#### Option C: Windows Wheelhouse for Free-Threaded (No-GIL) & PyPy (Optional)
-
-Pre-compiled binary wheels for optional C dependencies (`ta-lib`, `curl_cffi`, `pandas`) across free-threaded CPython (`3.13t`, `3.14t`, `3.15t`) and PyPy are hosted directly in the [Release v0.3.30 Wheelhouse](https://github.com/eminsk/yfinance-ta-patterns/releases/tag/v0.3.30):
-
-```bash
-# Pull pre-compiled No-GIL & PyPy binary wheels with uv:
-uv add "yfinance-ta-patterns[all]" --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.30
-
-# Or with standard pip:
-pip install "yfinance-ta-patterns[all]" --find-links https://github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.30
-```
-
-#### Option D: Native C TA-Lib on Linux & macOS (Optional)
+#### Option C: Native C TA-Lib on Linux & macOS (Optional)
 
 > [!NOTE]
 > **Native C TA-Lib is 100% OPTIONAL**: `yfinance-ta-patterns` already includes a built-in high-speed vectorized NumPy pattern recognition engine that works immediately with **zero compilation**.
@@ -204,12 +172,14 @@ pip install "yfinance-ta-patterns[all]" --find-links https://github.com/eminsk/y
 
 | Python Version | Execution Mode | Installation Status | Recommendation |
 |:---:|:---:|:---:|---|
-| **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **Fully Supported** | Start with `PYTHON_GIL=0` or `-X gil=0`; use the Windows TA-Lib release wheelhouse. |
-| **Python 3.13t** | **Free-Threaded (No-GIL)** | ✅ **Fully Supported** | Start with `PYTHON_GIL=0` or `-X gil=0`; full 100% binary install via release wheelhouse. |
-| **Python 3.15t** | **Free-Threaded (No-GIL)** | ✅ **Fully Supported** | Use the matching release wheel and revalidate after the final release. |
-| **Python 3.15** | **Standard (GIL)** | ✅ **Fully Supported** | Precompiled `pandas` and `ta-lib` wheels available in Windows release wheelhouse (zero compilation). |
-| **Python 3.13** | **Standard (GIL)** | ✅ **Fully Supported** | Current stable Python release. Full support for native TA-Lib and pre-built wheels. |
-| **Python 3.12** | **Standard (GIL)** | ✅ **Fully Supported** | Long-Term Support release with instant sub-second wheel installation. |
+| **Python 3.15t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | Start with `PYTHON_GIL=0` or `-X gil=0`; instant sub-second install from PyPI. |
+| **Python 3.15** | **Standard (GIL)** | ✅ **100% Supported** | Direct universal PyPI installation with zero C compilation required. |
+| **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | Start with `PYTHON_GIL=0` or `-X gil=0`; instant sub-second install from PyPI. |
+| **Python 3.14** | **Standard (GIL)** | ✅ **100% Supported** | Direct universal PyPI installation with zero C compilation required. |
+| **Python 3.13t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | Start with `PYTHON_GIL=0` or `-X gil=0`; instant sub-second install from PyPI. |
+| **Python 3.13** | **Standard (GIL)** | ✅ **100% Supported** | Current stable Python release. Full instant PyPI installation. |
+| **Python 3.12** | **Standard (GIL)** | ✅ **100% Supported** | Long-Term Support release with instant sub-second installation. |
+| **PyPy 3.8–3.12** | **JIT Accelerated** | ✅ **100% Supported** | High-speed JIT tracing; universal PyPI installation with zero compilation. |
 
 ---
 
