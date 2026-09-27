@@ -1,3 +1,9 @@
+yfinance-ta-patterns (0.3.40-1) unstable; urgency=medium
+
+  * Release v0.3.40: Cross-platform pytest test suite on Python 3.8-3.14 & PyPy 3.10, PyPy 3.8-3.11 prebuilt wheel caching, macOS LibreSSL warning filter, and CI execution optimizations.
+
+ -- eminsk <M_N_N@tut.by>  Sun, 27 Sep 2026 02:30:00 +0000
+
 yfinance-ta-patterns (0.3.39-1) unstable; urgency=medium
 
   * Release v0.3.39: Rich terminal executive briefs for AI Analyst, single-symbol lookback filtering, recency-aware setup ranking, and universal financial price precision.
