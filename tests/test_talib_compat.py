@@ -166,4 +166,6 @@ def test_all_61_patterns_in_fallback_mode(sample_data):
         assert isinstance(res, np.ndarray), f"Expected ndarray for {pat}"
         assert len(res) == len(sample_data), f"Length mismatch for {pat}"
         unique_vals = set(np.unique(res))
-        assert unique_vals.issubset({-100, 0, 100}), f"Unexpected values in {pat}: {unique_vals}"
+        assert unique_vals.issubset({-100, -80, 0, 80, 100}), (
+            f"Unexpected values in {pat}: {unique_vals}"
+        )

@@ -909,13 +909,19 @@ def cdl_dragonflydoji(open_: Any, high: Any, low: Any, close: Any) -> Any:
 def cdl_engulfing(open_: Any, high: Any, low: Any, close: Any) -> Any:
     d = _CandleData(open_, high, low, close)
     res = [0] * d.n
-    for i in range(1, d.n):
-        if d.color[i] == 1 and d.color[i - 1] == -1 and d.c[i] > d.o[i - 1] and d.o[i] < d.c[i - 1]:
-            res[i] = 100
-        elif (
-            d.color[i] == -1 and d.color[i - 1] == 1 and d.o[i] > d.c[i - 1] and d.c[i] < d.o[i - 1]
+    start = 2 if d.n > 2 else 1
+    for i in range(start, d.n):
+        ci, oi = d.c[i], d.o[i]
+        cp, op = d.c[i - 1], d.o[i - 1]
+        col = 1 if ci >= oi else -1
+        col_p = 1 if cp >= op else -1
+        if (col == 1 and col_p == -1 and ((ci >= op and oi < cp) or (ci > op and oi <= cp))) or (
+            col == -1 and col_p == 1 and ((oi >= cp and ci < op) or (oi > cp and ci <= op))
         ):
-            res[i] = -100
+            if oi != cp and ci != op:
+                res[i] = col * 100
+            else:
+                res[i] = col * 80
     return _make_result(res, is_vec=d.is_vec)
 
 
@@ -1071,13 +1077,16 @@ def cdl_harami(open_: Any, high: Any, low: Any, close: Any) -> Any:
     res = [0] * d.n
     start = 11 if d.n > 11 else 1
     for i in range(start, d.n):
-        if (
-            d.rb[i - 1] > d.avg_body_long[i - 1]
-            and d.rb[i] <= d.avg_body_short[i]
-            and max(d.c[i], d.o[i]) < max(d.c[i - 1], d.o[i - 1])
-            and min(d.c[i], d.o[i]) > min(d.c[i - 1], d.o[i - 1])
-        ):
-            res[i] = -d.color[i - 1] * 100
+        if d.rb[i - 1] > d.avg_body_long[i - 1] and d.rb[i] <= d.avg_body_short[i]:
+            c_max = max(d.c[i], d.o[i])
+            c_min = min(d.c[i], d.o[i])
+            p_max = max(d.c[i - 1], d.o[i - 1])
+            p_min = min(d.c[i - 1], d.o[i - 1])
+            sign = -1 if d.c[i - 1] >= d.o[i - 1] else 1
+            if c_max < p_max and c_min > p_min:
+                res[i] = sign * 100
+            elif c_max <= p_max and c_min >= p_min:
+                res[i] = sign * 80
     return _make_result(res, is_vec=d.is_vec)
 
 
@@ -1086,13 +1095,16 @@ def cdl_haramicross(open_: Any, high: Any, low: Any, close: Any) -> Any:
     res = [0] * d.n
     start = 11 if d.n > 11 else 1
     for i in range(start, d.n):
-        if (
-            d.rb[i - 1] > d.avg_body_long[i - 1]
-            and d.rb[i] <= d.avg_body_doji[i]
-            and max(d.c[i], d.o[i]) < max(d.c[i - 1], d.o[i - 1])
-            and min(d.c[i], d.o[i]) > min(d.c[i - 1], d.o[i - 1])
-        ):
-            res[i] = -d.color[i - 1] * 100
+        if d.rb[i - 1] > d.avg_body_long[i - 1] and d.rb[i] <= d.avg_body_doji[i]:
+            c_max = max(d.c[i], d.o[i])
+            c_min = min(d.c[i], d.o[i])
+            p_max = max(d.c[i - 1], d.o[i - 1])
+            p_min = min(d.c[i - 1], d.o[i - 1])
+            sign = -1 if d.c[i - 1] >= d.o[i - 1] else 1
+            if c_max < p_max and c_min > p_min:
+                res[i] = sign * 100
+            elif c_max <= p_max and c_min >= p_min:
+                res[i] = sign * 80
     return _make_result(res, is_vec=d.is_vec)
 
 
