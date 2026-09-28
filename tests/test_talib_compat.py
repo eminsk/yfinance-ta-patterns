@@ -128,14 +128,42 @@ def test_concurrent_multithreading_without_gil(sample_data):
     assert results[0][0] == 100
 
 
-def test_fallback_unsupported_pattern_raises_error(sample_data):
+def test_fallback_cdl_piercing(sample_data):
     wrapper = TALibWrapper(force_fallback=True)
-    with pytest.raises(NotImplementedError) as exc_info:
-        wrapper.CDLPIERCING(
+    res = wrapper.CDLPIERCING(
+        sample_data["Open"].values,
+        sample_data["High"].values,
+        sample_data["Low"].values,
+        sample_data["Close"].values,
+    )
+    assert isinstance(res, np.ndarray)
+    assert len(res) == len(sample_data)
+    assert set(np.unique(res)).issubset({-100, 0, 100})
+
+
+def test_fallback_invalid_pattern_raises_error(sample_data):
+    wrapper = TALibWrapper(force_fallback=True)
+    with pytest.raises(AttributeError) as exc_info:
+        wrapper.NON_EXISTENT_PATTERN(
             sample_data["Open"].values,
             sample_data["High"].values,
             sample_data["Low"].values,
             sample_data["Close"].values,
         )
-    assert "CDLPIERCING" in str(exc_info.value)
-    assert "requires native TA-Lib binary" in str(exc_info.value)
+    assert "NON_EXISTENT_PATTERN" in str(exc_info.value)
+
+
+def test_all_61_patterns_in_fallback_mode(sample_data):
+    wrapper = TALibWrapper(force_fallback=True)
+    o = sample_data["Open"].values
+    h = sample_data["High"].values
+    lo = sample_data["Low"].values
+    c = sample_data["Close"].values
+
+    for pat in ALL_CDL_PATTERNS:
+        fn = getattr(wrapper, pat)
+        res = fn(o, h, lo, c)
+        assert isinstance(res, np.ndarray), f"Expected ndarray for {pat}"
+        assert len(res) == len(sample_data), f"Length mismatch for {pat}"
+        unique_vals = set(np.unique(res))
+        assert unique_vals.issubset({-100, 0, 100}), f"Unexpected values in {pat}: {unique_vals}"

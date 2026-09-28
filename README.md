@@ -5,7 +5,7 @@
 [![Ubuntu / Debian PPA](https://img.shields.io/badge/Ubuntu%20%2F%20Debian-APT%20PPA-E95420?logo=ubuntu&logoColor=white)](https://eminsk.github.io/ppa/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/eminsk/yfinance-ta-patterns/blob/main/notebooks/yfinance_ta_patterns_quickstart.ipynb)
 [![Python](https://img.shields.io/pypi/pyversions/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
-[![PyPy](https://img.shields.io/badge/PyPy-3.8%20--%203.11-orange.svg)](https://www.pypy.org/)
+[![PyPy](https://img.shields.io/badge/PyPy-3.8%20--%203.12-orange.svg)](https://www.pypy.org/)
 [![No-GIL](https://img.shields.io/badge/No--GIL-3.13t%20--%203.15t-purple.svg)](https://peps.python.org/pep-0703/)
 [![CI](https://github.com/eminsk/yfinance-ta-patterns/actions/workflows/ci.yml/badge.svg)](https://github.com/eminsk/yfinance-ta-patterns/actions)
 [![Downloads](https://static.pepy.tech/badge/yfinance-ta-patterns)](https://pepy.tech/project/yfinance-ta-patterns)
@@ -13,14 +13,14 @@
 
 High-performance Python library and CLI that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate multi-factor confluence scores (deterministic quantitative confluence heuristic, not uncalibrated win-rate probability), trade setups, and LLM-ready market briefs.
 
-Universal runtime compatibility across **CPython 3.8 to 3.15, free-threaded No-GIL 3.13t to 3.15t, PyPy 3.8 to 3.11 with high-speed JIT tracing, and legacy Windows 7+ support**, installed directly from PyPI with zero compilation required.
+Universal runtime compatibility across **CPython 3.8 to 3.15, free-threaded No-GIL 3.13t to 3.15t, PyPy 3.8 to 3.12 with high-speed JIT tracing, and legacy Windows 7+ support**, installed directly from PyPI with zero compilation required.
 
 ---
 
 ## Key Features
 
 - **Multi-Asset Data Loader**: Universal fetching and candle normalization for stocks (`AAPL`, `NVDA`), crypto (`BTC-USD`), commodities (`GC=F`), indices (`^GSPC`), and forex pairs (`EURUSD`). Supports custom date ranges (`start`, `end`), timezone conversion, UTC-anchored 4h resampling, and raw OHLC integrity validation.
-- **TA-Lib Pattern Detection**: Full recognition engine across 60+ classic candlestick patterns (via native TA-Lib) with built-in zero-dependency pure-NumPy fallback engine for 11 core patterns.
+- **TA-Lib Pattern Detection**: Full recognition engine across **all 61 canonical TA-Lib candlestick patterns** via native C TA-Lib OR built-in pure-Python / NumPy fallback engine (all 61 patterns supported in both modes!).
 - **AI Pattern Confluence Scorer**: Multi-factor confluence score ($0.0 - 1.0$) evaluating quantitative confluence (deterministic heuristic, not win-rate probability):
   - Multi-EMA trend alignment (20, 50, 200 EMA) with safe warm-up handling
   - Zero-lookahead Relative Volume surge (RVOL)
@@ -38,7 +38,7 @@ Universal runtime compatibility across **CPython 3.8 to 3.15, free-threaded No-G
 |:---|:---|:---|:---:|:---:|
 | **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | Standard bytecode + GIL | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
 | **CPython (Free-Threaded)** | 3.13t, 3.14t, 3.15t | Multi-core No-GIL (PEP 703) | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
-| **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11 | High-speed JIT tracing | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
+| **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11, 3.12 | High-speed JIT tracing | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
 | **Operating Systems** | Windows (7, 8, 10, 11), Linux, macOS (Intel & Apple Silicon) | x86_64, ARM64 | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
 
 ---
@@ -179,7 +179,7 @@ pip install "yfinance-ta-patterns[talib]"
 | **Python 3.13t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | Start with `PYTHON_GIL=0` or `-X gil=0`; instant sub-second install from PyPI. |
 | **Python 3.13** | **Standard (GIL)** | ✅ **100% Supported** | Current stable Python release. Full instant PyPI installation. |
 | **Python 3.12** | **Standard (GIL)** | ✅ **100% Supported** | Long-Term Support release with instant sub-second installation. |
-| **PyPy 3.8–3.11** | **JIT Accelerated** | ✅ **100% Supported** | High-speed JIT tracing; universal PyPI installation with prebuilt wheels. *(PyPy 3.12 experimental, pending upstream NumPy C-API)* |
+| **PyPy 3.8–3.12** | **JIT Accelerated** | ✅ **100% Supported** | High-speed JIT tracing with pure-Python fallback (all 61 TA-Lib patterns supported, zero C-API compilation required). |
 
 ---
 
@@ -457,7 +457,7 @@ uv run --extra dev mypy yfinance_ta_patterns
 uv build
 ```
 
-All 429 tests pass with 100% success rate across **Python 3.8 through 3.15 (including No-GIL free-threaded 3.13t–3.15t)** and **PyPy 3.8 through 3.11**.
+All 431 tests pass with 100% success rate across **Python 3.8 through 3.15 (including No-GIL free-threaded 3.13t–3.15t)** and **PyPy 3.8 through 3.12**.
 
 ---
  

@@ -84,8 +84,7 @@ def format_markdown_table(df: pd.DataFrame) -> str:
 
     headers = [str(col) for col in df.columns]
     rows = [
-        [_markdown_cell(value) for value in row]
-        for row in df.itertuples(index=False, name=None)
+        [_markdown_cell(value) for value in row] for row in df.itertuples(index=False, name=None)
     ]
 
     widths = [
@@ -96,13 +95,10 @@ def format_markdown_table(df: pd.DataFrame) -> str:
     header_line = "| " + " | ".join(_pad_cell(h, w) for h, w in zip(headers, widths)) + " |"
     separator_line = "| " + " | ".join("-" * w for w in widths) + " |"
     data_lines = [
-        "| " + " | ".join(_pad_cell(cell, w) for cell, w in zip(row, widths)) + " |"
-        for row in rows
+        "| " + " | ".join(_pad_cell(cell, w) for cell, w in zip(row, widths)) + " |" for row in rows
     ]
 
     return "\n".join([header_line, separator_line, *data_lines])
-
-
 
 
 def resolve_symbols(symbol_arg: str | None, all_pairs_flag: bool = False) -> list[str]:
@@ -179,17 +175,13 @@ def render_rich_opportunity_ranking(
             conf_num = float(conf_val.rstrip("%"))
         except ValueError:
             conf_num = 0.0
-        conf_style = (
-            "bold green" if conf_num >= 60 else ("yellow" if conf_num >= 50 else "white")
-        )
+        conf_style = "bold green" if conf_num >= 60 else ("yellow" if conf_num >= 50 else "white")
         trend_val = str(row["Trend"])
         trend_style = "green" if "BULL" in trend_val else ("red" if "BEAR" in trend_val else "dim")
         tp1_val = str(row.get("TakeProfit_1", row.get("TP1", "-")))
         dir_val = str(row["Direction"])
         dir_styled = (
-            "[bold green]BUY[/bold green]"
-            if "BUY" in dir_val
-            else "[bold red]SELL[/bold red]"
+            "[bold green]BUY[/bold green]" if "BUY" in dir_val else "[bold red]SELL[/bold red]"
         )
 
         table.add_row(
@@ -212,9 +204,7 @@ def render_rich_opportunity_ranking(
 
     best_dir = str(best["Direction"])
     best_dir_styled = (
-        "[bold green]BUY[/bold green]"
-        if "BUY" in best_dir
-        else "[bold red]SELL[/bold red]"
+        "[bold green]BUY[/bold green]" if "BUY" in best_dir else "[bold red]SELL[/bold red]"
     )
     best_border = "green" if "BUY" in best_dir else "red"
     panel_lines = [
@@ -238,9 +228,7 @@ def render_rich_opportunity_ranking(
     console.print(panel)
 
 
-def render_rich_ai_analyst_brief(
-    analyst: AIMarketAnalyst, symbol: str, interval: str
-) -> None:
+def render_rich_ai_analyst_brief(analyst: AIMarketAnalyst, symbol: str, interval: str) -> None:
     """Render an executive AI Market Intelligence Brief in the terminal using Rich."""
     from rich import box
     from rich.console import Console
@@ -251,9 +239,7 @@ def render_rich_ai_analyst_brief(
     console = Console(safe_box=True)
     regime = analyst.get_market_regime_summary()
     results = analyst.scored_results
-    high_conv = sum(
-        1 for r in results if r.grade in (SignalGrade.EXCELLENT, SignalGrade.STRONG)
-    )
+    high_conv = sum(1 for r in results if r.grade in (SignalGrade.EXCELLENT, SignalGrade.STRONG))
 
     clean_sym = symbol.replace("=X", "")
     curr_price = format_price(regime.get("current_price"))
@@ -293,9 +279,7 @@ def render_rich_ai_analyst_brief(
     for i, res in enumerate(results[:5], 1):
         grade_val = res.grade.value if hasattr(res.grade, "value") else str(res.grade)
         grade_color = (
-            "green"
-            if grade_val == "EXCELLENT"
-            else ("cyan" if grade_val == "STRONG" else "yellow")
+            "green" if grade_val == "EXCELLENT" else ("cyan" if grade_val == "STRONG" else "yellow")
         )
         grade_badge = f"[{grade_color}][{grade_val}][/{grade_color}]"
         conf_pct = f"[{grade_color}]{res.confidence * 100:.1f}%[/{grade_color}]"
@@ -342,7 +326,9 @@ def render_rich_ai_analyst_brief(
                 f"(R/R: [bold cyan]1:{ts.risk_reward_ratio:.1f}[/bold cyan])"
             )
 
-        panel_title = f"#{i} [bold]{res.pattern_name}[/bold] — {grade_badge} (Confluence: {conf_pct})"
+        panel_title = (
+            f"#{i} [bold]{res.pattern_name}[/bold] — {grade_badge} (Confluence: {conf_pct})"
+        )
         console.print(
             Panel(
                 "\n".join(lines),
@@ -552,7 +538,9 @@ def run_cli(args: argparse.Namespace) -> int:
             if status.get("gil_recommendation"):
                 print(f"Recommendation:          {status['gil_recommendation']}")
             elif status["gil_enabled"]:
-                print("Runtime Note:            Set PYTHON_GIL=0 or pass -X gil=0 to enable no-GIL mode.")
+                print(
+                    "Runtime Note:            Set PYTHON_GIL=0 or pass -X gil=0 to enable no-GIL mode."
+                )
         print(f"Status Details:          {status['reason']}")
         if not status["has_native_talib"]:
             print("\n" + get_talib_install_hint())
@@ -626,7 +614,9 @@ def run_cli(args: argparse.Namespace) -> int:
         for idx, sym in enumerate(symbols, 1):
             clean_sym = sym.replace("=X", "")
             if sys.stdout and hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
-                print(f"[{idx:2d}/{len(symbols)}] Querying {clean_sym:<7} ...", end="\r", flush=True)
+                print(
+                    f"[{idx:2d}/{len(symbols)}] Querying {clean_sym:<7} ...", end="\r", flush=True
+                )
 
             try:
                 loader = MarketDataLoader(
@@ -764,7 +754,7 @@ def run_cli(args: argparse.Namespace) -> int:
                 f"over the last {lookback} bar(s)" if lookback > 0 else "over the selected period"
             )
             print(
-                f"\n⚠️ No reliable setups with confidence >= {min_confidence*100:.0f}% found {bars_info}."
+                f"\n⚠️ No reliable setups with confidence >= {min_confidence * 100:.0f}% found {bars_info}."
             )
             print(
                 "The market is consolidating / range-bound. Try switching timeframe to 15m or 1h."
@@ -935,9 +925,7 @@ def run_cli(args: argparse.Namespace) -> int:
     recent_ts: set[Any] | None = None
     if single_lookback is not None and single_lookback > 0:
         recent_ts = (
-            set(data.index[-single_lookback:])
-            if len(data) >= single_lookback
-            else set(data.index)
+            set(data.index[-single_lookback:]) if len(data) >= single_lookback else set(data.index)
         )
 
     all_scored_results: list[PatternConfidenceResult] = []
@@ -962,9 +950,7 @@ def run_cli(args: argparse.Namespace) -> int:
 
         clean_name = pat.replace("CDL", "")
         if scorer:
-            scored = scorer.score_all_signals(
-                signals, clean_name, min_confidence=min_confidence
-            )
+            scored = scorer.score_all_signals(signals, clean_name, min_confidence=min_confidence)
             all_scored_results.extend(scored)
         else:
             classic_signals[clean_name] = signals

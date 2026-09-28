@@ -78,9 +78,7 @@ def _pattern_frame(periods: int = 30) -> pd.DataFrame:
     )
 
 
-def _make_loader_stub(
-    frames: dict[str, pd.DataFrame], errors: dict[str, Exception] | None = None
-):
+def _make_loader_stub(frames: dict[str, pd.DataFrame], errors: dict[str, Exception] | None = None):
     """Build a `MarketDataLoader` stand-in serving prepared frames or raising per symbol."""
     errors = errors or {}
 
@@ -154,9 +152,7 @@ def test_markdown_format_is_no_longer_identical_to_text(monkeypatch, capsys):
 
 
 def test_markdown_format_renders_opportunity_ranking(monkeypatch, capsys):
-    stub = _make_loader_stub(
-        {"EURUSD=X": _marubozu_frame(), "GBPUSD=X": _marubozu_frame()}
-    )
+    stub = _make_loader_stub({"EURUSD=X": _marubozu_frame(), "GBPUSD=X": _marubozu_frame()})
     monkeypatch.setattr(cli, "MarketDataLoader", stub)
 
     rc = cli.run_cli(
@@ -193,9 +189,7 @@ def test_multi_symbol_scan_reports_skipped_symbols(monkeypatch, capsys):
     )
     monkeypatch.setattr(cli, "MarketDataLoader", stub)
 
-    rc = cli.run_cli(
-        cli.parse_args(["--symbol", "EURUSD=X,GBPUSD=X", "--min-confidence", "0"])
-    )
+    rc = cli.run_cli(cli.parse_args(["--symbol", "EURUSD=X,GBPUSD=X", "--min-confidence", "0"]))
 
     captured = capsys.readouterr()
     assert rc == 0
@@ -217,9 +211,7 @@ def test_multi_symbol_scan_reports_short_history(monkeypatch, capsys):
 
 
 def test_multi_symbol_scan_is_quiet_when_nothing_is_skipped(monkeypatch, capsys):
-    stub = _make_loader_stub(
-        {"EURUSD=X": _marubozu_frame(), "GBPUSD=X": _marubozu_frame()}
-    )
+    stub = _make_loader_stub({"EURUSD=X": _marubozu_frame(), "GBPUSD=X": _marubozu_frame()})
     monkeypatch.setattr(cli, "MarketDataLoader", stub)
 
     cli.run_cli(cli.parse_args(["--symbol", "EURUSD=X,GBPUSD=X", "--min-confidence", "0"]))

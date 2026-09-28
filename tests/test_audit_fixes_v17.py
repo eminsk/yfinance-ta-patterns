@@ -55,7 +55,9 @@ def test_closed_only_excludes_forming_day_after_resample():
     bucket already holds 19 hourly bars, so it passes the resampler's bar-count heuristic and
     only the closed-only checks can reject it.
     """
-    frame = pd.concat([_make_1h_frame("2025-01-06 00:00", 24), _make_1h_frame("2025-01-07 00:00", 19)])
+    frame = pd.concat(
+        [_make_1h_frame("2025-01-06 00:00", 24), _make_1h_frame("2025-01-07 00:00", 19)]
+    )
 
     loader = MarketDataLoader("EURUSD=X", interval="1d", clean_forex_daily=True)
     res = loader.process(frame, now_utc=pd.Timestamp("2025-01-07 19:00", tz="UTC"))
@@ -66,11 +68,11 @@ def test_closed_only_excludes_forming_day_after_resample():
 
 def test_closed_only_disabled_keeps_every_resampled_day():
     """`closed_only=False` must still return both buckets (the flag stays meaningful)."""
-    frame = pd.concat([_make_1h_frame("2025-01-06 00:00", 24), _make_1h_frame("2025-01-07 00:00", 19)])
-
-    loader = MarketDataLoader(
-        "EURUSD=X", interval="1d", clean_forex_daily=True, closed_only=False
+    frame = pd.concat(
+        [_make_1h_frame("2025-01-06 00:00", 24), _make_1h_frame("2025-01-07 00:00", 19)]
     )
+
+    loader = MarketDataLoader("EURUSD=X", interval="1d", clean_forex_daily=True, closed_only=False)
     res = loader.process(frame, now_utc=pd.Timestamp("2025-01-07 19:00", tz="UTC"))
 
     assert len(res) == 2
@@ -146,7 +148,9 @@ def test_to_json_sanitizes_nan_volume():
     # Strict parse: any NaN / Infinity token would trip the hook.
     parsed = json.loads(payload, parse_constant=_reject_json_constant)
     assert parsed["market_summary"]["last_volume"] is None
-    assert parsed["market_summary"]["current_price"] == pytest.approx(float(frame["Close"].iloc[-1]))
+    assert parsed["market_summary"]["current_price"] == pytest.approx(
+        float(frame["Close"].iloc[-1])
+    )
 
 
 def test_to_json_sanitizes_nan_rvol_in_pattern_results():

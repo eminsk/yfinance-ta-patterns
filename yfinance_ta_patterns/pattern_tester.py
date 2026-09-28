@@ -571,7 +571,6 @@ class PatternRankingTester:
         self._used_approx_fx: bool = False
 
         def _parse_staleness(val: Any) -> datetime.timedelta | pd.Timedelta | None:
-
             if val is None:
                 return None
             if isinstance(val, (datetime.timedelta, pd.Timedelta)):
@@ -598,7 +597,6 @@ class PatternRankingTester:
                 except Exception:
                     return datetime.timedelta(days=7)
             return None
-
 
         self._max_fx_staleness: datetime.timedelta | pd.Timedelta | None = _parse_staleness(
             max_fx_staleness
@@ -1094,7 +1092,11 @@ class PatternRankingTester:
             for i in range(len(signals)):
                 idx_time = _safe_get_time(self._data.index, i)
                 if idx_time is not None:
-                    date_str = idx_time.strftime("%Y-%m-%d") if hasattr(idx_time, "strftime") else str(idx_time)[:10]
+                    date_str = (
+                        idx_time.strftime("%Y-%m-%d")
+                        if hasattr(idx_time, "strftime")
+                        else str(idx_time)[:10]
+                    )
                     if date_str in self._news_dates:
                         signals[i] = 0
 
@@ -1326,7 +1328,9 @@ class PatternRankingTester:
                     eff_exit = exec_price + self._slippage
                     raw_pnl = (-position) * (entry_price - eff_exit)
                     direction = "SHORT"
-                exit_time_val = _safe_get_time(times, exec_idx) if self._fx_history is not None else None
+                exit_time_val = (
+                    _safe_get_time(times, exec_idx) if self._fx_history is not None else None
+                )
                 conv_pnl, fx_rate, fx_src = self._convert_pnl_with_source(
                     raw_pnl, exec_price, exit_time=exit_time_val
                 )
@@ -1360,7 +1364,9 @@ class PatternRankingTester:
                 if position < 0.0 and entry_idx is not None:
                     eff_exit = exec_price + self._slippage
                     raw_pnl = (-position) * (entry_price - eff_exit)
-                    exit_time_val = _safe_get_time(times, exec_idx) if self._fx_history is not None else None
+                    exit_time_val = (
+                        _safe_get_time(times, exec_idx) if self._fx_history is not None else None
+                    )
                     conv_pnl, fx_rate, fx_src = self._convert_pnl_with_source(
                         raw_pnl, exec_price, exit_time=exit_time_val
                     )
@@ -1394,7 +1400,9 @@ class PatternRankingTester:
                 if position > 0.0 and entry_idx is not None:
                     eff_exit = exec_price - self._slippage
                     raw_pnl = position * (eff_exit - entry_price)
-                    exit_time_val = _safe_get_time(times, exec_idx) if self._fx_history is not None else None
+                    exit_time_val = (
+                        _safe_get_time(times, exec_idx) if self._fx_history is not None else None
+                    )
                     conv_pnl, fx_rate, fx_src = self._convert_pnl_with_source(
                         raw_pnl, exec_price, exit_time=exit_time_val
                     )

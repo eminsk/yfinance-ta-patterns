@@ -1,4 +1,4 @@
-﻿"""Tests for Issue #10: Stop-Loss calculation on multi-candle patterns using pattern extremes."""
+"""Tests for Issue #10: Stop-Loss calculation on multi-candle patterns using pattern extremes."""
 
 import numpy as np
 import pandas as pd

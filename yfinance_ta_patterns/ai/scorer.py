@@ -19,10 +19,13 @@ except ImportError:
 
     class StrEnum(str, Enum):  # type: ignore[no-redef]
         """Fallback StrEnum for Python < 3.11."""
+
         pass
 
 
-_DATACLASS_SLOTS_FROZEN = {"slots": True, "frozen": True} if sys.version_info >= (3, 10) else {"frozen": True}
+_DATACLASS_SLOTS_FROZEN = (
+    {"slots": True, "frozen": True} if sys.version_info >= (3, 10) else {"frozen": True}
+)
 
 
 class SignalGrade(StrEnum):
@@ -634,7 +637,11 @@ class AIPatternScorer:
         # Determine pattern lookback window to find true pattern high/low extremes
         k = get_pattern_lookback(pattern_name)
         loc = self.df.index.get_loc(timestamp)
-        idx = int(loc) if isinstance(loc, (int, np.integer)) else int(loc.start if isinstance(loc, slice) else 0)
+        idx = (
+            int(loc)
+            if isinstance(loc, (int, np.integer))
+            else int(loc.start if isinstance(loc, slice) else 0)
+        )
         start_idx = max(0, idx - k + 1)
         window = self.df.iloc[start_idx : idx + 1]
         pattern_high = float(cast(Any, window["High"]).max())
@@ -645,7 +652,13 @@ class AIPatternScorer:
             None
             if insufficient_history
             else self._build_trade_setup(
-                is_bullish, close, high, low, atr, pattern_high=pattern_high, pattern_low=pattern_low
+                is_bullish,
+                close,
+                high,
+                low,
+                atr,
+                pattern_high=pattern_high,
+                pattern_low=pattern_low,
             )
         )
 

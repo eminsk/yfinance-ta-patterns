@@ -44,9 +44,9 @@ def test_get_talib_status_simulated_scenarios():
         assert status["has_native_talib"] is True
         assert "Native C TA-Lib successfully loaded." in status["reason"]
 
-    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), \
-         patch("sys.implementation.name", "pypy"), \
-         patch("sys.platform", "win32"):
+    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), patch(
+        "sys.implementation.name", "pypy"
+    ), patch("sys.platform", "win32"):
         status = get_talib_status()
         assert status["has_native_talib"] is False
         assert status["is_pypy"] is True
@@ -62,47 +62,48 @@ def test_get_talib_install_hint_formatting():
         assert hint == "Native TA-Lib is already installed and available."
 
     # When native ta-lib is absent on PyPy + Windows:
-    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), \
-         patch("sys.implementation.name", "pypy"), \
-         patch("sys.platform", "win32"):
+    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), patch(
+        "sys.implementation.name", "pypy"
+    ), patch("sys.platform", "win32"):
         hint = get_talib_install_hint(release_tag="v0.3.30")
         assert "--find-links" in hint
         assert "github.com/eminsk/yfinance-ta-patterns/releases/expanded_assets/v0.3.30" in hint
         assert 'uv add "yfinance-ta-patterns[all]"' in hint
-        assert '[tool.uv]' in hint
+        assert "[tool.uv]" in hint
 
     # When native ta-lib is absent on CPython + Windows:
-    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), \
-         patch("sys.implementation.name", "cpython"), \
-         patch("sys.platform", "win32"), \
-         patch("yfinance_ta_patterns.talib_compat.sys.version_info", (3, 14, 0, "final", 0)), \
-         patch("yfinance_ta_patterns.talib_compat.sysconfig.get_config_var", return_value=0):
+    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), patch(
+        "sys.implementation.name", "cpython"
+    ), patch("sys.platform", "win32"), patch(
+        "yfinance_ta_patterns.talib_compat.sys.version_info", (3, 14, 0, "final", 0)
+    ), patch("yfinance_ta_patterns.talib_compat.sysconfig.get_config_var", return_value=0):
         hint = get_talib_install_hint(release_tag="v0.3.30")
         assert "pip install ta-lib" in hint
         assert "--find-links" in hint
 
     # When native ta-lib is absent on Linux:
-    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), \
-         patch("sys.implementation.name", "cpython"), \
-         patch("sys.platform", "linux"):
+    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), patch(
+        "sys.implementation.name", "cpython"
+    ), patch("sys.platform", "linux"):
         hint = get_talib_install_hint()
         assert "apt-get install" in hint
         assert "libta-lib-dev" in hint
 
     # When native ta-lib is absent on macOS:
-    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), \
-          patch("sys.implementation.name", "cpython"), \
-          patch("sys.platform", "darwin"):
+    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), patch(
+        "sys.implementation.name", "cpython"
+    ), patch("sys.platform", "darwin"):
         hint = get_talib_install_hint()
         assert "brew install ta-lib" in hint
 
 
 def test_free_threaded_windows_install_hint_uses_wheelhouse():
     """Free-threaded Windows must not fall back to a local C-extension build."""
-    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), \
-         patch("sys.implementation.name", "cpython"), \
-         patch("sys.platform", "win32"), \
-         patch("yfinance_ta_patterns.talib_compat.sysconfig.get_config_var", return_value=1):
+    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), patch(
+        "sys.implementation.name", "cpython"
+    ), patch("sys.platform", "win32"), patch(
+        "yfinance_ta_patterns.talib_compat.sysconfig.get_config_var", return_value=1
+    ):
         hint = get_talib_install_hint()
 
     assert "PYTHON_GIL" in hint
@@ -113,11 +114,11 @@ def test_free_threaded_windows_install_hint_uses_wheelhouse():
 
 def test_standard_windows_315_install_hint_mentions_pandas_build():
     """Standard CPython 3.15 needs a pandas source build until upstream ships a wheel."""
-    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), \
-         patch("sys.implementation.name", "cpython"), \
-         patch("sys.platform", "win32"), \
-         patch("yfinance_ta_patterns.talib_compat.sys.version_info", (3, 15, 0, "final", 0)), \
-         patch("yfinance_ta_patterns.talib_compat.sysconfig.get_config_var", return_value=0):
+    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), patch(
+        "sys.implementation.name", "cpython"
+    ), patch("sys.platform", "win32"), patch(
+        "yfinance_ta_patterns.talib_compat.sys.version_info", (3, 15, 0, "final", 0)
+    ), patch("yfinance_ta_patterns.talib_compat.sysconfig.get_config_var", return_value=0):
         hint = get_talib_install_hint()
 
     assert "TA-Lib cp315" in hint
@@ -169,8 +170,9 @@ def mock_ohlcv_data():
 
 def test_fallback_notice_in_single_symbol_cli(capsys, mock_ohlcv_data):
     """Verify CLI notifies user with install hint in stderr when native TA-Lib is missing in all_patterns mode."""
-    with patch("yfinance_ta_patterns.cli.MarketDataLoader.get_data", return_value=mock_ohlcv_data), \
-         patch("yfinance_ta_patterns.cli.HAS_NATIVE_TALIB", False):
+    with patch(
+        "yfinance_ta_patterns.cli.MarketDataLoader.get_data", return_value=mock_ohlcv_data
+    ), patch("yfinance_ta_patterns.cli.HAS_NATIVE_TALIB", False):
         args = parse_args(["--symbol", "EURUSD", "--all-patterns"])
         exit_code = run_cli(args)
         assert exit_code == 0
@@ -180,8 +182,9 @@ def test_fallback_notice_in_single_symbol_cli(capsys, mock_ohlcv_data):
 
 def test_fallback_notice_in_multi_symbol_cli(capsys, mock_ohlcv_data):
     """Verify multi-symbol CLI notifies user with install hint in stderr when native TA-Lib is missing."""
-    with patch("yfinance_ta_patterns.cli.MarketDataLoader.get_data", return_value=mock_ohlcv_data), \
-         patch("yfinance_ta_patterns.cli.HAS_NATIVE_TALIB", False):
+    with patch(
+        "yfinance_ta_patterns.cli.MarketDataLoader.get_data", return_value=mock_ohlcv_data
+    ), patch("yfinance_ta_patterns.cli.HAS_NATIVE_TALIB", False):
         args = parse_args(["--symbol", "EURUSD,GBPUSD", "--timeframe", "1h"])
         exit_code = run_cli(args)
         assert exit_code == 0

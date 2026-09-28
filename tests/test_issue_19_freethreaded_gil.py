@@ -55,8 +55,9 @@ def test_is_gil_enabled_probe() -> None:
 
 def test_get_talib_status_freethreaded_gil_disabled() -> None:
     """Verify diagnostic fields when running free-threaded with GIL disabled."""
-    with patch("yfinance_ta_patterns.talib_compat.is_freethreaded", return_value=True), \
-         patch.object(sys, "_is_gil_enabled", create=True, return_value=False):
+    with patch(
+        "yfinance_ta_patterns.talib_compat.is_freethreaded", return_value=True
+    ), patch.object(sys, "_is_gil_enabled", create=True, return_value=False):
         status = get_talib_status()
 
         assert status["is_free_threaded"] is True
@@ -67,9 +68,11 @@ def test_get_talib_status_freethreaded_gil_disabled() -> None:
 
 def test_get_talib_status_freethreaded_forced_by_env() -> None:
     """Verify diagnostic fields when GIL was forced on by PYTHON_GIL=1."""
-    with patch("yfinance_ta_patterns.talib_compat.is_freethreaded", return_value=True), \
-         patch.object(sys, "_is_gil_enabled", create=True, return_value=True), \
-         patch.dict("os.environ", {"PYTHON_GIL": "1"}):
+    with patch(
+        "yfinance_ta_patterns.talib_compat.is_freethreaded", return_value=True
+    ), patch.object(sys, "_is_gil_enabled", create=True, return_value=True), patch.dict(
+        "os.environ", {"PYTHON_GIL": "1"}
+    ):
         status = get_talib_status()
 
         assert status["is_free_threaded"] is True
@@ -81,10 +84,11 @@ def test_get_talib_status_freethreaded_forced_by_env() -> None:
 
 def test_get_talib_status_freethreaded_reenabled_by_talib() -> None:
     """Verify diagnostic fields when GIL was re-enabled by native talib import."""
-    with patch("yfinance_ta_patterns.talib_compat.is_freethreaded", return_value=True), \
-         patch.object(sys, "_is_gil_enabled", create=True, return_value=True), \
-         patch.dict("os.environ", {}, clear=True), \
-         patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", True):
+    with patch(
+        "yfinance_ta_patterns.talib_compat.is_freethreaded", return_value=True
+    ), patch.object(sys, "_is_gil_enabled", create=True, return_value=True), patch.dict(
+        "os.environ", {}, clear=True
+    ), patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", True):
         status = get_talib_status()
 
         assert status["is_free_threaded"] is True
@@ -96,10 +100,11 @@ def test_get_talib_status_freethreaded_reenabled_by_talib() -> None:
 
 def test_get_talib_status_freethreaded_reenabled_by_other_extension() -> None:
     """Verify diagnostic fields when GIL was re-enabled without native talib."""
-    with patch("yfinance_ta_patterns.talib_compat.is_freethreaded", return_value=True), \
-         patch.object(sys, "_is_gil_enabled", create=True, return_value=True), \
-         patch.dict("os.environ", {}, clear=True), \
-         patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False):
+    with patch(
+        "yfinance_ta_patterns.talib_compat.is_freethreaded", return_value=True
+    ), patch.object(sys, "_is_gil_enabled", create=True, return_value=True), patch.dict(
+        "os.environ", {}, clear=True
+    ), patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False):
         status = get_talib_status()
 
         assert status["is_free_threaded"] is True
@@ -110,11 +115,11 @@ def test_get_talib_status_freethreaded_reenabled_by_other_extension() -> None:
 
 def test_get_talib_install_hint_windows_313t() -> None:
     """Verify install hint includes missing wheel guidance on Windows Python 3.13t."""
-    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), \
-         patch("sys.platform", "win32"), \
-         patch("sys.implementation.name", "cpython"), \
-         patch("sysconfig.get_config_var", return_value=1), \
-         patch("yfinance_ta_patterns.talib_compat.sys.version_info", (3, 13, 1, "final", 0)):
+    with patch("yfinance_ta_patterns.talib_compat.HAS_NATIVE_TALIB", False), patch(
+        "sys.platform", "win32"
+    ), patch("sys.implementation.name", "cpython"), patch(
+        "sysconfig.get_config_var", return_value=1
+    ), patch("yfinance_ta_patterns.talib_compat.sys.version_info", (3, 13, 1, "final", 0)):
         hint = get_talib_install_hint()
 
         assert "Windows Free-Threaded Python 3.13t" in hint
@@ -149,5 +154,11 @@ def test_cli_check_talib_freethreaded_output(capsys) -> None:
         captured = capsys.readouterr()
         assert "Free-Threaded Build:     True" in captured.out
         assert "GIL Currently Enabled:   True" in captured.out
-        assert "GIL Status Detail:       Forced enabled by PYTHON_GIL=1 environment variable." in captured.out
-        assert "Recommendation:          Run with 'python -X gil=0 <script>' or set PYTHON_GIL=0 in environment." in captured.out
+        assert (
+            "GIL Status Detail:       Forced enabled by PYTHON_GIL=1 environment variable."
+            in captured.out
+        )
+        assert (
+            "Recommendation:          Run with 'python -X gil=0 <script>' or set PYTHON_GIL=0 in environment."
+            in captured.out
+        )

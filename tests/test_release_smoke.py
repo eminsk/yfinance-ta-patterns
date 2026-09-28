@@ -88,7 +88,9 @@ def synthetic_market_candles() -> pd.DataFrame:
 def test_package_version_format():
     """Version string must follow standard semantic versioning (X.Y.Z)."""
     assert isinstance(__version__, str)
-    assert re.match(r"^\d+\.\d+\.\d+(\.post\d+)?$", __version__), f"Invalid version format: {__version__}"
+    assert re.match(r"^\d+\.\d+\.\d+(\.post\d+)?$", __version__), (
+        f"Invalid version format: {__version__}"
+    )
 
 
 def test_all_public_symbols_exported():
@@ -182,7 +184,6 @@ def test_lazy_yfinance_loading():
         assert proc.returncode == 0, f"Lazy import failed: {proc.stderr}"
 
 
-
 # ---------------------------------------------------------------------------
 # 4. Candlestick Pattern Recognition on Synthetic Data
 # ---------------------------------------------------------------------------
@@ -197,7 +198,7 @@ def test_candlestick_patterns_recognized(synthetic_market_candles: pd.DataFrame)
         assert len(patterns_to_test) >= 61
     else:
         patterns_to_test = sorted(SUPPORTED_FALLBACK_PATTERNS)
-        assert len(patterns_to_test) == 11
+        assert len(patterns_to_test) == 61
 
     for pattern in patterns_to_test:
         signals = analyzer.get_signals(pattern)
@@ -304,7 +305,6 @@ def test_ai_market_analyst_synthesis(synthetic_market_candles: pd.DataFrame):
     assert isinstance(payload, dict)
     assert payload.get("symbol") == "AAPL"
     assert "patterns" in payload
-
 
 
 # ---------------------------------------------------------------------------

@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import cast
+from typing import Any, cast
 
-import numpy as np
-import pandas as pd
+try:
+    import numpy as np
+except (ImportError, ModuleNotFoundError, RuntimeError, TypeError):  # pragma: no cover
+    from yfinance_ta_patterns.talib_compat import np  # type: ignore[no-redef]
+
+try:
+    import pandas as pd
+
+    HAS_PANDAS = True
+except (ImportError, ModuleNotFoundError, RuntimeError, TypeError):  # pragma: no cover
+    pd = None  # type: ignore[assignment]
+    HAS_PANDAS = False
 
 from yfinance_ta_patterns.talib_compat import (
     HAS_NATIVE_TALIB,
@@ -19,28 +29,37 @@ from yfinance_ta_patterns.talib_compat import (
 class PatternAnalyzer:
     """Analyze OHLC market data for TA-Lib candlestick patterns."""
 
-    def __init__(self, data: pd.DataFrame) -> None:
-        if not isinstance(data, pd.DataFrame):
-            raise TypeError("data must be a pandas DataFrame")
+    def __init__(self, data: Any) -> None:
+        if HAS_PANDAS:
+            if not isinstance(data, pd.DataFrame):
+                raise TypeError("data must be a pandas DataFrame")
 
-        required = {"Open", "High", "Low", "Close"}
-        missing = required.difference(data.columns)
-        if missing:
-            raise ValueError(f"Missing OHLC columns: {sorted(missing)}")
+            required = {"Open", "High", "Low", "Close"}
+            missing = required.difference(data.columns)
+            if missing:
+                raise ValueError(f"Missing OHLC columns: {sorted(missing)}")
 
-        if not data.empty:
-            for col in ("Open", "High", "Low", "Close"):
-                if not pd.api.types.is_numeric_dtype(data[col]):
-                    raise TypeError(f"Column '{col}' must be numeric")
-                if not np.isfinite(data[col]).all():
-                    raise ValueError("OHLC data contains non-finite values (NaN or inf)")
+            if not data.empty:
+                for col in ("Open", "High", "Low", "Close"):
+                    if not pd.api.types.is_numeric_dtype(data[col]):
+                        raise TypeError(f"Column '{col}' must be numeric")
+                    if hasattr(np, "isfinite") and not np.isfinite(data[col]).all():
+                        raise ValueError("OHLC data contains non-finite values (NaN or inf)")
 
-            if data.index.has_duplicates:
-                raise ValueError("Index contains duplicate timestamps")
-            if not data.index.is_monotonic_increasing:
-                raise ValueError("Index must be monotonically sorted in chronological order")
+                if data.index.has_duplicates:
+                    raise ValueError("Index contains duplicate timestamps")
+                if not data.index.is_monotonic_increasing:
+                    raise ValueError("Index must be monotonically sorted in chronological order")
 
-        self.data = data
+            self.data = data
+        else:
+            if not isinstance(data, dict):
+                raise TypeError("data must be a mapping with OHLC keys")
+            required = {"Open", "High", "Low", "Close"}
+            missing = required.difference(data.keys())
+            if missing:
+                raise ValueError(f"Missing OHLC columns: {sorted(missing)}")
+            self.data = data
         funcs: list[str] = (
             [f for f in dir(talib) if f.startswith("CDL")]
             if HAS_NATIVE_TALIB
@@ -98,6 +117,17 @@ class PatternAnalyzer:
                 )
             available = ", ".join(p.replace("CDL", "") for p in sorted(self.pattern_functions))
             raise ValueError(f"Unknown pattern '{pattern}'. Available: {available}")
+
+        if not (HAS_PANDAS and isinstance(self.data, pd.DataFrame)):
+            pattern_func = getattr(talib, normalized)
+            result = pattern_func(
+                self.data["Open"],
+                self.data["High"],
+                self.data["Low"],
+                self.data["Close"],
+            )
+            res_list = result.tolist() if hasattr(result, "tolist") else list(result)
+            return {i: val for i, val in enumerate(res_list) if val != 0}  # type: ignore[return-value]
 
         if self.data.empty:
             return pd.Series(dtype=int, name=normalized)

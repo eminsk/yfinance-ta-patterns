@@ -41,8 +41,9 @@ def test_repair_none_intraday_forex_disables_repair_with_sklearn() -> None:
     assert loader.repair is None
 
     dummy_df = _make_dummy_ohlcv(5)
-    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), \
-         patch("yfinance.download") as mock_dl:
+    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), patch(
+        "yfinance.download"
+    ) as mock_dl:
         mock_dl.return_value = dummy_df
         data = loader.fetch()
 
@@ -59,8 +60,9 @@ def test_forex_data_loader_intraday_disables_repair_with_sklearn() -> None:
     assert loader.asset_type == "forex"
 
     dummy_df = _make_dummy_ohlcv(5)
-    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), \
-         patch("yfinance.download") as mock_dl:
+    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), patch(
+        "yfinance.download"
+    ) as mock_dl:
         mock_dl.return_value = dummy_df
         data = loader.fetch()
 
@@ -75,8 +77,9 @@ def test_repair_none_daily_forex_keeps_repair_with_sklearn() -> None:
     assert loader.repair is None
 
     dummy_df = _make_dummy_ohlcv(5)
-    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), \
-         patch("yfinance.download") as mock_dl:
+    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), patch(
+        "yfinance.download"
+    ) as mock_dl:
         mock_dl.return_value = dummy_df
         data = loader.fetch()
 
@@ -91,8 +94,9 @@ def test_repair_none_intraday_stock_keeps_repair_with_sklearn() -> None:
     assert loader.repair is None
 
     dummy_df = _make_dummy_ohlcv(5)
-    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), \
-         patch("yfinance.download") as mock_dl:
+    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), patch(
+        "yfinance.download"
+    ) as mock_dl:
         mock_dl.return_value = dummy_df
         data = loader.fetch()
 
@@ -113,8 +117,9 @@ def test_fallback_retry_when_auto_repair_returns_empty() -> None:
 
     dummy_df = _make_dummy_ohlcv(5)
     # First call returns empty, second call returns valid data
-    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), \
-         patch("yfinance.download", side_effect=[pd.DataFrame(), dummy_df]) as mock_dl:
+    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), patch(
+        "yfinance.download", side_effect=[pd.DataFrame(), dummy_df]
+    ) as mock_dl:
         data = loader.fetch()
 
         assert not data.empty
@@ -131,8 +136,9 @@ def test_fallback_retry_with_start_and_end() -> None:
     loader = MarketDataLoader(symbol="AAPL", start="2024-01-01", end="2024-01-10")
     dummy_df = _make_dummy_ohlcv(5)
 
-    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), \
-         patch("yfinance.download", side_effect=[pd.DataFrame(), dummy_df]) as mock_dl:
+    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), patch(
+        "yfinance.download", side_effect=[pd.DataFrame(), dummy_df]
+    ) as mock_dl:
         data = loader.fetch()
 
         assert not data.empty
@@ -146,8 +152,9 @@ def test_no_fallback_when_explicit_repair_true() -> None:
     """When repair=True is explicitly specified, do not silently fallback on empty data."""
     loader = MarketDataLoader(symbol="AAPL", interval="1d", repair=True)
 
-    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), \
-         patch("yfinance.download", return_value=pd.DataFrame()) as mock_dl:
+    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), patch(
+        "yfinance.download", return_value=pd.DataFrame()
+    ) as mock_dl:
         with pytest.raises(ValueError, match="No market data found"):
             loader.fetch()
 
@@ -159,9 +166,12 @@ def test_fallback_fails_if_retry_also_empty() -> None:
     """If fallback with repair=False also returns empty DataFrame, raise ValueError."""
     loader = MarketDataLoader(symbol="NONEXISTENT", interval="1d")
 
-    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), \
-         patch("yfinance.download", side_effect=[pd.DataFrame(), pd.DataFrame()]) as mock_dl:
-        with pytest.raises(ValueError, match="No market data found on Yahoo Finance for ticker 'NONEXISTENT'"):
+    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), patch(
+        "yfinance.download", side_effect=[pd.DataFrame(), pd.DataFrame()]
+    ) as mock_dl:
+        with pytest.raises(
+            ValueError, match="No market data found on Yahoo Finance for ticker 'NONEXISTENT'"
+        ):
             loader.fetch()
 
         assert mock_dl.call_count == 2

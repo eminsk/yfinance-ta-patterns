@@ -16,7 +16,7 @@ def test_validate_ohlc_zero_body_warning():
     # Simulate corrupted Yahoo Forex daily candles: Open ~ Close, large High - Low
     opens = np.full(10, 1.1000)
     closes = np.full(10, 1.1001)  # 1 pip body
-    highs = np.full(10, 1.1080)   # 80 pips range
+    highs = np.full(10, 1.1080)  # 80 pips range
     lows = np.full(10, 1.1000)
 
     df = pd.DataFrame(

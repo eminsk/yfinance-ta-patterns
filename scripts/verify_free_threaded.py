@@ -18,7 +18,9 @@ def main() -> int:
     if not sysconfig.get_config_var("Py_GIL_DISABLED"):
         raise RuntimeError("This verifier requires a free-threaded CPython build.")
     if _gil_enabled():
-        raise RuntimeError("GIL is enabled. Set PYTHON_GIL=0 or pass -X gil=0 when starting Python.")
+        raise RuntimeError(
+            "GIL is enabled. Set PYTHON_GIL=0 or pass -X gil=0 when starting Python."
+        )
 
     import numpy as np
     import pandas as pd

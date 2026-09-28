@@ -41,8 +41,9 @@ def test_repair_none_without_sklearn_emits_no_warning() -> None:
     loader = MarketDataLoader(symbol="AAPL", interval="1d")
     assert loader.repair is None
 
-    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", False), \
-         patch("yfinance_ta_patterns.data.yf.download") as mock_dl:
+    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", False), patch(
+        "yfinance_ta_patterns.data.yf.download"
+    ) as mock_dl:
         mock_dl.return_value = _make_dummy_ohlcv(5)
         with warnings.catch_warnings(record=True) as record:
             warnings.simplefilter("always")
@@ -62,8 +63,9 @@ def test_repair_none_with_sklearn_enables_repair_silently() -> None:
     """When repair=None (default) and HAS_SKLEARN is True, repair is enabled without warning."""
     loader = MarketDataLoader(symbol="AAPL", interval="1d")
 
-    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), \
-         patch("yfinance_ta_patterns.data.yf.download") as mock_dl:
+    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", True), patch(
+        "yfinance_ta_patterns.data.yf.download"
+    ) as mock_dl:
         mock_dl.return_value = _make_dummy_ohlcv(5)
         with warnings.catch_warnings(record=True) as record:
             warnings.simplefilter("always")
@@ -83,8 +85,9 @@ def test_explicit_repair_true_without_sklearn_emits_warning() -> None:
     """When repair=True is explicitly passed and HAS_SKLEARN is False, UserWarning is emitted."""
     loader = MarketDataLoader(symbol="AAPL", interval="1d", repair=True)
 
-    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", False), \
-         patch("yfinance_ta_patterns.data.yf.download") as mock_dl:
+    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", False), patch(
+        "yfinance_ta_patterns.data.yf.download"
+    ) as mock_dl:
         mock_dl.return_value = _make_dummy_ohlcv(5)
         with pytest.warns(UserWarning, match="Data repair was requested .*scikit-learn"):
             loader.fetch()
@@ -97,8 +100,9 @@ def test_explicit_repair_false_without_sklearn_emits_no_warning() -> None:
     """When repair=False is explicitly passed, no warning is emitted and repair is False."""
     loader = MarketDataLoader(symbol="AAPL", interval="1d", repair=False)
 
-    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", False), \
-         patch("yfinance_ta_patterns.data.yf.download") as mock_dl:
+    with patch("yfinance_ta_patterns.data.HAS_SKLEARN", False), patch(
+        "yfinance_ta_patterns.data.yf.download"
+    ) as mock_dl:
         mock_dl.return_value = _make_dummy_ohlcv(5)
         with warnings.catch_warnings(record=True) as record:
             warnings.simplefilter("always")
@@ -176,4 +180,3 @@ def test_rich_dependency_available() -> None:
     assert rich is not None
     assert console is not None
     assert table is not None
-

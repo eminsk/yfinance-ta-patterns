@@ -308,18 +308,21 @@ def test_comparison_report_pattern_alignment(synthetic_ohlcv_data: pd.DataFrame)
 def test_talib_fallback_sets() -> None:
     """Issue 10 & 11: Supported and unsupported patterns are properly classified."""
     wrapper = TALibWrapper(force_fallback=True)
-    assert len(SUPPORTED_FALLBACK_PATTERNS) == 11
+    assert len(SUPPORTED_FALLBACK_PATTERNS) == 61
     assert "CDLDOJI" in SUPPORTED_FALLBACK_PATTERNS
     assert "CDLHAMMER" in SUPPORTED_FALLBACK_PATTERNS
-    assert "CDLPIERCING" in UNSUPPORTED_FALLBACK_PATTERNS
+    assert "CDLPIERCING" in SUPPORTED_FALLBACK_PATTERNS
+    assert len(UNSUPPORTED_FALLBACK_PATTERNS) == 0
 
     # Supported pattern runs
     res = wrapper.CDLDOJI(np.array([10.0]), np.array([11.0]), np.array([9.0]), np.array([10.0]))
     assert res[0] == 100
 
-    # Unsupported pattern raises NotImplementedError
-    with pytest.raises(NotImplementedError):
-        wrapper.CDLPIERCING(np.array([10.0]), np.array([11.0]), np.array([9.0]), np.array([10.0]))
+    # CDLPIERCING also runs cleanly in fallback mode
+    res_piercing = wrapper.CDLPIERCING(
+        np.array([10.0, 9.0]), np.array([11.0, 10.0]), np.array([9.0, 8.5]), np.array([9.2, 9.8])
+    )
+    assert len(res_piercing) == 2
 
 
 def test_forex_quote_currency_conversion() -> None:
@@ -1135,7 +1138,7 @@ def test_screenshot6_high_low_geometry_without_open_close() -> None:
 
 
 def test_cli_all_patterns_pure_python_fallback() -> None:
-    """Pure-Python fallback scans 11 supported patterns without crashing on CDL2CROWS."""
+    """Pure-Python fallback scans all 61 supported patterns including CDL2CROWS."""
     from yfinance_ta_patterns.pattern_analyzer import PatternAnalyzer
     from yfinance_ta_patterns.talib_compat import HAS_NATIVE_TALIB, SUPPORTED_FALLBACK_PATTERNS
 
@@ -1153,6 +1156,7 @@ def test_cli_all_patterns_pure_python_fallback() -> None:
     analyzer = PatternAnalyzer(df)
     if not HAS_NATIVE_TALIB:
         assert len(analyzer.pattern_functions) == len(SUPPORTED_FALLBACK_PATTERNS)
-        assert "CDL2CROWS" not in analyzer.pattern_functions
-        with pytest.raises(NotImplementedError, match="requires native TA-Lib"):
-            analyzer.get_signals("2CROWS")
+        assert len(analyzer.pattern_functions) == 61
+        assert "CDL2CROWS" in analyzer.pattern_functions
+        sig = analyzer.get_signals("2CROWS")
+        assert isinstance(sig, pd.Series)

@@ -79,8 +79,15 @@ def check_2_dependencies() -> None:
     except Exception:
         rich_ver = "installed"
 
-    mode = "Native C TA-Lib" if HAS_NATIVE_TALIB else f"Pure-Python Fallback ({len(SUPPORTED_FALLBACK_PATTERNS)} patterns)"
-    print(f"\n       [Dependencies: numpy {np.__version__}, pandas {pd.__version__}, rich {rich_ver}, yfinance {yfinance.__version__} | TA-Lib: {mode}]", end="")
+    mode = (
+        "Native C TA-Lib"
+        if HAS_NATIVE_TALIB
+        else f"Pure-Python Fallback ({len(SUPPORTED_FALLBACK_PATTERNS)} patterns)"
+    )
+    print(
+        f"\n       [Dependencies: numpy {np.__version__}, pandas {pd.__version__}, rich {rich_ver}, yfinance {yfinance.__version__} | TA-Lib: {mode}]",
+        end="",
+    )
 
 
 def check_3_cli_execution() -> None:
@@ -103,7 +110,9 @@ def check_3_cli_execution() -> None:
         capture_output=True,
         text=True,
     )
-    assert proc_help.returncode == 0, f"CLI --help returned {proc_help.returncode}: {proc_help.stderr}"
+    assert proc_help.returncode == 0, (
+        f"CLI --help returned {proc_help.returncode}: {proc_help.stderr}"
+    )
     assert "--pattern" in proc_help.stdout
     assert "--symbol" in proc_help.stdout
 
@@ -115,11 +124,14 @@ def check_4_runtime_safety() -> None:
     assert len(INTERVAL_DELTAS) >= 12, "INTERVAL_DELTAS missing standard intervals"
     t0 = datetime.datetime(2025, 1, 1, 0, 0, 0)
     for k, d in INTERVAL_DELTAS.items():
-        assert isinstance(d, datetime.timedelta), f"INTERVAL_DELTAS['{k}'] is not datetime.timedelta"
+        assert isinstance(d, datetime.timedelta), (
+            f"INTERVAL_DELTAS['{k}'] is not datetime.timedelta"
+        )
         assert (t0 + d) > t0, f"Invalid delta arithmetic for {k}"
 
     # Verify lazy loading in separate process if supported by package build (post-0.3.30)
     import yfinance_ta_patterns.data as ydata
+
     if hasattr(ydata, "yf") and ydata.yf is None:
         code = "import sys, yfinance_ta_patterns.data; assert 'yfinance' not in sys.modules"
         res = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
@@ -151,7 +163,6 @@ def _generate_synthetic_ohlcv():
     )
 
 
-
 def check_5_pattern_analyzer() -> None:
     """Check 5: Candlestick pattern scanning on synthetic market data."""
     import pandas as pd
@@ -171,7 +182,9 @@ def check_5_pattern_analyzer() -> None:
     for pat in patterns:
         signals = analyzer.get_signals(pat)
         assert isinstance(signals, pd.Series), f"Expected Series for {pat}"
-        assert set(signals.unique()).issubset({-100, 100}), f"Invalid signal values for {pat}: {set(signals.unique())}"
+        assert set(signals.unique()).issubset({-100, 100}), (
+            f"Invalid signal values for {pat}: {set(signals.unique())}"
+        )
 
 
 def check_6_backtest_and_ai_scoring() -> None:
@@ -213,19 +226,25 @@ def check_6_backtest_and_ai_scoring() -> None:
     except (AttributeError, Exception):
         last_idx = "2025-02-19"
     res = scorer.score_signal("HAMMER", last_idx, raw_signal=100)
-    assert isinstance(res, PatternConfidenceResult), "AIPatternScorer did not return PatternConfidenceResult"
+    assert isinstance(res, PatternConfidenceResult), (
+        "AIPatternScorer did not return PatternConfidenceResult"
+    )
     assert 0.0 <= res.confidence_score <= 1.0, f"Invalid confidence score: {res.confidence_score}"
     assert isinstance(res.grade, SignalGrade), f"Invalid signal grade: {res.grade}"
     assert res.trade_setup.entry_price > 0, "Trade setup entry price invalid"
 
     # AI Market Analyst
-    analyst = AIMarketAnalyst(df, scored_results=[res], symbol="BTC-USD", timeframe="1d", asset_type="crypto")
+    analyst = AIMarketAnalyst(
+        df, scored_results=[res], symbol="BTC-USD", timeframe="1d", asset_type="crypto"
+    )
     brief = analyst.generate_brief()
     assert isinstance(brief, str) and len(brief) > 0, "AIMarketAnalyst generate_brief failed"
     prompt = analyst.to_llm_prompt()
     assert isinstance(prompt, str) and len(prompt) > 0, "AIMarketAnalyst to_llm_prompt failed"
     payload = analyst.to_dict()
-    assert isinstance(payload, dict) and payload.get("symbol") == "BTC-USD", "AIMarketAnalyst to_dict failed"
+    assert isinstance(payload, dict) and payload.get("symbol") == "BTC-USD", (
+        "AIMarketAnalyst to_dict failed"
+    )
 
 
 def check_7_multithreaded_concurrency() -> None:
@@ -311,7 +330,9 @@ def main() -> int:
     total_time = time.time() - t_start
     print("-" * 72)
     if failed == 0:
-        print(f"  VERIFICATION SUCCESSFUL: {passed}/{len(CHECKS)} checks passed in {total_time:.2f}s.")
+        print(
+            f"  VERIFICATION SUCCESSFUL: {passed}/{len(CHECKS)} checks passed in {total_time:.2f}s."
+        )
         print("=" * 72)
         return 0
     else:
