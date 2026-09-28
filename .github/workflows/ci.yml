@@ -392,3 +392,29 @@ jobs:
           uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
           uv add pytest
           uv run pytest "$GITHUB_WORKSPACE/tests" -q -W "ignore:.*urllib3 v2 only supports OpenSSL.*:Warning"
+
+
+  verify-pypy-312:
+    name: Verify pure-Python on ${{ matrix.os }} (pypy-3.12)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+
+      - name: Test yfinance-ta-patterns pure-Python fallback on PyPy 3.12
+        shell: bash
+        run: |
+          uv init --no-workspace test_pypy12 --python pypy-3.12
+          cd test_pypy12
+          uv python pin pypy-3.12
+          uv add "$GITHUB_WORKSPACE"
+          uv run python "$GITHUB_WORKSPACE/scripts/verify_pypy_312.py"
+

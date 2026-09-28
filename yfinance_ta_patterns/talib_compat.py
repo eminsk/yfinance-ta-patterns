@@ -29,6 +29,9 @@ class _Vec:
     """Lightweight pure-Python vectorized 1D array with slice-views, mask assignment, and broadcasting."""
 
     __slots__ = ("_data", "_start", "_stop")
+    _data: list[Any]
+    _start: int
+    _stop: int
 
     def __init__(self, data: Any, start: int = 0, stop: int | None = None) -> None:
         if isinstance(data, _Vec):
@@ -49,14 +52,14 @@ class _Vec:
             self._stop = len(self._data)
 
     def __len__(self) -> int:
-        return max(0, self._stop - self._start)
+        return max(0, int(self._stop - self._start))
 
     def __iter__(self):
         for i in range(self._start, self._stop):
             yield self._data[i]
 
     def tolist(self) -> list[Any]:
-        return self._data[self._start : self._stop]
+        return list(self._data[self._start : self._stop])
 
     @property
     def dtype(self) -> Any:
@@ -181,11 +184,11 @@ class _Vec:
     def __le__(self, other: Any) -> _Vec:
         return self._binop(other, lambda a, b: a <= b)
 
-    def __eq__(self, other: Any) -> _Vec:
-        return self._binop(other, lambda a, b: a == b)  # type: ignore[override]
+    def __eq__(self, other: Any) -> Any:  # type: ignore[override]
+        return self._binop(other, lambda a, b: a == b)
 
-    def __ne__(self, other: Any) -> _Vec:
-        return self._binop(other, lambda a, b: a != b)  # type: ignore[override]
+    def __ne__(self, other: Any) -> Any:  # type: ignore[override]
+        return self._binop(other, lambda a, b: a != b)
 
     def __and__(self, other: Any) -> _Vec:
         return self._binop(other, lambda a, b: bool(a) and bool(b))
@@ -545,7 +548,7 @@ def cdl_2crows(open_, high, low, close):
 
 
 def cdl_3inside(open_, high, low, close):
-    o, h, lo, c = _to_arrays(open_, high, low, close)
+    o, _h, _lo, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 3:
         return res
@@ -565,7 +568,7 @@ def cdl_3inside(open_, high, low, close):
 
 
 def cdl_3outside(open_, high, low, close):
-    o, h, lo, c = _to_arrays(open_, high, low, close)
+    o, _h, _lo, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 3:
         return res
@@ -580,7 +583,7 @@ def cdl_3outside(open_, high, low, close):
 
 
 def cdl_3linestrike(open_, high, low, close):
-    o, h, lo, c = _to_arrays(open_, high, low, close)
+    o, _h, _lo, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 4:
         return res
@@ -917,7 +920,7 @@ def cdl_homingpigeon(open_, high, low, close):
 
 
 def cdl_identical3crows(open_, high, low, close):
-    o, h, lo, c = _to_arrays(open_, high, low, close)
+    o, _h, _lo, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 3:
         return res
@@ -980,7 +983,7 @@ def cdl_kickingbylength(open_, high, low, close):
 
 
 def cdl_ladderbottom(open_, high, low, close):
-    o, h, lo, c = _to_arrays(open_, high, low, close)
+    o, h, _lo, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 5:
         return res
@@ -1020,7 +1023,7 @@ def cdl_longline(open_, high, low, close):
 
 
 def cdl_matchinglow(open_, high, low, close):
-    o, h, lo, c = _to_arrays(open_, high, low, close)
+    o, _h, _lo, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 2:
         return res
@@ -1149,7 +1152,7 @@ def cdl_risefall3methods(open_, high, low, close):
 
 
 def cdl_separatinglines(open_, high, low, close):
-    o, h, lo, c = _to_arrays(open_, high, low, close)
+    o, _h, _lo, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 2:
         return res
@@ -1190,7 +1193,7 @@ def cdl_stalledpattern(open_, high, low, close):
 
 
 def cdl_sticksandwich(open_, high, low, close):
-    o, h, lo, c = _to_arrays(open_, high, low, close)
+    o, _h, _lo, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 3:
         return res
@@ -1220,7 +1223,7 @@ def cdl_takuri(open_, high, low, close, trend_lookback: int = 5):
 
 
 def cdl_tasukigap(open_, high, low, close):
-    o, h, lo, c = _to_arrays(open_, high, low, close)
+    o, _h, _lo, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 3:
         return res
@@ -1309,7 +1312,7 @@ def cdl_upsidegap2crows(open_, high, low, close):
 
 
 def cdl_xsidegap3methods(open_, high, low, close):
-    o, h, lo, c = _to_arrays(open_, high, low, close)
+    o, _h, _lo, c = _to_arrays(open_, high, low, close)
     res = np.zeros(len(o), dtype=np.int32)
     if len(o) < 3:
         return res

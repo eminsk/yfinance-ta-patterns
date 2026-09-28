@@ -118,9 +118,7 @@ scorer = AIPatternScorer(df)
 
 for signal in pattern_signals:
     score = scorer.score_pattern(
-        pattern_name=signal["pattern"],
-        bar_idx=signal["index"],
-        signal_type=signal["direction"]
+        pattern_name=signal["pattern"], bar_idx=signal["index"], signal_type=signal["direction"]
     )
 
     # Filter for high-confluence institutional setups
@@ -130,7 +128,7 @@ for signal in pattern_signals:
         print(f"   Trend Regime:     {score.trend_alignment}")
         print(f"   Relative Volume:  {score.rvol:.2f}x")
         print(f"   Wilder RSI (14):  {score.rsi:.1f}")
-        
+
         # Automated Trade Setup
         setup = score.trade_setup
         print(f"   Entry:       ${setup['entry']:.2f}")

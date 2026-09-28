@@ -171,10 +171,12 @@ class PatternAnalyzer:
             try:
                 signals = self.get_signals(pattern, date=date)
                 pattern_name = pattern.replace("CDL", "")
-                if not signals.empty:
-                    messages.append(
-                        f"{pattern_name} on {date} (non-zero values):\n{signals.to_string()}"
+                has_signals = not signals.empty if hasattr(signals, "empty") else len(signals) > 0
+                if has_signals:
+                    sig_repr = (
+                        signals.to_string() if hasattr(signals, "to_string") else str(signals)
                     )
+                    messages.append(f"{pattern_name} on {date} (non-zero values):\n{sig_repr}")
                 else:
                     messages.append(f"{pattern_name} on {date}: all values are 0")
             except Exception as exc:
