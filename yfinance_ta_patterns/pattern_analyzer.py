@@ -29,6 +29,8 @@ from yfinance_ta_patterns.talib_compat import (
 class PatternAnalyzer:
     """Analyze OHLC market data for TA-Lib candlestick patterns."""
 
+    data: Any
+
     def __init__(self, data: Any) -> None:
         if HAS_PANDAS:
             if not isinstance(data, pd.DataFrame):
