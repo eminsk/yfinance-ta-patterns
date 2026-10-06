@@ -36,8 +36,8 @@ Universal runtime compatibility across **CPython 3.8 to 3.15, free-threaded No-G
 
 | Runtime / Implementation | Supported Versions | Execution Mode | Status | Installation Source |
 |:---|:---|:---|:---:|:---:|
-| **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | Standard bytecode + GIL | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
-| **CPython (Free-Threaded)** | 3.13t, 3.14t, 3.15t | Multi-core No-GIL (PEP 703) | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
+| **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 3.15, 3.16 | Standard bytecode + GIL | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
+| **CPython (Free-Threaded)** | 3.13t, 3.14t, 3.15t, 3.16t | Multi-core No-GIL (PEP 703) | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
 | **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11, 3.12 | High-speed JIT tracing | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
 | **Operating Systems** | Windows (7, 8, 10, 11), Linux, macOS (Intel & Apple Silicon) | x86_64, ARM64 | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
 
@@ -57,7 +57,7 @@ Universal runtime compatibility across **CPython 3.8 to 3.15, free-threaded No-G
 | **Conda + Native TA-Lib** | `conda install -c conda-forge yfinance-ta-patterns ta-lib` | Full C-accelerated TA-Lib with **zero compilation** |
 | **Pixi** | `pixi add yfinance-ta-patterns` | Modern high-speed reproducible Conda workflow |
 | **Ubuntu / Debian (APT PPA)** | `curl -sS https://eminsk.github.io/ppa/setup.sh \| sudo bash`<br>`sudo apt install python3-yfinance-ta-patterns` | Official PPA repository (pure apt, zero URLs) |
-| **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.45-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
+| **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.46-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
 | **Ubuntu / Debian (pipx)** | `sudo apt install pipx && pipx install yfinance-ta-patterns` | Isolated global CLI tool install (PEP 668 compliant) |
 | **uv (Python)** | `uv add yfinance-ta-patterns` | Sub-second pure Python installation |
 | **pip (Python)** | `pip install yfinance-ta-patterns` | Universal PyPI installation |
