@@ -183,6 +183,22 @@ pip install "yfinance-ta-patterns[talib]"
 
 ---
 
+## 🤖 Native MCP (Model Context Protocol) Server
+
+Connect **yfinance-ta-patterns** directly to **Claude Desktop**, **Cursor**, **Windsurf**, or **Antigravity** via the built-in `yfinance-ta-mcp` JSON-RPC 2.0 server (`ta_scan_symbol`, `ta_scan_watchlist`, `ta_backtest_patterns`, `ta_list_patterns`) for real-time candlestick pattern scanning, AI Confluence Scoring, Trade Setups (Entry / Stop-Loss / Take-Profit), and multi-asset backtesting:
+
+```json
+{
+  "mcpServers": {
+    "yfinance-ta": {
+      "command": "yfinance-ta-mcp"
+    }
+  }
+}
+```
+
+---
+
 ## 🚀 Ready-to-Use Examples (`examples/`)
 
 The repository includes production-ready backtesting and real-time scanning scripts in the [`examples/`](examples/) directory:

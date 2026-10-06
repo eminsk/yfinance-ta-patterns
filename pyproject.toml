@@ -90,6 +90,7 @@ dev = [
 [project.scripts]
 yfinance-ta-patterns = "yfinance_ta_patterns.cli:main"
 yftp = "yfinance_ta_patterns.cli:main"
+yfinance-ta-mcp = "yfinance_ta_patterns.mcp_server:main_mcp"
 
 [project.urls]
 Homepage = "https://github.com/eminsk/yfinance-ta-patterns"

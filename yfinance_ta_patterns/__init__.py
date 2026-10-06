@@ -89,6 +89,11 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover
     SignalGrade = None  # type: ignore[assignment, misc]
     TradeSetup = None  # type: ignore[assignment, misc]
 
+try:
+    from .mcp_server import YFinanceTAMCPServer
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
+    YFinanceTAMCPServer = None  # type: ignore[assignment, misc]
+
 __all__ = [
     "ALLOWED_ASSET_TYPES",
     "ALL_CDL_PATTERNS",
@@ -110,6 +115,7 @@ __all__ = [
     "SignalGrade",
     "TALibWrapper",
     "TradeSetup",
+    "YFinanceTAMCPServer",
     "__version__",
     "classify_asset",
     "format_price",
