@@ -1,3 +1,9 @@
+yfinance-ta-patterns (0.3.48-1) unstable; urgency=medium
+
+  * Release v0.3.48: MCP lifecycle version negotiation for 2025-11-25, institutional tool annotations/outputSchema, raw UTF-8 token optimization without \\uXXXX escaping, compact watchlist mode, UTC time labeling, and removal of synthetic macro calendar data.
+
+ -- eminsk <M_N_N@tut.by>  Tue, 06 Oct 2026 14:00:00 +0000
+
 yfinance-ta-patterns (0.3.47-1) unstable; urgency=medium
 
   * Release v0.3.47: Production-grade MCP server hardening (stdout isolation, cp1251 safety, watchlist error diagnostics, intraday period clamping) and economic calendar tool (ta_get_economic_calendar) for selected assets.

@@ -450,9 +450,12 @@ class InvestingCalendar:
                 previous = td.text or "—"
 
         if time_text and current_date:
-            full_datetime = f"{current_date} {time_text}:00" if ":" in time_text else time_text
+            time_formatted = f"{time_text}:00" if ":" in time_text else time_text
+            full_datetime = f"{current_date} {time_formatted} UTC"
+        elif time_text:
+            full_datetime = f"{time_text} UTC"
         else:
-            full_datetime = time_text
+            full_datetime = f"{current_date} UTC" if current_date else ""
 
         return {
             "id": eid,
@@ -575,11 +578,11 @@ class InvestingCalendar:
         date_to: str,
         countries: Iterable[Any] | None = None,
         importances: Iterable[Any] | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[dict[str, Any]] | None:
         """Fetch economic events from the primary live feed."""
         html_text = self._download_feed_html(self.TE_URL)
-        if not html_text:
-            return []
+        if html_text is None:
+            return None
 
         parser = _TableHTMLParser()
         parser.feed(html_text)
@@ -621,7 +624,7 @@ class InvestingCalendar:
             else:
                 time_part = ""
 
-            full_time = f"{event_date} {time_part}".strip()
+            full_time = f"{event_date} {time_part} UTC" if time_part else f"{event_date} UTC"
 
             raw_country = (tr.attrs.get("data-country") or "").lower().strip()
             iso_code = tds[1].text.strip()
@@ -679,208 +682,6 @@ class InvestingCalendar:
 
         return events
 
-    def _generate_synthetic_events(
-        self,
-        date_from: str,
-        date_to: str,
-        countries: Iterable[Any] | None = None,
-        importances: Iterable[Any] | None = None,
-    ) -> list[dict[str, Any]]:
-        """Generate scheduled macroeconomic events if live feeds are unreachable or out of range."""
-        imp_filter = set(map(str, importances)) if importances else {"1", "2", "3"}
-        country_filter = (
-            {str(c).lower().strip() for c in countries if str(c).strip()} if countries else None
-        )
-
-        try:
-            d_start = dt.datetime.strptime(date_from, "%Y-%m-%d").date()
-            d_end = dt.datetime.strptime(date_to, "%Y-%m-%d").date()
-        except Exception:
-            d_start = dt.date.today()
-            d_end = d_start + dt.timedelta(days=7)
-
-        if d_end < d_start:
-            d_start, d_end = d_end, d_start
-
-        base_catalog = [
-            (
-                "09:00",
-                "Германия",
-                "EUR",
-                "3",
-                "Индекс делового климата IFO",
-                "85.4",
-                "85.2",
-                "85.0",
-            ),
-            (
-                "10:00",
-                "Еврозона",
-                "EUR",
-                "2",
-                "Индекс доверия потребителей",
-                "-12.9",
-                "-13.0",
-                "-13.5",
-            ),
-            (
-                "11:30",
-                "Великобритания",
-                "GBP",
-                "3",
-                "Индекс деловой активности (PMI)",
-                "52.3",
-                "52.0",
-                "51.8",
-            ),
-            (
-                "15:30",
-                "США",
-                "USD",
-                "3",
-                "Базовый ценовой индекс расходов (PCE)",
-                "2.6%",
-                "2.6%",
-                "2.7%",
-            ),
-            ("15:30", "США", "USD", "3", "ВВП (кв/кв)", "3.0%", "2.9%", "2.8%"),
-            (
-                "15:30",
-                "США",
-                "USD",
-                "3",
-                "Число первичных заявок на пособие",
-                "218K",
-                "222K",
-                "219K",
-            ),
-            ("17:00", "США", "USD", "2", "Продажи нового жилья", "716K", "700K", "739K"),
-            (
-                "21:00",
-                "США",
-                "USD",
-                "3",
-                "Решение по процентной ставке ФРС",
-                "5.00%",
-                "5.00%",
-                "5.25%",
-            ),
-            (
-                "03:30",
-                "Япония",
-                "JPY",
-                "3",
-                "Индекс потребительских цен (CPI)",
-                "2.8%",
-                "2.7%",
-                "2.8%",
-            ),
-            (
-                "10:30",
-                "Швейцария",
-                "CHF",
-                "2",
-                "Индекс потребительских настроений",
-                "-30.0",
-                "-29.0",
-                "-31.2",
-            ),
-            (
-                "15:30",
-                "Канада",
-                "CAD",
-                "3",
-                "Изменение занятости и уровень безработицы",
-                "25.4K",
-                "20.0K",
-                "22.1K",
-            ),
-            (
-                "04:30",
-                "Австралия",
-                "AUD",
-                "3",
-                "Решение РБА по процентной ставке",
-                "4.35%",
-                "4.35%",
-                "4.35%",
-            ),
-            (
-                "02:00",
-                "Новая Зеландия",
-                "NZD",
-                "3",
-                "Решение РБНЗ по процентной ставке",
-                "5.25%",
-                "5.25%",
-                "5.50%",
-            ),
-            (
-                "05:00",
-                "Китай",
-                "CNY",
-                "3",
-                "Индекс деловой активности (PMI) в производстве",
-                "50.2",
-                "50.0",
-                "49.8",
-            ),
-            (
-                "13:30",
-                "Россия",
-                "RUB",
-                "3",
-                "Решение ЦБ РФ по ключевой ставке",
-                "19.00%",
-                "19.00%",
-                "18.00%",
-            ),
-        ]
-
-        matching_catalog = [
-            item
-            for item in base_catalog
-            if item[3] in imp_filter
-            and (
-                country_filter is None
-                or item[1].lower() in country_filter
-                or item[2].lower() in country_filter
-            )
-        ]
-
-        results: list[dict[str, Any]] = []
-        if not matching_catalog:
-            return results
-
-        cur = d_start
-        idx = 1000
-        while cur <= d_end:
-            if cur.weekday() < 5:  # Business days
-                date_str = cur.strftime("%Y-%m-%d")
-                if len(matching_catalog) <= 4:
-                    daily_events = matching_catalog
-                else:
-                    day_seed = cur.day % len(matching_catalog)
-                    doubled = matching_catalog + matching_catalog
-                    daily_events = doubled[day_seed : day_seed + 4]
-                for tm, country, curr, imp, name, act, fore, prev in daily_events:
-                    results.append(
-                        {
-                            "id": str(idx),
-                            "time": f"{date_str} {tm}",
-                            "country": country,
-                            "currency": curr,
-                            "importance": imp,
-                            "event": name,
-                            "actual": act,
-                            "forecast": fore,
-                            "previous": prev,
-                        }
-                    )
-                    idx += 1
-            cur += dt.timedelta(days=1)
-        return results
-
     def get_events(
         self,
         date_from: Any,
@@ -895,23 +696,15 @@ class InvestingCalendar:
         limit_from: int | str = 0,
         limit: int | None = None,
     ) -> list[dict[str, Any]]:
-        """Get economic events with live multi-source feeds and fallback."""
+        """Get economic events from live feed (returns empty list if unreachable or no events match)."""
         _ = (categories, timezone, time_filter, tab, limit_from)
         d_from = self._date_str(date_from)
         d_to = self._date_str(date_to)
         imp_list = normalize_importance_filter(importances)
 
-        # 1. Primary Live Feed
         events = self._fetch_from_feed(d_from, d_to, countries=countries, importances=imp_list)
-
-        # 2. Fallback to scheduled calendar if live feed returned 0 events
-        if not events:
-            events = self._generate_synthetic_events(
-                d_from,
-                d_to,
-                countries=countries,
-                importances=imp_list,
-            )
+        if events is None:
+            return []
 
         if limit is not None:
             events = events[: max(1, int(limit))]
@@ -987,16 +780,16 @@ class InvestingCalendar:
             countries=target_filters,
             importances=imp_list,
         )
-        if live_events:
+        if live_events is not None:
             source = "live"
             all_events = live_events
+            message = None
         else:
-            source = "scheduled_fallback"
-            all_events = self._generate_synthetic_events(
-                d_from_iso,
-                d_to_iso,
-                countries=target_filters,
-                importances=imp_list,
+            source = "unavailable"
+            all_events = []
+            message = (
+                "Live macroeconomic calendar feed is currently unreachable; "
+                "no unverified synthetic data generated."
             )
 
         total_found = len(all_events)
@@ -1018,6 +811,8 @@ class InvestingCalendar:
             "total_events": total_found,
             "events": returned_events,
         }
+        if message is not None:
+            result["message"] = message
         if limit is not None and total_found > len(returned_events):
             result["truncated_to"] = len(returned_events)
         return result

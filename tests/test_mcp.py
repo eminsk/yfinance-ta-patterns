@@ -58,6 +58,30 @@ def test_yfinance_ta_mcp_server_lifecycle(capsys: pytest.CaptureFixture[str]) ->
     assert "instructions" in init_resp["result"]
     assert "yfinance-ta-patterns" in init_resp["result"]["instructions"]
 
+    # 1b. initialize with latest specification version 2025-11-25
+    init_latest = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 101,
+            "method": "initialize",
+            "params": {"protocolVersion": "2025-11-25"},
+        }
+    )
+    assert init_latest is not None
+    assert init_latest["result"]["protocolVersion"] == "2025-11-25"
+
+    # 1c. initialize with unsupported future/unknown version must negotiate highest supported version
+    init_unknown = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 102,
+            "method": "initialize",
+            "params": {"protocolVersion": "2026-99-99"},
+        }
+    )
+    assert init_unknown is not None
+    assert init_unknown["result"]["protocolVersion"] == "2025-11-25"
+
     # 2. notifications return None (including non-prefixed notifications)
     assert server.handle_request({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
     assert server.handle_request({"jsonrpc": "2.0", "method": "$/cancelRequest"}) is None
@@ -65,11 +89,18 @@ def test_yfinance_ta_mcp_server_lifecycle(capsys: pytest.CaptureFixture[str]) ->
     # 3. tools/list
     list_resp = server.handle_request({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     assert list_resp is not None
-    tools = [t["name"] for t in list_resp["result"]["tools"]]
+    tools_list = list_resp["result"]["tools"]
+    tools = [t["name"] for t in tools_list]
     assert "ta_scan_symbol" in tools
     assert "ta_scan_watchlist" in tools
     assert "ta_backtest_patterns" in tools
     assert "ta_list_patterns" in tools
+    assert "ta_get_economic_calendar" in tools
+    # Verify metadata: title, annotations, outputSchema
+    for t in tools_list:
+        assert "title" in t and len(t["title"]) > 0
+        assert "annotations" in t and "readOnlyHint" in t["annotations"]
+        assert "outputSchema" in t and t["outputSchema"]["type"] == "object"
 
     # 4. ta_scan_symbol (compact by default: no markdown_brief unless requested)
     scan_resp = server.handle_request(
@@ -406,9 +437,9 @@ def test_mcp_economic_calendar_for_selected_asset() -> None:
     assert stock_cal["currencies"] == ["USD"]
     assert stock_cal["total_events"] == 1
     assert stock_cal["events"][0]["id"] == "101"
-    assert stock_cal["events"][0]["time"] == "2026-10-06 08:30"
+    assert stock_cal["events"][0]["time"] == "2026-10-06 08:30 UTC"
 
-    # 3. Fallback when live feed is unavailable
+    # 3. Unavailable when live feed is unreachable (no fake synthetic events)
     offline_server = YFinanceTAMCPServer(
         data_fetcher=lambda s, p, i: _make_sample_ohlcv(),
         calendar_fetcher=lambda _url: None,
@@ -431,10 +462,12 @@ def test_mcp_economic_calendar_for_selected_asset() -> None:
     assert fb_resp is not None
     assert fb_resp["result"]["isError"] is False
     fb_cal = json.loads(fb_resp["result"]["content"][0]["text"])
-    assert fb_cal["source"] == "scheduled_fallback"
+    assert fb_cal["source"] == "unavailable"
     assert fb_cal["currencies"] == ["USD", "JPY"]
-    assert fb_cal["total_events"] > 0
-    assert all(e["currency"] in ("USD", "JPY") for e in fb_cal["events"])
+    assert fb_cal["total_events"] == 0
+    assert fb_cal["events"] == []
+    assert "message" in fb_cal
+    assert "unverified synthetic data" in fb_cal["message"]
 
     # 4. Verify Investing.com HTML parser compatibility
     investing_html = """
@@ -458,7 +491,97 @@ def test_mcp_economic_calendar_for_selected_asset() -> None:
     parsed_inv = list(InvestingCalendar.parse_events_html(investing_html))
     assert len(parsed_inv) == 1
     assert parsed_inv[0]["id"] == "555"
-    assert parsed_inv[0]["time"] == "2026-10-06 15:30:00"
+    assert parsed_inv[0]["time"] == "2026-10-06 15:30:00 UTC"
     assert parsed_inv[0]["currency"] == "USD"
     assert parsed_inv[0]["importance"] == "3"
     assert parsed_inv[0]["event"] == "Core CPI (MoM)"
+
+
+def test_mcp_encoding_utf8_preservation_and_watchlist_compactness() -> None:
+    """Verify ensure_ascii=False preserves Cyrillic and euro symbols without unicode escapes, and compact reduces payload."""
+    df = _make_sample_ohlcv()
+    server = YFinanceTAMCPServer(data_fetcher=lambda s, p, i: df.copy())
+
+    # 1. Watchlist with compact=True (default) vs compact=False
+    compact_resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 201,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_scan_watchlist",
+                "arguments": {"symbols": ["BTC-USD"], "compact": True},
+            },
+        }
+    )
+    assert compact_resp is not None
+    compact_data = json.loads(compact_resp["result"]["content"][0]["text"])
+    assert compact_data["compact"] is True
+    if compact_data["opportunities"]:
+        opp = compact_data["opportunities"][0]
+        assert "symbol" in opp
+        assert "pattern" in opp
+        assert "direction" in opp
+        assert "confluence_score" in opp
+        # Compact mode must not include deep bulky indicator keys
+        assert "confluence_factors" not in opp
+        assert "risk_factors" not in opp
+        assert "metrics" not in opp
+        assert "raw_signal" not in opp
+
+    full_resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 202,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_scan_watchlist",
+                "arguments": {"symbols": ["BTC-USD"], "compact": False},
+            },
+        }
+    )
+    assert full_resp is not None
+    full_data = json.loads(full_resp["result"]["content"][0]["text"])
+    assert full_data["compact"] is False
+    if full_data["opportunities"]:
+        opp_full = full_data["opportunities"][0]
+        assert "confluence_factors" in opp_full
+        assert "risk_factors" in opp_full
+        assert "metrics" in opp_full
+        assert "raw_signal" in opp_full
+
+    # 2. Test ensure_ascii=False output wire purity: Cyrillic and € should NOT be \uXXXX escaped
+    calendar_html_ru = """
+    <table>
+      <tr data-id="999" data-country="germany" data-event="ставка ецб" class="calendar-date-3">
+        <td class="2026-10-06">14:15</td>
+        <td>DE</td>
+        <td>Решение по процентной ставке ЕЦБ €</td>
+        <td>3.25%</td>
+        <td>3.50%</td>
+        <td>3.25%</td>
+      </tr>
+    </table>
+    """
+    ru_server = YFinanceTAMCPServer(
+        data_fetcher=lambda s, p, i: df.copy(),
+        calendar_fetcher=lambda _url: calendar_html_ru,
+    )
+
+    ru_resp = ru_server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 203,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_get_economic_calendar",
+                "arguments": {"symbol": "EURUSD=X"},
+            },
+        }
+    )
+    assert ru_resp is not None
+    raw_text = ru_resp["result"]["content"][0]["text"]
+    # Wire text must retain literal Unicode without \uXXXX escaping
+    assert "Решение по процентной ставке ЕЦБ €" in raw_text
+    assert "\\u04" not in raw_text
+    assert "\\u20ac" not in raw_text

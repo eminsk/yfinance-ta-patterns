@@ -32,7 +32,9 @@ SUPPORTED_PROTOCOL_VERSIONS: tuple[str, ...] = (
     "2024-11-05",
     "2025-03-26",
     "2025-06-18",
+    "2025-11-25",
 )
+LATEST_PROTOCOL_VERSION = "2025-11-25"
 
 MAX_WATCHLIST_SYMBOLS = 25
 DEFAULT_MAX_RESULTS = 25
@@ -52,11 +54,16 @@ MCP_SERVER_INSTRUCTIONS = (
 MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
     {
         "name": "ta_scan_symbol",
+        "title": "Scan Symbol Patterns & AI Confluence",
         "description": (
             "Scan a market symbol (Stocks, Crypto, Forex, Indices, Commodities, e.g. 'BTC-USD', "
             "'NVDA', 'AAPL', 'EURUSD=X') for candlestick patterns, compute AI Confluence Scores "
             "(Trend + RSI + Volume + ATR), and generate actionable Trade Setups (Entry, Stop-Loss, TP1, TP2)."
         ),
+        "annotations": {
+            "readOnlyHint": True,
+            "openWorldHint": True,
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -95,13 +102,31 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
             },
             "required": ["symbol"],
         },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string"},
+                "timeframe": {"type": "string"},
+                "period": {"type": "string"},
+                "timezone": {"type": "string"},
+                "patterns": {"type": "array"},
+                "setups": {"type": "array"},
+                "market_summary": {"type": "object"},
+                "markdown_brief": {"type": "string"},
+            },
+        },
     },
     {
         "name": "ta_scan_watchlist",
+        "title": "Scan Watchlist Patterns & Confluence Ranking",
         "description": (
             "Scan multiple ticker symbols in batch (up to 25 symbols) and rank all detected "
             "candlestick pattern setups across the watchlist by AI Confluence Score descending."
         ),
+        "annotations": {
+            "readOnlyHint": True,
+            "openWorldHint": True,
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -139,16 +164,43 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                     "default": DEFAULT_MAX_RESULTS,
                     "description": f"Maximum number of ranked setups to return (default: {DEFAULT_MAX_RESULTS}, max: {MAX_RESULTS_LIMIT})",
                 },
+                "compact": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": (
+                        "If true (default), returns streamlined trade setups to minimize token usage "
+                        "and stay well below LLM context limits; if false, returns full indicator dumps."
+                    ),
+                },
             },
             "required": ["symbols"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "symbols_requested": {"type": "integer"},
+                "symbols_scanned": {"type": "integer"},
+                "timeframe": {"type": "string"},
+                "period": {"type": "string"},
+                "compact": {"type": "boolean"},
+                "total_opportunities": {"type": "integer"},
+                "opportunities": {"type": "array"},
+                "truncated_to": {"type": "integer"},
+                "errors": {"type": "object"},
+            },
         },
     },
     {
         "name": "ta_backtest_patterns",
+        "title": "Backtest Candlestick Patterns",
         "description": (
             "Run quantitative historical backtesting of all candlestick patterns on a symbol "
             "(next-open execution) and return the top-performing patterns ranked by composite score or win rate."
         ),
+        "annotations": {
+            "readOnlyHint": True,
+            "openWorldHint": True,
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -190,22 +242,55 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
             },
             "required": ["symbol"],
         },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string"},
+                "timeframe": {"type": "string"},
+                "period": {"type": "string"},
+                "holding_period": {"type": "integer"},
+                "sort_by": {"type": "string"},
+                "total_patterns_evaluated": {"type": "integer"},
+                "patterns": {"type": "array"},
+            },
+        },
     },
     {
         "name": "ta_list_patterns",
+        "title": "List Supported Candlestick Patterns",
         "description": "List all supported candlestick patterns, TA-Lib binary status, and Python No-GIL runtime status.",
+        "annotations": {
+            "readOnlyHint": True,
+            "openWorldHint": False,
+        },
         "inputSchema": {
             "type": "object",
             "properties": {},
         },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "version": {"type": "string"},
+                "total_patterns": {"type": "integer"},
+                "patterns": {"type": "array"},
+                "talib_available": {"type": "boolean"},
+                "gil_disabled": {"type": "boolean"},
+            },
+        },
     },
     {
         "name": "ta_get_economic_calendar",
+        "title": "Get Macroeconomic Calendar for Asset",
         "description": (
-            "Get macroeconomic calendar events (live feed with resilient scheduled fallback) "
+            "Get macroeconomic calendar events (live verified feed) "
             "automatically filtered by the currencies impacting a selected asset symbol "
-            "(e.g. 'EURUSD=X' -> EUR, USD; 'AAPL' -> USD; 'GBPJPY' -> GBP, JPY; 'BTC-USD' -> USD)."
+            "(e.g. 'EURUSD=X' -> EUR, USD; 'AAPL' -> USD; 'GBPJPY' -> GBP, JPY; 'BTC-USD' -> USD). "
+            "Returns an empty list with source='unavailable' if the live feed is unreachable."
         ),
+        "annotations": {
+            "readOnlyHint": True,
+            "openWorldHint": True,
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -252,6 +337,23 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 },
             },
             "required": ["symbol"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string"},
+                "normalized_symbol": {"type": "string"},
+                "currencies": {"type": "array", "items": {"type": "string"}},
+                "filter_countries": {"type": "array", "items": {"type": "string"}},
+                "date_from": {"type": "string"},
+                "date_to": {"type": "string"},
+                "importances": {"type": "array", "items": {"type": "string"}},
+                "source": {"type": "string", "enum": ["live", "unavailable"]},
+                "total_events": {"type": "integer"},
+                "events": {"type": "array"},
+                "message": {"type": "string"},
+                "truncated_to": {"type": "integer"},
+            },
         },
     },
 ]
@@ -407,7 +509,7 @@ class YFinanceTAMCPServer:
                     requested_version
                     if isinstance(requested_version, str)
                     and requested_version in SUPPORTED_PROTOCOL_VERSIONS
-                    else MCP_PROTOCOL_VERSION
+                    else LATEST_PROTOCOL_VERSION
                 )
                 return {
                     "jsonrpc": "2.0",
@@ -460,7 +562,7 @@ class YFinanceTAMCPServer:
                                 "mimeType": "application/json",
                                 "text": json.dumps(
                                     res_payload,
-                                    ensure_ascii=True,
+                                    ensure_ascii=False,
                                     separators=(",", ":"),
                                     default=str,
                                 ),
@@ -536,7 +638,7 @@ class YFinanceTAMCPServer:
                                 "type": "text",
                                 "text": json.dumps(
                                     output,
-                                    ensure_ascii=True,
+                                    ensure_ascii=False,
                                     separators=(",", ":"),
                                     default=str,
                                 ),
@@ -620,6 +722,7 @@ class YFinanceTAMCPServer:
             lookback = int(args.get("lookback_bars", 2))
             raw_max_results = int(args.get("max_results", DEFAULT_MAX_RESULTS))
             max_results = max(1, min(raw_max_results, MAX_RESULTS_LIMIT))
+            compact = bool(args.get("compact", True))
 
             opportunities: list[dict[str, Any]] = []
             errors: dict[str, str] = {}
@@ -639,7 +742,31 @@ class YFinanceTAMCPServer:
                     for r in scored:
                         d = r.to_dict()
                         d["symbol"] = sym
-                        opportunities.append(d)
+                        if compact:
+                            raw_setup = d.get("trade_setup") or d.get("setup")
+                            setup_info = raw_setup if isinstance(raw_setup, dict) else {}
+                            conf_score = (
+                                d.get("confluence_score")
+                                or d.get("confidence_score")
+                                or d.get("confidence")
+                            )
+                            compact_entry: dict[str, Any] = {
+                                "symbol": sym,
+                                "pattern": d.get("pattern"),
+                                "direction": d.get("direction") or setup_info.get("direction"),
+                                "confluence_score": conf_score,
+                                "timestamp": d.get("timestamp"),
+                                "price": d.get("price"),
+                                "entry": setup_info.get("entry"),
+                                "stop_loss": setup_info.get("stop_loss"),
+                                "take_profit_1": setup_info.get("take_profit_1"),
+                                "take_profit_2": setup_info.get("take_profit_2"),
+                                "risk_reward_ratio": setup_info.get("risk_reward_ratio"),
+                                "trend_regime": d.get("trend_regime"),
+                            }
+                            opportunities.append(compact_entry)
+                        else:
+                            opportunities.append(d)
                 except Exception as exc:
                     errors[sym] = str(exc)
                     continue
@@ -671,6 +798,7 @@ class YFinanceTAMCPServer:
                 "symbols_scanned": symbols_succeeded,
                 "timeframe": timeframe,
                 "period": period,
+                "compact": compact,
                 "total_opportunities": total_found,
                 "opportunities": truncated,
             }
@@ -770,7 +898,13 @@ class YFinanceTAMCPServer:
     ) -> None:
         """Run the yfinance-ta-patterns MCP JSON-RPC 2.0 server over standard input/output."""
         in_stream = stdin if stdin is not None else sys.stdin
-        proto_out = stdout if stdout is not None else sys.stdout
+        if stdout is None:
+            if hasattr(sys.stdout, "reconfigure"):
+                with contextlib.suppress(Exception):
+                    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            proto_out = sys.stdout
+        else:
+            proto_out = stdout
         saved_stdout = sys.stdout
         # Redirect global sys.stdout to sys.stderr so third-party libraries (yfinance, etc.)
         # can never write non-JSON text onto the MCP protocol wire.
@@ -789,7 +923,7 @@ class YFinanceTAMCPServer:
                         "error": {"code": -32700, "message": f"Parse error: {exc.msg}"},
                     }
                     proto_out.write(
-                        json.dumps(err_resp, ensure_ascii=True, separators=(",", ":")) + "\n"
+                        json.dumps(err_resp, ensure_ascii=False, separators=(",", ":")) + "\n"
                     )
                     proto_out.flush()
                     continue
@@ -806,7 +940,7 @@ class YFinanceTAMCPServer:
 
                 if resp is not None:
                     proto_out.write(
-                        json.dumps(resp, ensure_ascii=True, separators=(",", ":"), default=str)
+                        json.dumps(resp, ensure_ascii=False, separators=(",", ":"), default=str)
                         + "\n"
                     )
                     proto_out.flush()
