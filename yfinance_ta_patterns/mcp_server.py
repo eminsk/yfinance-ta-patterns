@@ -8,6 +8,7 @@ Claude Desktop, Cursor, Windsurf, Antigravity, and any MCP client over stdio.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import contextlib
 import json
 import re
@@ -99,6 +100,19 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                     "default": False,
                     "description": "If true, include a human-readable markdown_brief alongside structured JSON patterns",
                 },
+                "compact": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": (
+                        "If true (default), returns streamlined trade setups to minimize token usage "
+                        "and stay well below LLM context limits; if false, returns full indicator dumps."
+                    ),
+                },
+                "max_patterns": {
+                    "type": "integer",
+                    "default": 25,
+                    "description": "Maximum number of active pattern setups to return (default: 25, max: 50)",
+                },
             },
             "required": ["symbol"],
         },
@@ -109,6 +123,9 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "timeframe": {"type": "string"},
                 "period": {"type": "string"},
                 "timezone": {"type": "string"},
+                "compact": {"type": "boolean"},
+                "total_patterns_found": {"type": "integer"},
+                "truncated_to": {"type": "integer"},
                 "patterns": {"type": "array"},
                 "setups": {"type": "array"},
                 "market_summary": {"type": "object"},
@@ -252,6 +269,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "sort_by": {"type": "string"},
                 "total_patterns_evaluated": {"type": "integer"},
                 "patterns": {"type": "array"},
+                "top_patterns": {"type": "array"},
             },
         },
     },
@@ -273,6 +291,8 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "version": {"type": "string"},
                 "total_patterns": {"type": "integer"},
                 "patterns": {"type": "array"},
+                "fallback_patterns": {"type": "array"},
+                "talib_status": {"type": "object"},
                 "talib_available": {"type": "boolean"},
                 "gil_disabled": {"type": "boolean"},
             },
@@ -629,23 +649,26 @@ class YFinanceTAMCPServer:
                     }
                 with contextlib.redirect_stdout(sys.stderr):
                     output = _json_safe(self._call_tool(str(tool_name), args))
+                call_result: dict[str, Any] = {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(
+                                output,
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                                default=str,
+                            ),
+                        }
+                    ],
+                    "isError": False,
+                }
+                if isinstance(output, dict):
+                    call_result["structuredContent"] = output
                 return {
                     "jsonrpc": "2.0",
                     "id": req_id,
-                    "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": json.dumps(
-                                    output,
-                                    ensure_ascii=False,
-                                    separators=(",", ":"),
-                                    default=str,
-                                ),
-                            }
-                        ],
-                        "isError": False,
-                    },
+                    "result": call_result,
                 }
 
             return {
@@ -700,8 +723,12 @@ class YFinanceTAMCPServer:
             timeframe = normalize_interval(str(args.get("timeframe", "1d")))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="6mo")
             min_conf = float(args.get("min_confidence", 0.4))
-            lookback = int(args.get("lookback_bars", 3))
+            raw_lookback = int(args.get("lookback_bars", 3))
+            lookback = max(1, min(raw_lookback, 60))
             include_brief = bool(args.get("include_brief", False))
+            compact = bool(args.get("compact", True))
+            raw_max_patterns = int(args.get("max_patterns", 25))
+            max_patterns = max(1, min(raw_max_patterns, 50))
 
             df = self._fetch_ohlcv(symbol, period, timeframe)
             analyst = AIMarketAnalyst(df, symbol=symbol, timeframe=timeframe)
@@ -710,6 +737,49 @@ class YFinanceTAMCPServer:
             report["period"] = period
             tz_obj = getattr(df.index, "tz", None)
             report["timezone"] = str(tz_obj) if tz_obj is not None else "UTC"
+
+            raw_patterns = report.get("patterns", [])
+            raw_setups = report.get("setups", [])
+            total_patterns_found = len(raw_patterns)
+
+            if compact:
+                streamlined_patterns = []
+                for p in raw_patterns[:max_patterns]:
+                    streamlined_patterns.append({
+                        "pattern": p.get("pattern"),
+                        "direction": p.get("direction"),
+                        "confidence_score": p.get("confidence_score") or p.get("confluence_score"),
+                        "timestamp": p.get("timestamp"),
+                        "price": p.get("price"),
+                        "trend": p.get("trend"),
+                        "rvol": p.get("rvol"),
+                        "rsi": p.get("rsi"),
+                    })
+                streamlined_setups = []
+                for s in raw_setups[:max_patterns]:
+                    streamlined_setups.append({
+                        "pattern": s.get("pattern"),
+                        "direction": s.get("direction"),
+                        "confluence_score": s.get("confluence_score"),
+                        "timestamp": s.get("timestamp"),
+                        "price": s.get("price"),
+                        "entry": s.get("entry"),
+                        "stop_loss": s.get("stop_loss"),
+                        "tp1": s.get("tp1"),
+                        "tp2": s.get("tp2"),
+                        "risk_reward": s.get("risk_reward"),
+                    })
+                report["patterns"] = streamlined_patterns
+                report["setups"] = streamlined_setups
+                report["compact"] = True
+            else:
+                report["patterns"] = raw_patterns[:max_patterns]
+                report["setups"] = raw_setups[:max_patterns]
+                report["compact"] = False
+
+            report["total_patterns_found"] = total_patterns_found
+            report["truncated_to"] = len(report["patterns"])
+
             if include_brief:
                 report["markdown_brief"] = analyst.generate_brief()
             return report
@@ -728,17 +798,18 @@ class YFinanceTAMCPServer:
             errors: dict[str, str] = {}
             symbols_succeeded = 0
 
-            for sym in symbols:
+            def _scan_one(sym: str) -> tuple[str, list[dict[str, Any]] | None, str | None]:
                 try:
                     df = self._fetch_ohlcv(sym, period, timeframe)
                     if df.empty or len(df) < 20:
-                        errors[sym] = (
-                            f"Insufficient market data ({len(df)} bars returned, minimum 20 required)."
+                        return (
+                            sym,
+                            None,
+                            f"Insufficient market data ({len(df)} bars returned, minimum 20 required).",
                         )
-                        continue
-                    symbols_succeeded += 1
                     analyst = AIMarketAnalyst(df, symbol=sym, timeframe=timeframe)
                     scored = analyst.analyze(min_confidence=min_conf, lookback_bars=lookback)
+                    sym_opps: list[dict[str, Any]] = []
                     for r in scored:
                         d = r.to_dict()
                         d["symbol"] = sym
@@ -764,12 +835,22 @@ class YFinanceTAMCPServer:
                                 "risk_reward_ratio": setup_info.get("risk_reward_ratio"),
                                 "trend_regime": d.get("trend_regime"),
                             }
-                            opportunities.append(compact_entry)
+                            sym_opps.append(compact_entry)
                         else:
-                            opportunities.append(d)
+                            sym_opps.append(d)
+                    return sym, sym_opps, None
                 except Exception as exc:
-                    errors[sym] = str(exc)
-                    continue
+                    return sym, None, str(exc)
+
+            max_workers = min(len(symbols), 8)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                for sym, sym_opps, err in executor.map(_scan_one, symbols):
+                    if err is not None:
+                        errors[sym] = err
+                    else:
+                        symbols_succeeded += 1
+                        if sym_opps:
+                            opportunities.extend(sym_opps)
 
             if symbols_succeeded == 0 and errors:
                 first_sym, first_err = next(iter(errors.items()))
@@ -830,8 +911,24 @@ class YFinanceTAMCPServer:
                 symbol=symbol,
                 verbose=False,
             )
-            tester.test_all_patterns(filter_news=False, min_signals=min_signals, sort_by=sort_by)
+            ranked = tester.test_all_patterns(filter_news=False, min_signals=min_signals, sort_by=sort_by)
             top = tester.get_top_patterns(n=top_n)
+            top_patterns_list = [
+                {
+                    "pattern_name": r.pattern_name,
+                    "total_signals": r.total_signals,
+                    "total_trades": r.total_trades,
+                    "win_rate": round(r.win_rate, 2),
+                    "total_pnl": round(r.total_pnl, 2),
+                    "profit_factor": round(r.profit_factor, 2)
+                    if pd.notna(r.profit_factor) and r.profit_factor != float("inf")
+                    else None,
+                    "sharpe_ratio": round(r.sharpe_ratio, 2),
+                    "max_drawdown": round(r.max_drawdown, 2),
+                    "score": round(r.score, 2),
+                }
+                for r in top
+            ]
             return {
                 "symbol": symbol,
                 "timeframe": timeframe,
@@ -839,32 +936,30 @@ class YFinanceTAMCPServer:
                 "holding_period": holding_period,
                 "min_signals": min_signals,
                 "sort_by": sort_by,
-                "top_patterns": [
-                    {
-                        "pattern_name": r.pattern_name,
-                        "total_signals": r.total_signals,
-                        "total_trades": r.total_trades,
-                        "win_rate": round(r.win_rate, 2),
-                        "total_pnl": round(r.total_pnl, 2),
-                        "profit_factor": round(r.profit_factor, 2)
-                        if pd.notna(r.profit_factor) and r.profit_factor != float("inf")
-                        else None,
-                        "sharpe_ratio": round(r.sharpe_ratio, 2),
-                        "max_drawdown": round(r.max_drawdown, 2),
-                        "score": round(r.score, 2),
-                    }
-                    for r in top
-                ],
+                "total_patterns_evaluated": len(ranked),
+                "top_patterns": top_patterns_list,
+                "patterns": top_patterns_list,
             }
 
         if name == "ta_list_patterns":
             status = get_talib_status()
             fallback_patterns = PatternAnalyzer.get_supported_fallback_patterns()
+            patterns_catalog = [
+                {
+                    "name": pat.replace("CDL", ""),
+                    "talib_function": pat,
+                    "candle_lookback": PATTERN_CANDLE_COUNTS.get(pat.replace("CDL", ""), 1),
+                }
+                for pat in fallback_patterns
+            ]
             return {
                 "version": __version__,
-                "talib_status": status,
                 "total_patterns": len(fallback_patterns),
+                "patterns": patterns_catalog,
                 "fallback_patterns": fallback_patterns,
+                "talib_status": status,
+                "talib_available": bool(status.get("talib_available", False)),
+                "gil_disabled": bool(status.get("gil_disabled", False)),
             }
 
         if name == "ta_get_economic_calendar":

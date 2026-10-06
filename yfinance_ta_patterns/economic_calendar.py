@@ -309,6 +309,22 @@ class InvestingCalendar:
         "singapore": ("Сингапур", "SGD"),
         "indonesia": ("Индонезия", "IDR"),
         "argentina": ("Аргентина", "ARS"),
+        "sweden": ("Швеция", "SEK"),
+        "hong kong": ("Гонконг", "HKD"),
+        "norway": ("Норвегия", "NOK"),
+        "denmark": ("Дания", "DKK"),
+        "poland": ("Польша", "PLN"),
+        "czech republic": ("Чехия", "CZK"),
+        "czechia": ("Чехия", "CZK"),
+        "hungary": ("Венгрия", "HUF"),
+        "israel": ("Израиль", "ILS"),
+        "taiwan": ("Тайвань", "TWD"),
+        "thailand": ("Таиланд", "THB"),
+        "malaysia": ("Малайзия", "MYR"),
+        "philippines": ("Филиппины", "PHP"),
+        "chile": ("Чили", "CLP"),
+        "colombia": ("Колумбия", "COP"),
+        "united arab emirates": ("ОАЭ", "AED"),
         "opec": ("ОПЕК", "USD"),
         "world": ("Мир", "USD"),
     }
@@ -338,6 +354,21 @@ class InvestingCalendar:
         "SG": "SGD",
         "ID": "IDR",
         "AR": "ARS",
+        "SE": "SEK",
+        "HK": "HKD",
+        "NO": "NOK",
+        "DK": "DKK",
+        "PL": "PLN",
+        "CZ": "CZK",
+        "HU": "HUF",
+        "IL": "ILS",
+        "TW": "TWD",
+        "TH": "THB",
+        "MY": "MYR",
+        "PH": "PHP",
+        "CL": "CLP",
+        "CO": "COP",
+        "AE": "AED",
     }
 
     def __init__(
@@ -578,15 +609,25 @@ class InvestingCalendar:
         date_to: str,
         countries: Iterable[Any] | None = None,
         importances: Iterable[Any] | None = None,
-    ) -> list[dict[str, Any]] | None:
+    ) -> tuple[list[dict[str, Any]], str, str | None]:
         """Fetch economic events from the primary live feed."""
         html_text = self._download_feed_html(self.TE_URL)
         if html_text is None:
-            return None
+            return [], "unavailable", (
+                "Live macroeconomic calendar feed is currently unreachable; "
+                "no unverified synthetic data generated."
+            )
 
         parser = _TableHTMLParser()
         parser.feed(html_text)
         rows = [r for r in parser.rows if r.attrs.get("data-id")]
+        if not rows:
+            logger.warning("No calendar rows with 'data-id' found in feed HTML (anti-bot challenge or layout changed).")
+            return [], "parse_failed", (
+                "Calendar feed page received but no economic event rows could be parsed "
+                "(anti-bot challenge, captcha, or changed layout); treated as unavailable."
+            )
+
         events: list[dict[str, Any]] = []
 
         imp_filter = set(map(str, importances)) if importances else None
@@ -680,7 +721,7 @@ class InvestingCalendar:
                 }
             )
 
-        return events
+        return events, "live", None
 
     def get_events(
         self,
@@ -702,8 +743,10 @@ class InvestingCalendar:
         d_to = self._date_str(date_to)
         imp_list = normalize_importance_filter(importances)
 
-        events = self._fetch_from_feed(d_from, d_to, countries=countries, importances=imp_list)
-        if events is None:
+        events, _status, _msg = self._fetch_from_feed(
+            d_from, d_to, countries=countries, importances=imp_list
+        )
+        if not events:
             return []
 
         if limit is not None:
@@ -774,23 +817,15 @@ class InvestingCalendar:
         if not target_filters:
             target_filters = list(currencies)
 
-        live_events = self._fetch_from_feed(
+        live_events, fetch_source, fetch_message = self._fetch_from_feed(
             d_from_iso,
             d_to_iso,
             countries=target_filters,
             importances=imp_list,
         )
-        if live_events is not None:
-            source = "live"
-            all_events = live_events
-            message = None
-        else:
-            source = "unavailable"
-            all_events = []
-            message = (
-                "Live macroeconomic calendar feed is currently unreachable; "
-                "no unverified synthetic data generated."
-            )
+        source = fetch_source
+        all_events = live_events
+        message = fetch_message
 
         total_found = len(all_events)
         if limit is not None:

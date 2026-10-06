@@ -122,7 +122,11 @@ def test_yfinance_ta_mcp_server_lifecycle(capsys: pytest.CaptureFixture[str]) ->
     )
     assert scan_resp is not None
     assert scan_resp["result"]["isError"] is False
-    report = json.loads(scan_resp["result"]["content"][0]["text"])
+    assert "structuredContent" in scan_resp["result"]
+    report = scan_resp["result"]["structuredContent"]
+    assert scan_resp["result"]["content"][0]["text"] == json.dumps(
+        report, ensure_ascii=False, separators=(",", ":"), default=str
+    )
     assert report["symbol"] == "BTC-USD"
     assert report["period"] == "60d"  # 15m period is auto-clamped from 6mo to 60d
     assert report["timezone"] == "UTC"
@@ -148,7 +152,8 @@ def test_yfinance_ta_mcp_server_lifecycle(capsys: pytest.CaptureFixture[str]) ->
         }
     )
     assert scan_brief_resp is not None
-    report_with_brief = json.loads(scan_brief_resp["result"]["content"][0]["text"])
+    assert "structuredContent" in scan_brief_resp["result"]
+    report_with_brief = scan_brief_resp["result"]["structuredContent"]
     assert "markdown_brief" in report_with_brief
     assert "UTC" in report_with_brief["markdown_brief"]
 
@@ -166,9 +171,12 @@ def test_yfinance_ta_mcp_server_lifecycle(capsys: pytest.CaptureFixture[str]) ->
     )
     assert bt_resp is not None
     assert bt_resp["result"]["isError"] is False
-    bt_data = json.loads(bt_resp["result"]["content"][0]["text"])
+    assert "structuredContent" in bt_resp["result"]
+    bt_data = bt_resp["result"]["structuredContent"]
     assert bt_data["symbol"] == "BTC-USD"
     assert "top_patterns" in bt_data
+    assert "patterns" in bt_data
+    assert "total_patterns_evaluated" in bt_data
 
     # 6. ta_list_patterns
     pat_resp = server.handle_request(
@@ -180,8 +188,13 @@ def test_yfinance_ta_mcp_server_lifecycle(capsys: pytest.CaptureFixture[str]) ->
         }
     )
     assert pat_resp is not None
-    pat_data = json.loads(pat_resp["result"]["content"][0]["text"])
+    assert "structuredContent" in pat_resp["result"]
+    pat_data = pat_resp["result"]["structuredContent"]
     assert len(pat_data["fallback_patterns"]) > 0
+    assert "patterns" in pat_data
+    assert "talib_status" in pat_data
+    assert "talib_available" in pat_data
+    assert "gil_disabled" in pat_data
 
     # Verify zero stray stdout output across the entire lifecycle
     captured = capsys.readouterr()
@@ -585,3 +598,170 @@ def test_mcp_encoding_utf8_preservation_and_watchlist_compactness() -> None:
     assert "Решение по процентной ставке ЕЦБ €" in raw_text
     assert "\\u04" not in raw_text
     assert "\\u20ac" not in raw_text
+
+
+def test_mcp_all_tools_return_structured_content() -> None:
+    """Validate that every tool with an outputSchema returns structuredContent according to MCP spec."""
+    df = _make_sample_ohlcv()
+    server = YFinanceTAMCPServer(data_fetcher=lambda s, p, i: df.copy())
+
+    tools_resp = server.handle_request({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+    assert tools_resp is not None
+    tools = tools_resp["result"]["tools"]
+
+    for tool in tools:
+        assert "outputSchema" in tool, f"Tool {tool['name']} must declare outputSchema"
+        t_name = tool["name"]
+
+        # Call tool with minimal valid arguments
+        args: dict[str, Any] = {}
+        if t_name in ("ta_scan_symbol", "ta_backtest_patterns", "ta_get_economic_calendar"):
+            args["symbol"] = "BTC-USD"
+        elif t_name == "ta_scan_watchlist":
+            args["symbols"] = ["BTC-USD"]
+
+        call_resp = server.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 99,
+                "method": "tools/call",
+                "params": {"name": t_name, "arguments": args},
+            }
+        )
+        assert call_resp is not None
+        assert call_resp["result"]["isError"] is False
+        # Official SDK requirement: has outputSchema -> must return structuredContent
+        assert "structuredContent" in call_resp["result"], (
+            f"Tool {t_name} declared outputSchema but CallToolResult did not return structuredContent"
+        )
+        assert isinstance(call_resp["result"]["structuredContent"], dict)
+
+
+def test_mcp_economic_calendar_unparseable_html_returns_parse_failed() -> None:
+    """Verify that empty / anti-bot / challenge HTML returns parse_failed instead of silent live with 0 events."""
+    df = _make_sample_ohlcv()
+    challenge_html = "<html><body><p>CloudFront 403 Forbidden / CAPTCHA Challenge</p></body></html>"
+    blocked_server = YFinanceTAMCPServer(
+        data_fetcher=lambda s, p, i: df.copy(),
+        calendar_fetcher=lambda _url: challenge_html,
+    )
+
+    resp = blocked_server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_get_economic_calendar",
+                "arguments": {"symbol": "EURUSD=X"},
+            },
+        }
+    )
+    assert resp is not None
+    data = resp["result"]["structuredContent"]
+    # Must NOT report source: 'live' when 0 table rows were parsed from HTML
+    assert data["source"] in ("parse_failed", "unavailable")
+    assert data["total_events"] == 0
+    assert "message" in data
+    assert "unavailable" in data["message"].lower() or "challenge" in data["message"].lower()
+
+
+def test_mcp_economic_calendar_currency_coverage_sweden_and_hongkong() -> None:
+    """Verify Sweden (SEK) and Hong Kong (HKD) coverage with feed HTML."""
+    df = _make_sample_ohlcv()
+    feed_html = """
+    <table>
+      <tr data-id="101" data-country="sweden" data-event="Riksbank Rate Decision" class="calendar-date-3">
+        <td class="2026-10-06">08:30</td>
+        <td>SE</td>
+        <td>Riksbank Interest Rate Decision</td>
+        <td>2.75%</td>
+        <td>3.00%</td>
+        <td>2.75%</td>
+      </tr>
+      <tr data-id="102" data-country="hong kong" data-event="HK Retail Sales" class="calendar-date-2">
+        <td class="2026-10-06">09:00</td>
+        <td>HK</td>
+        <td>Hong Kong Retail Sales YoY</td>
+        <td>-1.2%</td>
+        <td>-2.5%</td>
+        <td>-3.0%</td>
+      </tr>
+    </table>
+    """
+    server = YFinanceTAMCPServer(
+        data_fetcher=lambda s, p, i: df.copy(),
+        calendar_fetcher=lambda _url: feed_html,
+    )
+
+    # 1. EURSEK=X should match Swedish event
+    resp_sek = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_get_economic_calendar",
+                "arguments": {"symbol": "EURSEK=X"},
+            },
+        }
+    )
+    assert resp_sek is not None
+    data_sek = resp_sek["result"]["structuredContent"]
+    assert data_sek["source"] == "live"
+    assert data_sek["total_events"] >= 1
+    assert any(e["currency"] == "SEK" for e in data_sek["events"])
+
+    # 2. 0700.HK should match Hong Kong event
+    resp_hkd = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_get_economic_calendar",
+                "arguments": {"symbol": "0700.HK"},
+            },
+        }
+    )
+    assert resp_hkd is not None
+    data_hkd = resp_hkd["result"]["structuredContent"]
+    assert data_hkd["source"] == "live"
+    assert data_hkd["total_events"] >= 1
+    assert any(e["currency"] == "HKD" for e in data_hkd["events"])
+
+
+def test_mcp_scan_symbol_compact_mode_and_limits() -> None:
+    """Verify ta_scan_symbol compact mode, max_patterns bounding, and lookback clamping."""
+    df = _make_sample_ohlcv()
+    server = YFinanceTAMCPServer(data_fetcher=lambda s, p, i: df.copy())
+
+    # Request huge lookback and low confidence
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 20,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_scan_symbol",
+                "arguments": {
+                    "symbol": "BTC-USD",
+                    "lookback_bars": 60,
+                    "min_confidence": 0.0,
+                    "compact": True,
+                    "max_patterns": 5,
+                },
+            },
+        }
+    )
+    assert resp is not None
+    data = resp["result"]["structuredContent"]
+    assert data["compact"] is True
+    assert "total_patterns_found" in data
+    assert "truncated_to" in data
+    assert len(data["patterns"]) <= 5
+    assert len(data["setups"]) <= 5
+    # Wire payload should be compact (well below 10,000 characters)
+    wire_json = resp["result"]["content"][0]["text"]
+    assert len(wire_json) < 10_000
+
