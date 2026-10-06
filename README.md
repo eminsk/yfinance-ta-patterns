@@ -58,7 +58,7 @@ Universal runtime compatibility across **CPython 3.8 to 3.16, free-threaded No-G
 | **Conda + Native TA-Lib** | `conda install -c conda-forge yfinance-ta-patterns ta-lib` | Full C-accelerated TA-Lib with **zero compilation** |
 | **Pixi** | `pixi add yfinance-ta-patterns` | Modern high-speed reproducible Conda workflow |
 | **Ubuntu / Debian (APT PPA)** | `curl -sS https://eminsk.github.io/ppa/setup.sh \| sudo bash`<br>`sudo apt install python3-yfinance-ta-patterns` | Official PPA repository (pure apt, zero URLs) |
-| **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.46-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
+| **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.47-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
 | **Ubuntu / Debian (pipx)** | `sudo apt install pipx && pipx install yfinance-ta-patterns` | Isolated global CLI tool install (PEP 668 compliant) |
 | **uv (Python)** | `uv add yfinance-ta-patterns` | Sub-second pure Python installation |
 | **pip (Python)** | `pip install yfinance-ta-patterns` | Universal PyPI installation |
@@ -186,13 +186,39 @@ pip install "yfinance-ta-patterns[talib]"
 
 ## 🤖 Native MCP (Model Context Protocol) Server
 
-Connect **yfinance-ta-patterns** directly to **Claude Desktop**, **Cursor**, **Windsurf**, or **Antigravity** via the built-in `yfinance-ta-mcp` JSON-RPC 2.0 server (`ta_scan_symbol`, `ta_scan_watchlist`, `ta_backtest_patterns`, `ta_list_patterns`) for real-time candlestick pattern scanning, AI Confluence Scoring, Trade Setups (Entry / Stop-Loss / Take-Profit), and multi-asset backtesting:
+Connect **yfinance-ta-patterns** directly to **Claude Code**, **Antigravity**, **Claude Desktop**, **Cursor**, or **Windsurf** via the built-in `yfinance-ta-mcp` JSON-RPC 2.0 server (`ta_scan_symbol`, `ta_scan_watchlist`, `ta_backtest_patterns`, `ta_list_patterns`, `ta_get_economic_calendar`) for real-time candlestick pattern scanning, AI Confluence Scoring, Trade Setups (Entry / Stop-Loss / Take-Profit), multi-asset backtesting, and economic calendar retrieval for a selected asset:
+
+#### Option 1: Claude Code CLI
+
+```bash
+# Recommended: install once as a global tool (~0.4s startup)
+uv tool install yfinance-ta-patterns
+claude mcp add yfinance-ta -- yfinance-ta-mcp
+
+# Or zero-install execution via uvx:
+claude mcp add yfinance-ta -- uvx --from yfinance-ta-patterns yfinance-ta-mcp
+```
+
+#### Option 2: Antigravity / Claude Desktop / Cursor / Windsurf (`mcp_config.json`)
 
 ```json
 {
   "mcpServers": {
     "yfinance-ta": {
       "command": "yfinance-ta-mcp"
+    }
+  }
+}
+```
+
+Or zero-install via `uvx`:
+
+```json
+{
+  "mcpServers": {
+    "yfinance-ta": {
+      "command": "uvx",
+      "args": ["--from", "yfinance-ta-patterns", "yfinance-ta-mcp"]
     }
   }
 }

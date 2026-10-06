@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 import warnings
 from dataclasses import dataclass
 from typing import Any, cast
@@ -18,6 +19,8 @@ from yfinance_ta_patterns.data import (
     validate_asset_type,
 )
 from yfinance_ta_patterns.talib_compat import talib
+
+logger = logging.getLogger(__name__)
 
 # Standard annual periods for timeframe-aware Sharpe Ratio calculation (Equities: 252 days, 6.5h session -> 7 observations/day)
 TIMEFRAME_PERIODS_PER_YEAR: dict[str, float] = {
@@ -406,6 +409,7 @@ class PatternRankingTester:
         "_timeframe",
         "_use_adj_close",
         "_used_approx_fx",
+        "_verbose",
         "equity_curve",
         "trades",
     )
@@ -438,6 +442,7 @@ class PatternRankingTester:
         max_fx_staleness: pd.Timedelta | str | None = "7D",
         use_adj_close: bool = False,
         metadata_currency: str | None = None,
+        verbose: bool = False,
     ) -> None:
         """Initialize pattern tester.
 
@@ -536,6 +541,7 @@ class PatternRankingTester:
             self._data = data
         self._use_adj_close: bool = use_adj_close
         self._metadata_currency: str | None = metadata_currency
+        self._verbose: bool = bool(verbose)
         self._initial_capital: float = float(initial_capital)
         self._position_size: float = float(position_size)
         self._results: list[PatternResult] = []
@@ -998,7 +1004,9 @@ class PatternRankingTester:
                 # Silently skip patterns not implemented in pure-Python fallback
                 continue
             except Exception as exc:
-                print(f"Error testing {pattern_name}: {exc}")
+                logger.debug("Error testing %s: %s", pattern_name, exc)
+                if self._verbose:
+                    print(f"Error testing {pattern_name}: {exc}")
                 continue
 
         # Sort results
@@ -1052,7 +1060,9 @@ class PatternRankingTester:
 
         pattern_func = getattr(talib, pat, None)
         if not pattern_func:
-            print(f"Pattern function not found: {pattern_name}")
+            logger.debug("Pattern function not found: %s", pattern_name)
+            if self._verbose:
+                print(f"Pattern function not found: {pattern_name}")
             return None
 
         try:
@@ -1066,7 +1076,9 @@ class PatternRankingTester:
             # Propagate up so test_all_patterns can skip
             raise
         except Exception as exc:
-            print(f"Error detecting pattern {pattern_name}: {exc}")
+            logger.debug("Error detecting pattern %s: %s", pattern_name, exc)
+            if self._verbose:
+                print(f"Error detecting pattern {pattern_name}: {exc}")
             return None
 
         # Generate signals and preserve pattern strength
@@ -1107,9 +1119,13 @@ class PatternRankingTester:
         if not trades and self._last_open_trade is None:
             total_signals = int(np.sum(signals != 0))
             if total_signals == 0:
-                print(f"{pattern_name}: No signals generated")
+                logger.debug("%s: No signals generated", pattern_name)
+                if self._verbose:
+                    print(f"{pattern_name}: No signals generated")
             else:
-                print(f"{pattern_name}: {total_signals} signals but no completed trades")
+                logger.debug("%s: %d signals but no completed trades", pattern_name, total_signals)
+                if self._verbose:
+                    print(f"{pattern_name}: {total_signals} signals but no completed trades")
             return None
 
         # Calculate statistics
@@ -1607,4 +1623,6 @@ class PatternRankingTester:
                 )
         df = pd.DataFrame(data, columns=columns)
         df.to_csv(filename, index=False)
-        print(f"Results exported to {filename}")
+        logger.info("Results exported to %s", filename)
+        if self._verbose:
+            print(f"Results exported to {filename}")

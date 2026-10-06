@@ -249,16 +249,21 @@ def format_price(val: Any) -> str:
         return str(val).strip()
 
 
-def format_timestamp(ts: Any, timeframe: str = "") -> str:
+def format_timestamp(ts: Any, timeframe: str = "", include_tz: bool = False) -> str:
     """Format timestamp into a clean, human-readable string without noisy offsets."""
     if ts is None:
         return "-"
     try:
         dt = pd.to_datetime(ts)
         tf_lower = str(timeframe).lower()
-        if tf_lower in ("1d", "1w", "1wk", "1mo", "d1", "w1", "m1"):
+        if tf_lower in ("1d", "1w", "1wk", "1mo", "3mo", "5d", "d1", "w1", "m1", "mn1"):
             return str(dt.strftime("%Y-%m-%d"))
-        return str(dt.strftime("%Y-%m-%d %H:%M"))
+        base = str(dt.strftime("%Y-%m-%d %H:%M"))
+        if include_tz and dt.tzinfo is not None:
+            tz_label = dt.tzname() or str(dt.strftime("%z"))
+            if tz_label:
+                return f"{base} {tz_label}"
+        return base
     except Exception:
         return str(ts)
 
@@ -1056,9 +1061,11 @@ class MarketDataLoader:
         self.asset_type: str = validate_asset_type(asset_type)
         self.closed_only: bool = closed_only
         self.ticker: str = normalize_ticker(symbol, asset_type=self.asset_type)
-        # Yahoo Finance restricts 1m data to the last 7-8 days (2m is supported up to 60d).
-        # Auto-adjust period to '7d' if default '60d' is passed with 1m.
-        self.period: str = "7d" if (norm_interval == "1m" and period == "60d") else period
+        # Yahoo Finance restricts intraday lookback windows:
+        # - 1m: max 7-8 days
+        # - 2m, 5m, 15m, 30m, 90m: max 60 days
+        # - 60m, 1h, 4h (resampled from 1h): max 730 days (2y)
+        self.period: str = self._clamp_period_for_interval(period, norm_interval)
         self.interval: str = norm_interval
         self.timezone: str = timezone
         self.start: str | None = start
@@ -1076,6 +1083,36 @@ class MarketDataLoader:
         else:
             self._download_interval = self._resolve_download_interval(norm_interval)
             self._resample_rule = "4h" if norm_interval == "4h" else None
+
+    @staticmethod
+    def _clamp_period_for_interval(period: str, norm_interval: str) -> str:
+        """Clamp lookback period to Yahoo Finance's maximum supported window for intraday intervals."""
+        p_clean = (period or "60d").strip()
+        p_lower = p_clean.lower()
+        if norm_interval == "1m":
+            if p_lower in (
+                "14d",
+                "15d",
+                "30d",
+                "60d",
+                "90d",
+                "1mo",
+                "3mo",
+                "6mo",
+                "1y",
+                "2y",
+                "5y",
+                "10y",
+                "ytd",
+                "max",
+            ):
+                return "7d"
+        elif norm_interval in ("2m", "5m", "15m", "30m", "90m"):
+            if p_lower in ("90d", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"):
+                return "60d"
+        elif norm_interval in ("60m", "1h", "4h") and p_lower in ("5y", "10y", "max"):
+            return "730d"
+        return p_clean
 
     @staticmethod
     def _resolve_download_interval(interval: str) -> str:
@@ -1159,8 +1196,9 @@ class MarketDataLoader:
 
         if data.empty:
             raise ValueError(
-                f"No market data found on Yahoo Finance for ticker '{self.ticker}'. "
-                "Verify that the symbol is valid and active."
+                f"No market data found on Yahoo Finance for ticker '{self.ticker}' "
+                f"(interval='{self.interval}', period='{self.period}'). "
+                "Verify that the symbol is valid and active, or check network connectivity to Yahoo Finance."
             )
         return cast(pd.DataFrame, data)
 

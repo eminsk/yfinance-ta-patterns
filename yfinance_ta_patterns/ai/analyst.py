@@ -215,7 +215,7 @@ class AIMarketAnalyst:
             grade_badge = f"[{res.grade.value}]"
             conf_pct = f"{res.confidence * 100:.1f}%"
             lines.append(f"### {i}. {res.pattern_name} - {grade_badge} (Confluence: {conf_pct})")
-            ts_str = format_timestamp(res.timestamp, tf)
+            ts_str = format_timestamp(res.timestamp, tf, include_tz=True)
             lines.append(f"- **Timestamp:** `{ts_str}` | **Regime:** `{res.trend_regime}`")
             atr_str = format_price(res.atr) if res.atr is not None else "-"
             lines.append(

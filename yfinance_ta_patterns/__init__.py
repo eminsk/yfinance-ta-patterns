@@ -7,7 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("yfinance-ta-patterns")
 except PackageNotFoundError:  # pragma: no cover - during editable installs
-    __version__ = "0.3.46"
+    __version__ = "0.3.47"
 
 import sys
 
@@ -90,9 +90,27 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover
     TradeSetup = None  # type: ignore[assignment, misc]
 
 try:
-    from .mcp_server import YFinanceTAMCPServer
+    from .economic_calendar import (
+        EconomicCalendar,
+        InvestingCalendar,
+        resolve_symbol_currencies,
+    )
 except (ImportError, ModuleNotFoundError):  # pragma: no cover
-    YFinanceTAMCPServer = None  # type: ignore[assignment, misc]
+    EconomicCalendar = None  # type: ignore[assignment, misc]
+    InvestingCalendar = None  # type: ignore[assignment, misc]
+    resolve_symbol_currencies = None  # type: ignore[assignment]
+
+
+def __getattr__(name: str) -> object:
+    if name == "YFinanceTAMCPServer":
+        try:
+            from .mcp_server import YFinanceTAMCPServer
+
+            return YFinanceTAMCPServer
+        except (ImportError, ModuleNotFoundError):  # pragma: no cover
+            return None
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "ALLOWED_ASSET_TYPES",
@@ -106,7 +124,9 @@ __all__ = [
     "UNSUPPORTED_FALLBACK_PATTERNS",
     "AIMarketAnalyst",
     "AIPatternScorer",
+    "EconomicCalendar",
     "ForexDataLoader",
+    "InvestingCalendar",
     "MarketDataLoader",
     "PatternAnalyzer",
     "PatternConfidenceResult",
@@ -126,6 +146,7 @@ __all__ = [
     "is_gil_enabled",
     "normalize_ticker",
     "resolve_asset_currencies",
+    "resolve_symbol_currencies",
     "talib",
     "validate_asset_type",
 ]
