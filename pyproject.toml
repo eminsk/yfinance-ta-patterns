@@ -125,6 +125,7 @@ filterwarnings = [
     "ignore:Corrupted OHLC data anomaly detected.*:UserWarning",
     "ignore:cython\\.collection_type only works on PyPy.*:RuntimeWarning",
     "ignore:.*urllib3 v2 only supports OpenSSL.*:Warning",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
 ]
 
 [tool.ruff]
