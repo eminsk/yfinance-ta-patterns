@@ -466,7 +466,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "symbol": {"type": "string"},
                 "total_news": {"type": "integer"},
                 "news": {"type": "array"},
-                "status": {"type": "string", "enum": ["live", "unavailable"]},
+                "status": {"type": "string", "enum": ["live", "empty", "unavailable"]},
                 "source": {"type": "string", "enum": ["live", "unavailable"]},
                 "message": {"type": "string"},
             },
@@ -704,6 +704,34 @@ def _format_news_item(article: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+class _ToolTimeout(Exception):
+    """Raised when a tool call exceeds its wall-clock budget."""
+
+
+def _run_with_timeout(fn: Callable[[], Any], timeout: float) -> Any:
+    """Run ``fn`` in a daemon thread; return its result or raise _ToolTimeout.
+
+    Unlike ``with ThreadPoolExecutor(): ... return``, this never joins the worker on
+    timeout, so a hung network call cannot block the stdio worker or process exit.
+    """
+    box: dict[str, Any] = {}
+
+    def _target() -> None:
+        try:
+            box["ok"] = fn()
+        except BaseException as exc:  # re-raised in the caller thread
+            box["err"] = exc
+
+    t = threading.Thread(target=_target, name="yfinance-mcp-tool", daemon=True)
+    t.start()
+    t.join(timeout)
+    if t.is_alive():
+        raise _ToolTimeout()
+    if "err" in box:
+        raise box["err"]
+    return box.get("ok")
+
+
 class YFinanceTAMCPServer:
     """Zero-dependency Model Context Protocol (MCP) JSON-RPC 2.0 server for yfinance-ta-patterns."""
 
@@ -905,28 +933,24 @@ class YFinanceTAMCPServer:
                 timeout = self._tool_timeout
                 with contextlib.redirect_stdout(sys.stderr):
                     if timeout is not None and timeout > 0:
-                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                            fut = pool.submit(self._call_tool, str(tool_name), args)
-                            try:
-                                output = _json_safe(fut.result(timeout=timeout))
-                            except (TimeoutError, concurrent.futures.TimeoutError):
-                                if sys.version_info >= (3, 9):
-                                    pool.shutdown(wait=False, cancel_futures=True)
-                                else:
-                                    pool.shutdown(wait=False)
-                                return {
-                                    "jsonrpc": "2.0",
-                                    "id": req_id,
-                                    "result": {
-                                        "content": [
-                                            {
-                                                "type": "text",
-                                                "text": f"Error: Tool '{tool_name}' execution timed out after {timeout}s",
-                                            }
-                                        ],
-                                        "isError": True,
-                                    },
-                                }
+                        try:
+                            output = _json_safe(
+                                _run_with_timeout(lambda: self._call_tool(str(tool_name), args), timeout)
+                            )
+                        except _ToolTimeout:
+                            return {
+                                "jsonrpc": "2.0",
+                                "id": req_id,
+                                "result": {
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": f"Error: Tool '{tool_name}' execution timed out after {timeout}s",
+                                        }
+                                    ],
+                                    "isError": True,
+                                },
+                            }
                     else:
                         output = _json_safe(self._call_tool(str(tool_name), args))
                 call_result: dict[str, Any] = {
@@ -1328,7 +1352,7 @@ class YFinanceTAMCPServer:
             sort_by = str(args.get("sort_by") or "composite").strip().lower()
             if sort_by not in ("composite", "win_rate"):
                 raise ValueError("Parameter 'sort_by' must be 'composite' or 'win_rate'.")
-            top_n = _parse_int_param(args.get("top_n"), "top_n", 1, 50, default=10)
+            top_n = _parse_int_param(args.get("top_n"), "top_n", 1, 61, default=10)
             filter_news = bool(args.get("filter_news", False))
 
             df = self._fetch_ohlcv(symbol, period, timeframe)
@@ -1468,13 +1492,19 @@ class YFinanceTAMCPServer:
                     }
             articles = [_format_news_item(a) for a in (raw_news or []) if isinstance(a, dict)]
             articles = [a for a in articles if a.get("title")]
-            return {
+            news_result: dict[str, Any] = {
                 "symbol": symbol,
                 "total_news": len(articles),
                 "news": articles[:limit],
-                "status": "live",
+                "status": "live" if articles else "empty",
                 "source": "live",
             }
+            if not articles:
+                news_result["message"] = (
+                    "Yahoo Finance returned no articles for this symbol. Either none exist or the "
+                    "request failed (yfinance hides HTTP/JSON errors); retry later or try another ticker."
+                )
+            return news_result
 
         raise ValueError(f"Unknown MCP tool: {name}")
 
@@ -1578,7 +1608,7 @@ def main_mcp(argv: Sequence[str] | None = None) -> int:
     )
     parser.parse_args(argv)
     server = YFinanceTAMCPServer()
-    server.run_stdio()
+    server.run_stdio(max_workers=4)
     return 0
 
 

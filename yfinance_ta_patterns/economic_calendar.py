@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 _CALENDAR_CACHE: dict[str, tuple[float, str | None]] = {}
 _CACHE_TTL_SUCCESS: float = 900.0  # 15 minutes
 _CACHE_TTL_FAILURE: float = 60.0   # 1 minute negative caching
+# Timeout used by the attempt that produced a negative-cache entry: a caller with a LONGER
+# timeout must retry instead of inheriting a failure caused by someone else's short probe.
+_CALENDAR_FAIL_TIMEOUT: dict[str, float] = {}
 
 curl_requests: Any = None
 try:
@@ -637,7 +640,11 @@ class InvestingCalendar:
         if url in _CALENDAR_CACHE:
             cached_at, cached_html = _CALENDAR_CACHE[url]
             ttl = _CACHE_TTL_SUCCESS if cached_html is not None else _CACHE_TTL_FAILURE
-            if now - cached_at < ttl:
+            retry_with_longer_timeout = (
+                cached_html is None
+                and self._timeout > _CALENDAR_FAIL_TIMEOUT.get(url, self._timeout)
+            )
+            if now - cached_at < ttl and not retry_with_longer_timeout:
                 return cached_html
 
         content: str | None = None
@@ -671,6 +678,8 @@ class InvestingCalendar:
                 logger.debug("Error requesting live calendar feed via urllib: %s", exc)
 
         _CALENDAR_CACHE[url] = (now, content)
+        if content is None:
+            _CALENDAR_FAIL_TIMEOUT[url] = self._timeout
         return content
 
     def _fetch_from_feed(
