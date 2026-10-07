@@ -6,6 +6,7 @@ import contextlib
 import datetime as dt
 import logging
 import re
+import time
 import urllib.request
 import warnings
 from collections.abc import Callable, Iterable, Mapping
@@ -15,6 +16,11 @@ from typing import Any, ClassVar
 from .data import _CURRENCY_CODES, normalize_ticker, resolve_asset_currencies
 
 logger = logging.getLogger(__name__)
+
+# Module-level TTL cache for economic calendar feeds: key -> (timestamp, html_content)
+_CALENDAR_CACHE: dict[str, tuple[float, str | None]] = {}
+_CACHE_TTL_SUCCESS: float = 900.0  # 15 minutes
+_CACHE_TTL_FAILURE: float = 60.0   # 1 minute negative caching
 
 curl_requests: Any = None
 try:
@@ -424,7 +430,7 @@ class InvestingCalendar:
 
     def __init__(
         self,
-        timeout: float = 12.0,
+        timeout: float = 3.5,
         headers: Mapping[str, str] | None = None,
         http_fetcher: Callable[[str], str | None] | None = None,
     ) -> None:
@@ -623,36 +629,49 @@ class InvestingCalendar:
                 continue
 
     def _download_feed_html(self, url: str) -> str | None:
-        """Download raw HTML from calendar feed using injectable fetcher or multi-client fallback."""
+        """Download raw HTML from calendar feed using caching, injectable fetcher or fast-fail client."""
         if self._http_fetcher is not None:
             return self._http_fetcher(url)
 
+        now = time.monotonic()
+        if url in _CALENDAR_CACHE:
+            cached_at, cached_html = _CALENDAR_CACHE[url]
+            ttl = _CACHE_TTL_SUCCESS if cached_html is not None else _CACHE_TTL_FAILURE
+            if now - cached_at < ttl:
+                return cached_html
+
+        content: str | None = None
+        # Try primary fast client (curl_cffi impersonate if available)
         if self._curl_session is not None:
             with contextlib.suppress(Exception):
                 r = self._curl_session.get(url, timeout=self._timeout)
                 if r.status_code == 200 and len(r.text) > 500:
-                    return str(r.text)
+                    content = str(r.text)
 
-        if self._client is not None:
+        # Fallback 1: httpx if curl was not available or failed
+        if content is None and self._client is not None:
             try:
                 r = self._client.get(url)
                 if r.status_code == 200 and len(r.text) > 500:
-                    return str(r.text)
+                    content = str(r.text)
             except Exception as exc:
                 logger.debug("Error requesting live calendar feed via httpx: %s", exc)
 
-        try:
-            req = urllib.request.Request(url, headers=self._headers)
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # nosec B310
-                if getattr(resp, "status", 200) == 200:
-                    raw_bytes = bytes(resp.read())
-                    text = raw_bytes.decode("utf-8", errors="replace")
-                    if len(text) > 500:
-                        return str(text)
-        except Exception as exc:
-            logger.debug("Error requesting live calendar feed via urllib: %s", exc)
+        # Fallback 2: urllib if still None and curl/httpx not available
+        if content is None and self._curl_session is None and self._client is None:
+            try:
+                req = urllib.request.Request(url, headers=self._headers)
+                with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # nosec B310
+                    if getattr(resp, "status", 200) == 200:
+                        raw_bytes = bytes(resp.read())
+                        text = raw_bytes.decode("utf-8", errors="replace")
+                        if len(text) > 500:
+                            content = str(text)
+            except Exception as exc:
+                logger.debug("Error requesting live calendar feed via urllib: %s", exc)
 
-        return None
+        _CALENDAR_CACHE[url] = (now, content)
+        return content
 
     def _fetch_from_feed(
         self,
@@ -674,7 +693,7 @@ class InvestingCalendar:
         rows = [r for r in parser.rows if r.attrs.get("data-id")]
         if not rows:
             logger.warning("No calendar rows with 'data-id' found in feed HTML (anti-bot challenge or layout changed).")
-            return [], "parse_failed", (
+            return [], "unavailable", (
                 "Calendar feed page received but no economic event rows could be parsed "
                 "(anti-bot challenge, captcha, or changed layout); treated as unavailable."
             )
@@ -737,13 +756,19 @@ class InvestingCalendar:
                 if not (country_candidates & country_filter):
                     continue
 
-            event_name = tds[2].text or (tr.attrs.get("data-event") or "").title()
-            actual = tds[3].text or "—"
-            previous = tds[4].text or "—"
+            raw_event_name = tds[2].text or (tr.attrs.get("data-event") or "").title()
+            event_name = raw_event_name.strip()
+            if len(event_name) > 120:
+                event_name = event_name[:117] + "..."
+            if len(country_name) > 60:
+                country_name = country_name[:57] + "..."
+
+            actual = (tds[3].text or "—").strip()[:30]
+            previous = (tds[4].text or "—").strip()[:30]
             forecast_val = tds[5].text if len(tds) > 5 else ""
             if not forecast_val and len(tds) > 6:
                 forecast_val = tds[6].text
-            forecast = forecast_val or "—"
+            forecast = (forecast_val or "—").strip()[:30]
 
             classes = " ".join(tr.classes)
             if "calendar-date-3" in classes:

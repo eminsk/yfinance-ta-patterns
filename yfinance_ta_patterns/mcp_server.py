@@ -10,12 +10,16 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import contextlib
+import datetime as dt
 import json
+import logging
 import re
 import sys
+import threading
 from collections.abc import Callable, Sequence
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from . import __version__
@@ -27,6 +31,8 @@ from .forex_data_loader import FOREX_56_PAIRS
 from .pattern_analyzer import PatternAnalyzer
 from .pattern_tester import PatternRankingTester
 from .talib_compat import get_talib_status
+
+logger = logging.getLogger(__name__)
 
 MCP_PROTOCOL_VERSION = "2024-11-05"
 SUPPORTED_PROTOCOL_VERSIONS: tuple[str, ...] = (
@@ -40,6 +46,10 @@ LATEST_PROTOCOL_VERSION = "2025-11-25"
 MAX_WATCHLIST_SYMBOLS = 25
 DEFAULT_MAX_RESULTS = 25
 MAX_RESULTS_LIMIT = 50
+
+SUPPORTED_TIMEFRAMES = [
+    "1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "4h", "1d", "5d", "1wk", "1mo", "3mo"
+]
 
 MCP_SERVER_INSTRUCTIONS = (
     "yfinance-ta-patterns MCP server for multi-asset candlestick pattern scanning, "
@@ -70,11 +80,13 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
             "properties": {
                 "symbol": {
                     "type": "string",
+                    "minLength": 1,
                     "description": "Ticker symbol (e.g. 'BTC-USD', 'NVDA', 'EURUSD=X')",
                 },
                 "timeframe": {
                     "type": "string",
                     "default": "1d",
+                    "enum": SUPPORTED_TIMEFRAMES,
                     "description": "Timeframe interval ('15m', '1h', '4h', '1d', '1wk')",
                 },
                 "period": {
@@ -87,13 +99,17 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 },
                 "min_confidence": {
                     "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
                     "default": 0.4,
                     "description": "Minimum AI Confluence score in [0.0, 1.0]",
                 },
                 "lookback_bars": {
                     "type": "integer",
+                    "minimum": 1,
+                    "maximum": 60,
                     "default": 3,
-                    "description": "Number of recent bars to evaluate for active patterns",
+                    "description": "Number of recent bars to evaluate for active patterns (1-60)",
                 },
                 "include_brief": {
                     "type": "boolean",
@@ -110,11 +126,14 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 },
                 "max_patterns": {
                     "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
                     "default": 25,
                     "description": "Maximum number of active pattern setups to return (default: 25, max: 50)",
                 },
             },
             "required": ["symbol"],
+            "additionalProperties": False,
         },
         "outputSchema": {
             "type": "object",
@@ -130,6 +149,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "setups": {"type": "array"},
                 "market_summary": {"type": "object"},
                 "markdown_brief": {"type": "string"},
+                "event_risk": {"type": "object"},
             },
         },
     },
@@ -150,6 +170,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "symbols": {
                     "type": "array",
                     "items": {"type": "string"},
+                    "minItems": 1,
                     "maxItems": MAX_WATCHLIST_SYMBOLS,
                     "description": (
                         f"List of ticker symbols (max {MAX_WATCHLIST_SYMBOLS}, "
@@ -159,6 +180,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "timeframe": {
                     "type": "string",
                     "default": "1d",
+                    "enum": SUPPORTED_TIMEFRAMES,
                     "description": "Timeframe interval (default: '1d')",
                 },
                 "period": {
@@ -168,16 +190,22 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 },
                 "min_confidence": {
                     "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
                     "default": 0.55,
                     "description": "Minimum AI Confluence score in [0.0, 1.0]",
                 },
                 "lookback_bars": {
                     "type": "integer",
+                    "minimum": 1,
+                    "maximum": 60,
                     "default": 2,
                     "description": "Number of recent bars per symbol to evaluate (default: 2)",
                 },
                 "max_results": {
                     "type": "integer",
+                    "minimum": 1,
+                    "maximum": MAX_RESULTS_LIMIT,
                     "default": DEFAULT_MAX_RESULTS,
                     "description": f"Maximum number of ranked setups to return (default: {DEFAULT_MAX_RESULTS}, max: {MAX_RESULTS_LIMIT})",
                 },
@@ -191,6 +219,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 },
             },
             "required": ["symbols"],
+            "additionalProperties": False,
         },
         "outputSchema": {
             "type": "object",
@@ -223,11 +252,13 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
             "properties": {
                 "symbol": {
                     "type": "string",
+                    "minLength": 1,
                     "description": "Ticker symbol (e.g. 'BTC-USD', 'AAPL')",
                 },
                 "timeframe": {
                     "type": "string",
                     "default": "1d",
+                    "enum": SUPPORTED_TIMEFRAMES,
                     "description": "Timeframe interval (default: '1d')",
                 },
                 "period": {
@@ -237,11 +268,15 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 },
                 "holding_period": {
                     "type": "integer",
+                    "minimum": 1,
+                    "maximum": 60,
                     "default": 5,
                     "description": "Bars to hold each trade (default: 5)",
                 },
                 "min_signals": {
                     "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
                     "default": 1,
                     "description": "Minimum total signals required to include a pattern (default: 1)",
                 },
@@ -253,11 +288,14 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 },
                 "top_n": {
                     "type": "integer",
+                    "minimum": 1,
+                    "maximum": 61,
                     "default": 10,
                     "description": "Number of top-ranked patterns to return (default: 10)",
                 },
             },
             "required": ["symbol"],
+            "additionalProperties": False,
         },
         "outputSchema": {
             "type": "object",
@@ -268,7 +306,6 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "holding_period": {"type": "integer"},
                 "sort_by": {"type": "string"},
                 "total_patterns_evaluated": {"type": "integer"},
-                "patterns": {"type": "array"},
                 "top_patterns": {"type": "array"},
             },
         },
@@ -284,6 +321,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
         "inputSchema": {
             "type": "object",
             "properties": {},
+            "additionalProperties": False,
         },
         "outputSchema": {
             "type": "object",
@@ -316,6 +354,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
             "properties": {
                 "symbol": {
                     "type": "string",
+                    "minLength": 1,
                     "description": (
                         "Selected asset ticker symbol or currency pair "
                         "(e.g. 'EURUSD=X', 'EUR/USD', 'GBPUSD', 'AAPL', 'BTC-USD', 'SAP.DE')"
@@ -331,6 +370,8 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 },
                 "days": {
                     "type": "integer",
+                    "minimum": 1,
+                    "maximum": 60,
                     "default": 7,
                     "description": "Number of days ahead from date_from when date_to is omitted (default: 7, max: 60)",
                 },
@@ -352,11 +393,14 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 },
                 "max_results": {
                     "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
                     "default": 30,
                     "description": "Maximum number of calendar events to return (default: 30, max: 100)",
                 },
             },
             "required": ["symbol"],
+            "additionalProperties": False,
         },
         "outputSchema": {
             "type": "object",
@@ -368,7 +412,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "date_from": {"type": "string"},
                 "date_to": {"type": "string"},
                 "importances": {"type": "array", "items": {"type": "string"}},
-                "source": {"type": "string", "enum": ["live", "unavailable", "parse_failed"]},
+                "source": {"type": "string", "enum": ["live", "unavailable"]},
                 "total_events": {"type": "integer"},
                 "events": {"type": "array"},
                 "message": {"type": "string"},
@@ -411,6 +455,32 @@ MCP_PROMPTS_SCHEMA: list[dict[str, Any]] = [
         ],
     }
 ]
+
+
+def _round_price(val: Any) -> float | None:
+    """Round price: 4 decimals if abs(price) < 1.0 (forex/crypto), else 2 decimals."""
+    if val is None:
+        return None
+    try:
+        f = float(val)
+        if not np.isfinite(f):
+            return None
+        return round(f, 4 if abs(f) < 1.0 else 2)
+    except (ValueError, TypeError):
+        return None
+
+
+def _round_val(val: Any, decimals: int = 2) -> float | None:
+    """Round numeric metric or ratio to specified decimals."""
+    if val is None:
+        return None
+    try:
+        f = float(val)
+        if not np.isfinite(f):
+            return None
+        return round(f, decimals)
+    except (ValueError, TypeError):
+        return None
 
 
 def _resolve_mcp_period(timeframe: str, period: Any, default_period: str = "6mo") -> str:
@@ -571,7 +641,14 @@ class YFinanceTAMCPServer:
 
             if method == "resources/read":
                 uri = str(params.get("uri", ""))
-                res_payload = _json_safe(self._read_resource(uri))
+                try:
+                    res_payload = _json_safe(self._read_resource(uri))
+                except ValueError as exc:
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "error": {"code": -32002, "message": str(exc)},
+                    }
                 return {
                     "jsonrpc": "2.0",
                     "id": req_id,
@@ -722,13 +799,14 @@ class YFinanceTAMCPServer:
                 raise ValueError("Parameter 'symbol' is required and cannot be empty.")
             timeframe = normalize_interval(str(args.get("timeframe", "1d")))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="6mo")
-            min_conf = float(args.get("min_confidence", 0.4))
-            raw_lookback = int(args.get("lookback_bars", 3))
-            lookback = max(1, min(raw_lookback, 60))
+            raw_min_conf = args.get("min_confidence")
+            min_conf = 0.4 if raw_min_conf is None else float(raw_min_conf)
+            raw_lookback = args.get("lookback_bars")
+            lookback = max(1, min(3 if raw_lookback is None else int(raw_lookback), 60))
             include_brief = bool(args.get("include_brief", False))
-            compact = bool(args.get("compact", True))
-            raw_max_patterns = int(args.get("max_patterns", 25))
-            max_patterns = max(1, min(raw_max_patterns, 50))
+            compact = True if args.get("compact") is None else bool(args.get("compact"))
+            raw_max_patterns = args.get("max_patterns")
+            max_patterns = max(1, min(25 if raw_max_patterns is None else int(raw_max_patterns), 50))
 
             df = self._fetch_ohlcv(symbol, period, timeframe)
             analyst = AIMarketAnalyst(df, symbol=symbol, timeframe=timeframe)
@@ -749,7 +827,14 @@ class YFinanceTAMCPServer:
             if curr_price is None and not df.empty and "Close" in df.columns:
                 curr_price = float(df["Close"].iloc[-1])
 
-            # Extract actionable trade setups from all detected patterns
+            if isinstance(market_summary, dict):
+                for k in ("current_price", "last_high", "last_low"):
+                    if k in market_summary:
+                        market_summary[k] = _round_price(market_summary[k])
+                if "return_20_bars_pct" in market_summary:
+                    market_summary["return_20_bars_pct"] = _round_val(market_summary["return_20_bars_pct"], 2)
+
+            # Extract actionable trade setups with clean canonical keys and rounded figures
             extracted_setups: list[dict[str, Any]] = []
             for p in raw_patterns:
                 ts = p.get("trade_setup")
@@ -762,24 +847,18 @@ class YFinanceTAMCPServer:
                 tp1_val = ts.get("take_profit_1") or ts.get("tp1")
                 tp2_val = ts.get("take_profit_2") or ts.get("tp2")
                 rr_val = ts.get("risk_reward_ratio") or ts.get("risk_reward")
-                score_val = p.get("confluence_score") or p.get("confidence_score")
+                score_val = p.get("confluence_score") if p.get("confluence_score") is not None else p.get("confidence_score")
 
                 setup_item = {
                     "pattern": p.get("pattern"),
                     "direction": dir_val,
-                    "confluence_score": score_val,
-                    "confidence_score": score_val,
+                    "confluence_score": _round_val(score_val, 2),
                     "timestamp": p.get("timestamp"),
-                    "price": entry_val,
-                    "entry": entry_val,
-                    "entry_price": entry_val,
-                    "stop_loss": ts.get("stop_loss"),
-                    "take_profit_1": tp1_val,
-                    "tp1": tp1_val,
-                    "take_profit_2": tp2_val,
-                    "tp2": tp2_val,
-                    "risk_reward_ratio": rr_val,
-                    "risk_reward": rr_val,
+                    "entry": _round_price(entry_val),
+                    "stop_loss": _round_price(ts.get("stop_loss")),
+                    "tp1": _round_price(tp1_val),
+                    "tp2": _round_price(tp2_val),
+                    "risk_reward": _round_val(rr_val, 2),
                     "trend": p.get("trend_regime") or p.get("trend"),
                 }
                 extracted_setups.append(setup_item)
@@ -794,7 +873,7 @@ class YFinanceTAMCPServer:
                         or ("BULLISH" if p.get("raw_signal", 0) > 0 else "BEARISH" if p.get("raw_signal", 0) < 0 else "NEUTRAL")
                     )
                     entry_val = ts.get("entry_price") or ts.get("entry") or curr_price
-                    score_val = p.get("confidence_score") or p.get("confluence_score")
+                    score_val = p.get("confluence_score") if p.get("confluence_score") is not None else p.get("confidence_score")
                     trend_val = p.get("trend_regime") or p.get("trend")
                     rvol_val = metrics.get("rvol") if metrics.get("rvol") is not None else p.get("rvol")
                     rsi_val = metrics.get("rsi") if metrics.get("rsi") is not None else p.get("rsi")
@@ -802,25 +881,12 @@ class YFinanceTAMCPServer:
                     streamlined_patterns.append({
                         "pattern": p.get("pattern"),
                         "direction": dir_val,
-                        "confidence_score": score_val,
-                        "confluence_score": score_val,
+                        "confluence_score": _round_val(score_val, 2),
                         "timestamp": p.get("timestamp"),
-                        "price": entry_val,
+                        "price": _round_price(entry_val),
                         "trend": trend_val,
-                        "rvol": rvol_val,
-                        "rsi": rsi_val,
-                        "trade_setup": {
-                            "direction": dir_val,
-                            "entry": entry_val,
-                            "entry_price": entry_val,
-                            "stop_loss": ts.get("stop_loss"),
-                            "take_profit_1": ts.get("take_profit_1") or ts.get("tp1"),
-                            "tp1": ts.get("take_profit_1") or ts.get("tp1"),
-                            "take_profit_2": ts.get("take_profit_2") or ts.get("tp2"),
-                            "tp2": ts.get("take_profit_2") or ts.get("tp2"),
-                            "risk_reward_ratio": ts.get("risk_reward_ratio") or ts.get("risk_reward"),
-                            "risk_reward": ts.get("risk_reward_ratio") or ts.get("risk_reward"),
-                        } if ts else None,
+                        "rvol": _round_val(rvol_val, 2),
+                        "rsi": _round_val(rsi_val, 1),
                     })
                 report["patterns"] = streamlined_patterns
                 report["setups"] = extracted_setups[:max_patterns]
@@ -833,6 +899,36 @@ class YFinanceTAMCPServer:
             report["total_patterns_found"] = total_patterns_found
             report["truncated_to"] = len(report["patterns"])
 
+            # Check imminent macroeconomic event risk (importance 3 within 48h)
+            event_risk: dict[str, Any] = {"has_high_impact_event": False, "event_count": 0}
+            try:
+                with InvestingCalendar(http_fetcher=self._calendar_fetcher, timeout=2.0) as cal:
+                    today_utc = dt.datetime.now(dt.timezone.utc).date()
+                    cal_res = cal.get_events_for_symbol(
+                        symbol=symbol,
+                        date_from=today_utc.isoformat(),
+                        days=2,
+                        importances=["3"],
+                        limit=5,
+                    )
+                    high_events = cal_res.get("events", [])
+                    if high_events:
+                        event_risk = {
+                            "has_high_impact_event": True,
+                            "event_count": len(high_events),
+                            "nearest_event": high_events[0].get("event"),
+                            "event_time": high_events[0].get("time"),
+                            "currency": high_events[0].get("currency"),
+                            "warning": (
+                                f"High-impact macroeconomic event imminent: "
+                                f"'{high_events[0].get('event')}' ({high_events[0].get('currency')}) "
+                                f"at {high_events[0].get('time')}."
+                            ),
+                        }
+            except Exception:
+                pass
+            report["event_risk"] = event_risk
+
             if include_brief:
                 report["markdown_brief"] = analyst.generate_brief()
             return report
@@ -841,11 +937,13 @@ class YFinanceTAMCPServer:
             symbols = _normalize_watchlist_symbols(args.get("symbols"))
             timeframe = normalize_interval(str(args.get("timeframe", "1d")))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="6mo")
-            min_conf = float(args.get("min_confidence", 0.55))
-            lookback = int(args.get("lookback_bars", 2))
-            raw_max_results = int(args.get("max_results", DEFAULT_MAX_RESULTS))
-            max_results = max(1, min(raw_max_results, MAX_RESULTS_LIMIT))
-            compact = bool(args.get("compact", True))
+            raw_min_conf = args.get("min_confidence")
+            min_conf = 0.55 if raw_min_conf is None else float(raw_min_conf)
+            raw_lookback = args.get("lookback_bars")
+            lookback = 2 if raw_lookback is None else int(raw_lookback)
+            raw_max_results = args.get("max_results")
+            max_results = max(1, min(DEFAULT_MAX_RESULTS if raw_max_results is None else int(raw_max_results), MAX_RESULTS_LIMIT))
+            compact = True if args.get("compact") is None else bool(args.get("compact"))
 
             opportunities: list[dict[str, Any]] = []
             errors: dict[str, str] = {}
@@ -871,8 +969,8 @@ class YFinanceTAMCPServer:
                             setup_info = raw_setup if isinstance(raw_setup, dict) else {}
                             conf_score = (
                                 d.get("confluence_score")
-                                or d.get("confidence_score")
-                                or d.get("confidence")
+                                if d.get("confluence_score") is not None
+                                else d.get("confidence_score")
                             )
                             entry_val = (
                                 setup_info.get("entry_price")
@@ -891,20 +989,13 @@ class YFinanceTAMCPServer:
                                 "symbol": sym,
                                 "pattern": d.get("pattern"),
                                 "direction": dir_val,
-                                "confluence_score": conf_score,
-                                "confidence_score": conf_score,
+                                "confluence_score": _round_val(conf_score, 2),
                                 "timestamp": d.get("timestamp"),
-                                "price": d.get("price") or entry_val,
-                                "entry": entry_val,
-                                "entry_price": entry_val,
-                                "stop_loss": setup_info.get("stop_loss"),
-                                "take_profit_1": tp1_val,
-                                "tp1": tp1_val,
-                                "take_profit_2": tp2_val,
-                                "tp2": tp2_val,
-                                "risk_reward_ratio": rr_val,
-                                "risk_reward": rr_val,
-                                "trend_regime": d.get("trend_regime"),
+                                "entry": _round_price(entry_val),
+                                "stop_loss": _round_price(setup_info.get("stop_loss")),
+                                "tp1": _round_price(tp1_val),
+                                "tp2": _round_price(tp2_val),
+                                "risk_reward": _round_val(rr_val, 2),
                                 "trend": d.get("trend_regime"),
                             }
                             sym_opps.append(compact_entry)
@@ -916,13 +1007,16 @@ class YFinanceTAMCPServer:
 
             max_workers = min(len(symbols), 8)
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                for sym, sym_opps, err in executor.map(_scan_one, symbols):
-                    if err is not None:
-                        errors[sym] = err
-                    else:
-                        symbols_succeeded += 1
-                        if sym_opps:
-                            opportunities.extend(sym_opps)
+                try:
+                    for sym, sym_opps, err in executor.map(_scan_one, symbols, timeout=20.0):
+                        if err is not None:
+                            errors[sym] = err
+                        else:
+                            symbols_succeeded += 1
+                            if sym_opps:
+                                opportunities.extend(sym_opps)
+                except TimeoutError:
+                    logger.warning("ta_scan_watchlist timed out waiting for symbols")
 
             if symbols_succeeded == 0 and errors:
                 first_sym, first_err = next(iter(errors.items()))
@@ -967,12 +1061,15 @@ class YFinanceTAMCPServer:
                 raise ValueError("Parameter 'symbol' is required and cannot be empty.")
             timeframe = normalize_interval(str(args.get("timeframe", "1d")))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="1y")
-            holding_period = int(args.get("holding_period", 5))
-            min_signals = max(1, int(args.get("min_signals", 1)))
-            sort_by = str(args.get("sort_by", "composite")).strip().lower()
+            raw_hp = args.get("holding_period")
+            holding_period = 5 if raw_hp is None else int(raw_hp)
+            raw_sig = args.get("min_signals")
+            min_signals = max(1, 1 if raw_sig is None else int(raw_sig))
+            sort_by = str(args.get("sort_by") or "composite").strip().lower()
             if sort_by not in ("composite", "win_rate"):
                 raise ValueError("Parameter 'sort_by' must be 'composite' or 'win_rate'.")
-            top_n = max(1, min(int(args.get("top_n", 10)), 61))
+            raw_top = args.get("top_n")
+            top_n = max(1, min(10 if raw_top is None else int(raw_top), 61))
 
             df = self._fetch_ohlcv(symbol, period, timeframe)
             tester = PatternRankingTester(
@@ -1010,7 +1107,6 @@ class YFinanceTAMCPServer:
                 "sort_by": sort_by,
                 "total_patterns_evaluated": len(ranked),
                 "top_patterns": top_patterns_list,
-                "patterns": top_patterns_list,
             }
 
         if name == "ta_list_patterns":
@@ -1040,10 +1136,12 @@ class YFinanceTAMCPServer:
                 raise ValueError("Parameter 'symbol' is required and cannot be empty.")
             date_from = args.get("date_from")
             date_to = args.get("date_to")
-            days = int(args.get("days", 7))
+            raw_days = args.get("days")
+            days = 7 if raw_days is None else int(raw_days)
             importances = args.get("importances")
             countries = args.get("countries")
-            max_results = int(args.get("max_results", 30))
+            raw_limit = args.get("max_results")
+            max_results = 30 if raw_limit is None else int(raw_limit)
 
             with InvestingCalendar(http_fetcher=self._calendar_fetcher) as calendar:
                 return calendar.get_events_for_symbol(
@@ -1062,8 +1160,9 @@ class YFinanceTAMCPServer:
         self,
         stdin: Any | None = None,
         stdout: Any | None = None,
+        max_workers: int = 1,
     ) -> None:
-        """Run the yfinance-ta-patterns MCP JSON-RPC 2.0 server over standard input/output."""
+        """Run the yfinance-ta-patterns MCP JSON-RPC 2.0 server over standard input/output with non-blocking concurrency."""
         in_stream = stdin if stdin is not None else sys.stdin
         if stdout is None:
             if hasattr(sys.stdout, "reconfigure"):
@@ -1076,6 +1175,33 @@ class YFinanceTAMCPServer:
         # Redirect global sys.stdout to sys.stderr so third-party libraries (yfinance, etc.)
         # can never write non-JSON text onto the MCP protocol wire.
         sys.stdout = sys.stderr
+
+        write_lock = threading.Lock()
+
+        def _send(obj: dict[str, Any]) -> None:
+            raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), default=str) + "\n"
+            with write_lock:
+                proto_out.write(raw)
+                proto_out.flush()
+
+        executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=max_workers,
+            thread_name_prefix="yfinance-mcp-worker",
+        )
+
+        def _worker_task(req: dict[str, Any]) -> None:
+            try:
+                resp = self.handle_request(req)
+                if resp is not None:
+                    _send(resp)
+            except Exception as exc:
+                req_id = req.get("id") if isinstance(req, dict) else None
+                _send({
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {"code": -32603, "message": f"Internal error: {exc}"},
+                })
+
         try:
             for raw_line in in_stream:
                 line = raw_line.strip()
@@ -1084,34 +1210,35 @@ class YFinanceTAMCPServer:
                 try:
                     req = json.loads(line)
                 except json.JSONDecodeError as exc:
-                    err_resp: dict[str, Any] = {
+                    _send({
                         "jsonrpc": "2.0",
                         "id": None,
                         "error": {"code": -32700, "message": f"Parse error: {exc.msg}"},
-                    }
-                    proto_out.write(
-                        json.dumps(err_resp, ensure_ascii=False, separators=(",", ":")) + "\n"
-                    )
-                    proto_out.flush()
+                    })
                     continue
 
-                try:
-                    resp = self.handle_request(req)
-                except Exception as exc:
-                    req_id = req.get("id") if isinstance(req, dict) else None
-                    resp = {
+                if not isinstance(req, dict):
+                    _send({
                         "jsonrpc": "2.0",
-                        "id": req_id,
-                        "error": {"code": -32603, "message": f"Internal error: {exc}"},
-                    }
+                        "id": None,
+                        "error": {"code": -32600, "message": "Invalid Request: expected JSON object"},
+                    })
+                    continue
 
-                if resp is not None:
-                    proto_out.write(
-                        json.dumps(resp, ensure_ascii=False, separators=(",", ":"), default=str)
-                        + "\n"
-                    )
-                    proto_out.flush()
+                # JSON-RPC notifications (without id) must never be replied to
+                if "id" not in req or req.get("id") is None:
+                    continue
+
+                method = req.get("method")
+                # Immediately answer ping in reader thread without queuing behind worker pool
+                if method == "ping":
+                    _send({"jsonrpc": "2.0", "id": req.get("id"), "result": {}})
+                    continue
+
+                # Offload all tool/resource calls to worker pool to prevent stdio blocking
+                executor.submit(_worker_task, req)
         finally:
+            executor.shutdown(wait=True)
             sys.stdout = saved_stdout
 
 

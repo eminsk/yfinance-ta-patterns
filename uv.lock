@@ -2946,7 +2946,7 @@ wheels = [
 
 [[package]]
 name = "yfinance-ta-patterns"
-version = "0.3.50"
+version = "0.3.51"
 source = { editable = "." }
 dependencies = [
     { name = "multitasking", marker = "python_full_version < '3.9'" },
@@ -3021,7 +3021,7 @@ requires-dist = [
     { name = "ta-lib", marker = "python_full_version < '3.12' and implementation_name == 'pypy' and extra == 'talib'", specifier = ">=0.4.19,<=0.7.1" },
     { name = "types-pytz", marker = "extra == 'dev'", specifier = ">=2022.5" },
     { name = "typing-extensions", marker = "python_full_version < '3.11'", specifier = ">=4.0" },
-    { name = "yfinance", marker = "python_full_version < '3.12' or implementation_name != 'pypy'", specifier = ">=0.2.50" },
+    { name = "yfinance", marker = "python_full_version < '3.12' or implementation_name != 'pypy'", specifier = ">=0.2.54" },
 ]
 provides-extras = ["talib", "repair", "all", "dev"]
 

@@ -176,7 +176,6 @@ def test_yfinance_ta_mcp_server_lifecycle(capsys: pytest.CaptureFixture[str]) ->
     bt_data = bt_resp["result"]["structuredContent"]
     assert bt_data["symbol"] == "BTC-USD"
     assert "top_patterns" in bt_data
-    assert "patterns" in bt_data
     assert "total_patterns_evaluated" in bt_data
 
     # 6. ta_list_patterns
@@ -538,8 +537,11 @@ def test_mcp_encoding_utf8_preservation_and_watchlist_compactness() -> None:
         assert "direction" in opp
         assert "confluence_score" in opp
         assert opp.get("entry") is not None
-        assert opp.get("entry_price") == opp.get("entry")
-        # Compact mode must not include deep bulky indicator keys
+        assert opp.get("tp1") is not None
+        # Compact mode must not include duplicate aliases or bulky indicator keys
+        assert "entry_price" not in opp
+        assert "take_profit_1" not in opp
+        assert "confidence_score" not in opp
         assert "confluence_factors" not in opp
         assert "risk_factors" not in opp
         assert "metrics" not in opp
@@ -772,16 +774,190 @@ def test_mcp_scan_symbol_compact_mode_and_limits() -> None:
     assert p0["trend"] is not None
     assert p0["rvol"] is not None and p0["rvol"] > 0
     assert p0["rsi"] is not None
+    # Verify no bloat in streamlined patterns
+    assert "trade_setup" not in p0
+    assert "confidence_score" not in p0
     assert len(data["setups"]) <= 5
     assert len(data["setups"]) > 0
     s0 = data["setups"][0]
     assert s0["entry"] is not None and s0["entry"] > 0
-    assert s0["entry_price"] == s0["entry"]
     assert s0["stop_loss"] is not None
-    assert s0["take_profit_1"] is not None
-    assert s0["tp1"] == s0["take_profit_1"]
-    assert s0["risk_reward_ratio"] is not None
+    assert s0["tp1"] is not None
+    assert s0["tp2"] is not None
+    assert s0["risk_reward"] is not None
+    # Verify no duplicate keys in setups
+    assert "entry_price" not in s0
+    assert "take_profit_1" not in s0
+    assert "confidence_score" not in s0
+    assert "event_risk" in data
     # Wire payload should be compact (well below 10,000 characters)
     wire_json = resp["result"]["content"][0]["text"]
     assert len(wire_json) < 10_000
+
+
+def test_mcp_unknown_resource_error_code_32002() -> None:
+    """Ensure resources/read with an unknown URI returns JSON-RPC error code -32002."""
+    server = YFinanceTAMCPServer()
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 999,
+            "method": "resources/read",
+            "params": {"uri": "ta://unknown/invalid-resource"},
+        }
+    )
+    assert resp is not None
+    assert "error" in resp
+    assert resp["error"]["code"] == -32002
+    assert "Unknown resource" in resp["error"]["message"]
+
+
+def test_mcp_graceful_none_arguments_handling() -> None:
+    """Ensure tools accept None / null for optional parameters without crashing or raising TypeError."""
+    df = _make_sample_ohlcv()
+    server = YFinanceTAMCPServer(data_fetcher=lambda s, p, i: df.copy())
+
+    # 1. ta_scan_symbol with null optional parameters
+    resp_scan = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_scan_symbol",
+                "arguments": {
+                    "symbol": "BTC-USD",
+                    "min_confidence": None,
+                    "lookback_bars": None,
+                    "max_patterns": None,
+                },
+            },
+        }
+    )
+    assert resp_scan is not None
+    assert resp_scan["result"]["isError"] is False
+
+    # 2. ta_scan_watchlist with null optional parameters
+    resp_wl = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_scan_watchlist",
+                "arguments": {
+                    "symbols": ["BTC-USD"],
+                    "min_confidence": None,
+                    "lookback_bars": None,
+                    "max_results": None,
+                },
+            },
+        }
+    )
+    assert resp_wl is not None
+    assert resp_wl["result"]["isError"] is False
+
+    # 3. ta_backtest_patterns with null optional parameters
+    resp_bt = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_backtest_patterns",
+                "arguments": {
+                    "symbol": "BTC-USD",
+                    "holding_period": None,
+                    "min_signals": None,
+                    "top_n": None,
+                },
+            },
+        }
+    )
+    assert resp_bt is not None
+    assert resp_bt["result"]["isError"] is False
+
+
+def test_mcp_nonblocking_ping_during_stdio() -> None:
+    """Verify that ping requests are answered immediately without being blocked behind tool calls."""
+    import queue
+    import threading
+    import time
+
+    df = _make_sample_ohlcv()
+
+    def slow_fetcher(s: str, p: str, i: str) -> pd.DataFrame:
+        time.sleep(0.25)
+        return df.copy()
+
+    server = YFinanceTAMCPServer(data_fetcher=slow_fetcher)
+
+    q: queue.Queue[str | None] = queue.Queue()
+
+    class StreamIter:
+        def __iter__(self) -> StreamIter:
+            return self
+
+        def __next__(self) -> str:
+            item = q.get()
+            if item is None:
+                raise StopIteration
+            return item
+
+    out_lines: list[str] = []
+
+    class OutCollector:
+        def write(self, s: str) -> None:
+            out_lines.append(s)
+
+        def flush(self) -> None:
+            pass
+
+    t = threading.Thread(
+        target=server.run_stdio,
+        kwargs={"stdin": StreamIter(), "stdout": OutCollector()},
+    )
+    t.start()
+
+    # Send a slow tool call first
+    q.put(
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "ta_scan_symbol", "arguments": {"symbol": "BTC-USD"}},
+            }
+        )
+        + "\n"
+    )
+    # Send ping immediately after
+    q.put(json.dumps({"jsonrpc": "2.0", "id": 2, "method": "ping"}) + "\n")
+
+    # Give reader thread time to respond to ping (< 50ms)
+    time.sleep(0.08)
+    q.put(None)
+    t.join(timeout=2.0)
+
+    parsed = [json.loads(line) for line in out_lines if line.strip()]
+    assert len(parsed) >= 2
+    # Verify ping response was processed
+    ping_resp = next((r for r in parsed if r.get("id") == 2), None)
+    assert ping_resp is not None
+    assert ping_resp["result"] == {}
+
+
+def test_mcp_calendar_in_memory_cache_resiliency() -> None:
+    """Verify InvestingCalendar in-memory cache and fast failure."""
+    import time
+
+    from yfinance_ta_patterns.economic_calendar import _CALENDAR_CACHE, InvestingCalendar
+
+    test_url = "https://d3fy651gv2fhd3.cloudfront.net/calendar/"
+    fake_html = "<table><tr data-id='1'><td>2026-10-06</td><td>US</td><td>Event</td></tr></table>"
+    _CALENDAR_CACHE[test_url] = (time.monotonic(), fake_html)
+
+    cal = InvestingCalendar(http_fetcher=None)
+    cached = cal._download_feed_html(test_url)
+    assert cached == fake_html
 
