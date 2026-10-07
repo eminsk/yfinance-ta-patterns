@@ -910,7 +910,10 @@ class YFinanceTAMCPServer:
                             try:
                                 output = _json_safe(fut.result(timeout=timeout))
                             except (TimeoutError, concurrent.futures.TimeoutError):
-                                pool.shutdown(wait=False, cancel_futures=True)
+                                if sys.version_info >= (3, 9):
+                                    pool.shutdown(wait=False, cancel_futures=True)
+                                else:
+                                    pool.shutdown(wait=False)
                                 return {
                                     "jsonrpc": "2.0",
                                     "id": req_id,
