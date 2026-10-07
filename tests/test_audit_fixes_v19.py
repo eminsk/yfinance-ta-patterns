@@ -67,7 +67,7 @@ def test_event_risk_feed_unavailable_returns_source_unavailable() -> None:
     er = data["event_risk"]
     assert er["source"] == "unavailable"
     assert er["status"] == "unavailable"
-    assert er["has_high_impact_event"] is False
+    assert er["has_high_impact_event"] is None
     assert er["event_count"] == 0
 
 

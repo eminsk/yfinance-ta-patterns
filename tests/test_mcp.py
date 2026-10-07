@@ -1003,7 +1003,7 @@ def test_mcp_event_risk_future_filtering_and_source_resiliency() -> None:
     assert resp_down is not None
     er_down = resp_down["result"]["structuredContent"]["event_risk"]
     assert er_down["source"] == "unavailable"
-    assert er_down["has_high_impact_event"] is False
+    assert er_down["has_high_impact_event"] is None
 
     # 2. Feed live with past event earlier today (00:01 UTC) and future event (tomorrow)
     tomorrow_dt = now_utc + dt.timedelta(days=1)

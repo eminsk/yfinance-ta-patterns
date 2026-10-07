@@ -701,9 +701,17 @@ class InvestingCalendar:
         events: list[dict[str, Any]] = []
 
         imp_filter = set(map(str, importances)) if importances else None
-        country_filter = (
-            {str(c).lower().strip() for c in countries if str(c).strip()} if countries else None
-        )
+        country_filter: set[str] | None = None
+        if countries:
+            country_filter = set()
+            for c in countries:
+                c_clean = str(c).lower().strip()
+                if c_clean:
+                    country_filter.add(c_clean)
+                    if c_clean in self.COUNTRY_MAP:
+                        c_name, c_curr = self.COUNTRY_MAP[c_clean]
+                        country_filter.add(c_name.lower())
+                        country_filter.add(c_curr.lower())
 
         for tr in rows:
             tds = tr.tds
@@ -931,4 +939,5 @@ class InvestingCalendar:
 
 # Aliases for backward compatibility
 EconomicCalendar = InvestingCalendar
+TradingEconomicsCalendar = InvestingCalendar
 InvestingCalendarError = Exception

@@ -31,7 +31,7 @@ from .economic_calendar import InvestingCalendar
 from .forex_data_loader import FOREX_56_PAIRS
 from .pattern_analyzer import PatternAnalyzer
 from .pattern_tester import PatternRankingTester
-from .talib_compat import get_talib_status
+from .talib_compat import HAS_NATIVE_TALIB, get_talib_status
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +140,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "symbol": {"type": "string"},
+                "engine": {"type": "string", "enum": ["TA-Lib", "NumPy-fallback"]},
                 "timeframe": {"type": "string"},
                 "period": {"type": "string"},
                 "timezone": {"type": "string"},
@@ -227,6 +228,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
             "properties": {
                 "symbols_requested": {"type": "integer"},
                 "symbols_scanned": {"type": "integer"},
+                "engine": {"type": "string", "enum": ["TA-Lib", "NumPy-fallback"]},
                 "timeframe": {"type": "string"},
                 "period": {"type": "string"},
                 "compact": {"type": "boolean"},
@@ -464,6 +466,8 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "symbol": {"type": "string"},
                 "total_news": {"type": "integer"},
                 "news": {"type": "array"},
+                "status": {"type": "string", "enum": ["live", "unavailable"]},
+                "source": {"type": "string", "enum": ["live", "unavailable"]},
                 "message": {"type": "string"},
             },
         },
@@ -531,6 +535,56 @@ def _round_val(val: Any, decimals: int = 2) -> float | None:
         return round(f, decimals)
     except (ValueError, TypeError):
         return None
+
+
+def _parse_int_param(
+    val: Any,
+    name: str,
+    min_val: int | None = None,
+    max_val: int | None = None,
+    default: int | None = None,
+) -> int:
+    """Parse, type-check, and clamp integer parameters with clean schema error messages."""
+    if val is None:
+        if default is not None:
+            return default
+        raise ValueError(f"Parameter '{name}' is required.")
+    if isinstance(val, bool):
+        raise ValueError(f"Invalid parameter '{name}': expected integer, got boolean.")
+    try:
+        iv = int(val)
+    except (ValueError, TypeError):
+        raise ValueError(f"Invalid parameter '{name}': expected integer, got {val!r}.") from None
+    if min_val is not None and iv < min_val:
+        iv = min_val
+    if max_val is not None and iv > max_val:
+        iv = max_val
+    return iv
+
+
+def _parse_float_param(
+    val: Any,
+    name: str,
+    min_val: float | None = None,
+    max_val: float | None = None,
+    default: float | None = None,
+) -> float:
+    """Parse, type-check, and clamp float parameters with clean schema error messages."""
+    if val is None:
+        if default is not None:
+            return default
+        raise ValueError(f"Parameter '{name}' is required.")
+    if isinstance(val, bool):
+        raise ValueError(f"Invalid parameter '{name}': expected number, got boolean.")
+    try:
+        fv = float(val)
+    except (ValueError, TypeError):
+        raise ValueError(f"Invalid parameter '{name}': expected number, got {val!r}.") from None
+    if min_val is not None and fv < min_val:
+        fv = min_val
+    if max_val is not None and fv > max_val:
+        fv = max_val
+    return fv
 
 
 def _resolve_mcp_period(timeframe: str, period: Any, default_period: str = "6mo") -> str:
@@ -658,10 +712,12 @@ class YFinanceTAMCPServer:
         data_fetcher: Callable[[str, str, str], pd.DataFrame] | None = None,
         calendar_fetcher: Callable[[str], str | None] | None = None,
         news_fetcher: Callable[[str, int], list[dict[str, Any]]] | None = None,
+        tool_timeout: float | None = 30.0,
     ) -> None:
         self._data_fetcher = data_fetcher
         self._calendar_fetcher = calendar_fetcher
         self._news_fetcher = news_fetcher
+        self._tool_timeout = tool_timeout
 
     def _fetch_ohlcv(self, symbol: str, period: str, interval: str) -> pd.DataFrame:
         if self._data_fetcher is not None:
@@ -846,8 +902,30 @@ class YFinanceTAMCPServer:
                             "message": "Invalid tool arguments: expected JSON object",
                         },
                     }
+                timeout = self._tool_timeout
                 with contextlib.redirect_stdout(sys.stderr):
-                    output = _json_safe(self._call_tool(str(tool_name), args))
+                    if timeout is not None and timeout > 0:
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                            fut = pool.submit(self._call_tool, str(tool_name), args)
+                            try:
+                                output = _json_safe(fut.result(timeout=timeout))
+                            except (TimeoutError, concurrent.futures.TimeoutError):
+                                pool.shutdown(wait=False, cancel_futures=True)
+                                return {
+                                    "jsonrpc": "2.0",
+                                    "id": req_id,
+                                    "result": {
+                                        "content": [
+                                            {
+                                                "type": "text",
+                                                "text": f"Error: Tool '{tool_name}' execution timed out after {timeout}s",
+                                            }
+                                        ],
+                                        "isError": True,
+                                    },
+                                }
+                    else:
+                        output = _json_safe(self._call_tool(str(tool_name), args))
                 call_result: dict[str, Any] = {
                     "content": [
                         {
@@ -921,19 +999,17 @@ class YFinanceTAMCPServer:
                 raise ValueError("Parameter 'symbol' is required and cannot be empty.")
             timeframe = normalize_interval(str(args.get("timeframe", "1d")))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="6mo")
-            raw_min_conf = args.get("min_confidence")
-            min_conf = 0.4 if raw_min_conf is None else max(0.0, min(1.0, float(raw_min_conf)))
-            raw_lookback = args.get("lookback_bars")
-            lookback = max(1, min(60, 3 if raw_lookback is None else int(raw_lookback)))
+            min_conf = _parse_float_param(args.get("min_confidence"), "min_confidence", 0.0, 1.0, default=0.4)
+            lookback = _parse_int_param(args.get("lookback_bars"), "lookback_bars", 1, 60, default=3)
             include_brief = bool(args.get("include_brief", False))
             compact = True if args.get("compact") is None else bool(args.get("compact"))
-            raw_max_patterns = args.get("max_patterns")
-            max_patterns = max(1, min(50, 25 if raw_max_patterns is None else int(raw_max_patterns)))
+            max_patterns = _parse_int_param(args.get("max_patterns"), "max_patterns", 1, 50, default=25)
 
             df = self._fetch_ohlcv(symbol, period, timeframe)
             analyst = AIMarketAnalyst(df, symbol=symbol, timeframe=timeframe)
             analyst.analyze(min_confidence=min_conf, lookback_bars=lookback)
             report = analyst.to_dict()
+            report["engine"] = "TA-Lib" if HAS_NATIVE_TALIB else "NumPy-fallback"
             report["period"] = period
             tz_obj = getattr(df.index, "tz", None)
             report["timezone"] = str(tz_obj) if tz_obj is not None else "UTC"
@@ -1026,7 +1102,7 @@ class YFinanceTAMCPServer:
             event_risk: dict[str, Any] = {
                 "source": "unavailable",
                 "status": "unavailable",
-                "has_high_impact_event": False,
+                "has_high_impact_event": None,
                 "event_count": 0,
             }
             try:
@@ -1044,7 +1120,7 @@ class YFinanceTAMCPServer:
                         event_risk = {
                             "source": "unavailable",
                             "status": "unavailable",
-                            "has_high_impact_event": False,
+                            "has_high_impact_event": None,
                             "event_count": 0,
                             "message": cal_res.get("message", "Economic calendar feed is unavailable"),
                         }
@@ -1085,7 +1161,7 @@ class YFinanceTAMCPServer:
                 event_risk = {
                     "source": "unavailable",
                     "status": "unavailable",
-                    "has_high_impact_event": False,
+                    "has_high_impact_event": None,
                     "event_count": 0,
                     "message": str(exc),
                 }
@@ -1099,12 +1175,9 @@ class YFinanceTAMCPServer:
             symbols = _normalize_watchlist_symbols(args.get("symbols"))
             timeframe = normalize_interval(str(args.get("timeframe", "1d")))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="6mo")
-            raw_min_conf = args.get("min_confidence")
-            min_conf = 0.55 if raw_min_conf is None else max(0.0, min(1.0, float(raw_min_conf)))
-            raw_lookback = args.get("lookback_bars")
-            lookback = max(1, min(60, 2 if raw_lookback is None else int(raw_lookback)))
-            raw_max_results = args.get("max_results")
-            max_results = max(1, min(50, DEFAULT_MAX_RESULTS if raw_max_results is None else int(raw_max_results)))
+            min_conf = _parse_float_param(args.get("min_confidence"), "min_confidence", 0.0, 1.0, default=0.55)
+            lookback = _parse_int_param(args.get("lookback_bars"), "lookback_bars", 1, 60, default=2)
+            max_results = _parse_int_param(args.get("max_results"), "max_results", 1, 50, default=DEFAULT_MAX_RESULTS)
             compact = True if args.get("compact") is None else bool(args.get("compact"))
 
             opportunities: list[dict[str, Any]] = []
@@ -1228,6 +1301,7 @@ class YFinanceTAMCPServer:
             result: dict[str, Any] = {
                 "symbols_requested": len(symbols),
                 "symbols_scanned": symbols_succeeded,
+                "engine": "TA-Lib" if HAS_NATIVE_TALIB else "NumPy-fallback",
                 "timeframe": timeframe,
                 "period": period,
                 "compact": compact,
@@ -1246,15 +1320,12 @@ class YFinanceTAMCPServer:
                 raise ValueError("Parameter 'symbol' is required and cannot be empty.")
             timeframe = normalize_interval(str(args.get("timeframe", "1d")))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="1y")
-            raw_hp = args.get("holding_period")
-            holding_period = max(1, min(60, 5 if raw_hp is None else int(raw_hp)))
-            raw_sig = args.get("min_signals")
-            min_signals = max(1, min(100, 1 if raw_sig is None else int(raw_sig)))
+            holding_period = _parse_int_param(args.get("holding_period"), "holding_period", 1, 60, default=5)
+            min_signals = _parse_int_param(args.get("min_signals"), "min_signals", 1, 100, default=1)
             sort_by = str(args.get("sort_by") or "composite").strip().lower()
             if sort_by not in ("composite", "win_rate"):
                 raise ValueError("Parameter 'sort_by' must be 'composite' or 'win_rate'.")
-            raw_top = args.get("top_n")
-            top_n = max(1, min(50, 10 if raw_top is None else int(raw_top)))
+            top_n = _parse_int_param(args.get("top_n"), "top_n", 1, 50, default=10)
             filter_news = bool(args.get("filter_news", False))
 
             df = self._fetch_ohlcv(symbol, period, timeframe)
@@ -1345,12 +1416,10 @@ class YFinanceTAMCPServer:
                 raise ValueError("Parameter 'symbol' is required and cannot be empty.")
             date_from = args.get("date_from")
             date_to = args.get("date_to")
-            raw_days = args.get("days")
-            days = 7 if raw_days is None else int(raw_days)
+            days = _parse_int_param(args.get("days"), "days", 1, 60, default=7)
             importances = args.get("importances")
             countries = args.get("countries")
-            raw_limit = args.get("max_results")
-            max_results = 30 if raw_limit is None else int(raw_limit)
+            max_results = _parse_int_param(args.get("max_results"), "max_results", 1, 100, default=30)
 
             with InvestingCalendar(http_fetcher=self._calendar_fetcher) as calendar:
                 return calendar.get_events_for_symbol(
@@ -1367,8 +1436,7 @@ class YFinanceTAMCPServer:
             symbol = str(args.get("symbol", "")).strip()
             if not symbol:
                 raise ValueError("Parameter 'symbol' is required and cannot be empty.")
-            raw_lim = args.get("limit")
-            limit = max(1, min(50, 10 if raw_lim is None else int(raw_lim)))
+            limit = _parse_int_param(args.get("limit"), "limit", 1, 50, default=10)
             if self._news_fetcher is not None:
                 try:
                     raw_news = self._news_fetcher(symbol, limit)
@@ -1377,6 +1445,8 @@ class YFinanceTAMCPServer:
                         "symbol": symbol,
                         "total_news": 0,
                         "news": [],
+                        "status": "unavailable",
+                        "source": "unavailable",
                         "message": f"News fetcher failed for {symbol}: {exc}",
                     }
             else:
@@ -1389,6 +1459,8 @@ class YFinanceTAMCPServer:
                         "symbol": symbol,
                         "total_news": 0,
                         "news": [],
+                        "status": "unavailable",
+                        "source": "unavailable",
                         "message": f"News service unreachable or error fetching news for {symbol}: {exc}",
                     }
             articles = [_format_news_item(a) for a in (raw_news or []) if isinstance(a, dict)]
@@ -1397,6 +1469,8 @@ class YFinanceTAMCPServer:
                 "symbol": symbol,
                 "total_news": len(articles),
                 "news": articles[:limit],
+                "status": "live",
+                "source": "live",
             }
 
         raise ValueError(f"Unknown MCP tool: {name}")
@@ -1408,7 +1482,13 @@ class YFinanceTAMCPServer:
         max_workers: int = 1,
     ) -> None:
         """Run the yfinance-ta-patterns MCP JSON-RPC 2.0 server over standard input/output with non-blocking concurrency."""
-        in_stream = stdin if stdin is not None else sys.stdin
+        if stdin is None:
+            if hasattr(sys.stdin, "reconfigure"):
+                with contextlib.suppress(Exception):
+                    sys.stdin.reconfigure(encoding="utf-8", errors="replace")
+            in_stream = sys.stdin
+        else:
+            in_stream = stdin
         if stdout is None:
             if hasattr(sys.stdout, "reconfigure"):
                 with contextlib.suppress(Exception):

@@ -186,12 +186,13 @@ pip install "yfinance-ta-patterns[talib]"
 
 ## 🤖 Native MCP (Model Context Protocol) Server
 
-Connect **yfinance-ta-patterns** directly to **Claude Code**, **Antigravity**, **Claude Desktop**, **Cursor**, or **Windsurf** via the built-in `yfinance-ta-mcp` JSON-RPC 2.0 server (`ta_scan_symbol`, `ta_scan_watchlist`, `ta_backtest_patterns`, `ta_list_patterns`, `ta_get_economic_calendar`):
+Connect **yfinance-ta-patterns** directly to **Claude Code**, **Antigravity**, **Claude Desktop**, **Cursor**, or **Windsurf** via the built-in `yfinance-ta-mcp` JSON-RPC 2.0 server (`ta_scan_symbol`, `ta_scan_watchlist`, `ta_backtest_patterns`, `ta_list_patterns`, `ta_get_economic_calendar`, `ta_get_news`):
 
 - **Latest Protocol Spec (`2025-11-25`)**: Full MCP lifecycle version negotiation supporting `2024-11-05`, `2025-03-26`, `2025-06-18`, and `2025-11-25`.
 - **Institutional Tool Metadata**: Includes human-readable `title`, `annotations` (`readOnlyHint: true`, `openWorldHint`), and detailed JSON `outputSchema` for every tool.
 - **Token-Optimized Output**: Emits raw UTF-8 without token-wasting `\uXXXX` escaping for Cyrillic and currency symbols (`€`, `£`, `¥`). `ta_scan_watchlist` features `compact: true` by default to comfortably remain below Claude Code's 10,000-token tool output threshold.
 - **Verified Macro Calendar**: `ta_get_economic_calendar` retrieves live macroeconomic events mapped to asset currencies with explicit `UTC` timestamps, returning clean `source: "unavailable"` when feeds are offline (zero mock/hallucinated macroeconomic data).
+- **Market News Headlines**: `ta_get_news` retrieves recent financial market headlines, publisher attribution, and publication timestamps directly for the selected ticker symbol with resilient fallback handling.
 
 #### Option 1: Claude Code CLI
 
