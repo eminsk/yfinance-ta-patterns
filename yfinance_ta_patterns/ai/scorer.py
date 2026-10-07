@@ -77,9 +77,9 @@ class TradeSetup:
             "stop_loss": self.stop_loss,
             "take_profit_1": self.take_profit_1,
             "take_profit_2": self.take_profit_2,
-            "risk_reward_ratio": round(self.risk_reward_ratio, 2),
-            "rr_tp1": round(self.rr_tp1, 2),
-            "rr_tp2": round(self.rr_tp2, 2),
+            "risk_reward_ratio": round(float(self.risk_reward_ratio), 2),
+            "rr_tp1": round(float(self.rr_tp1), 2),
+            "rr_tp2": round(float(self.rr_tp2), 2),
             "risk_per_unit": self.risk_per_unit,
         }
 
@@ -234,15 +234,15 @@ class PatternConfidenceResult:
             "pattern": self.pattern_name,
             "timestamp": str(self.timestamp),
             "raw_signal": self.raw_signal,
-            "confluence_score": round(self.confidence, 4),
-            "confidence_score": round(self.confidence, 4),
+            "confluence_score": round(float(self.confidence), 4),
+            "confidence_score": round(float(self.confidence), 4),
             "grade": self.grade.value,
             "trend_regime": self.trend_regime,
             "insufficient_history": self.insufficient_history,
             "metrics": {
-                "rvol": round(self.rvol, 2),
-                "rsi": round(self.rsi, 2) if not np.isnan(self.rsi) else None,
-                "atr": round(self.atr, 5) if not np.isnan(self.atr) else None,
+                "rvol": round(float(self.rvol), 2),
+                "rsi": round(float(self.rsi), 2) if not np.isnan(self.rsi) else None,
+                "atr": round(float(self.atr), 5) if not np.isnan(self.atr) else None,
             },
             "confluence_factors": self.confluence_factors,
             "risk_factors": self.risk_factors,
@@ -718,8 +718,8 @@ class AIPatternScorer:
             actual_rr_tp1 = max(entry - tp1, 0.0) / risk if risk > 0 else 0.0
             actual_rr_tp2 = max(entry - tp2, 0.0) / risk if risk > 0 else 0.0
 
-        actual_rr_tp1 = round(actual_rr_tp1, 2)
-        actual_rr_tp2 = round(actual_rr_tp2, 2)
+        actual_rr_tp1 = round(float(actual_rr_tp1), 2)
+        actual_rr_tp2 = round(float(actual_rr_tp2), 2)
 
         return TradeSetup(
             direction=direction,

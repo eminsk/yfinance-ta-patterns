@@ -291,7 +291,7 @@ def test_return_20_bars_exact(synthetic_ohlcv_data: pd.DataFrame) -> None:
         / synthetic_ohlcv_data["Close"].iloc[-21]
     ) * 100.0
 
-    assert np.isclose(summary["return_20_bars_pct"], round(expected, 2))
+    assert np.isclose(summary["return_20_bars_pct"], round(float(expected), 2))
 
 
 def test_comparison_report_pattern_alignment(synthetic_ohlcv_data: pd.DataFrame) -> None:

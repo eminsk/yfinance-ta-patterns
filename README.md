@@ -510,7 +510,7 @@ uv run --extra dev mypy yfinance_ta_patterns
 uv build
 ```
 
-All 435 tests pass with 100% success rate across **Python 3.8 through 3.16 (including No-GIL free-threaded 3.13t–3.16t)** and **PyPy 3.8 through 3.12**.
+All 469 tests pass with 100% success rate across **Python 3.8 through 3.16 (including No-GIL free-threaded 3.13t–3.16t)** and **PyPy 3.8 through 3.12**.
 
 ---
 
@@ -528,15 +528,19 @@ All 435 tests pass with 100% success rate across **Python 3.8 through 3.16 (incl
 
 ---
 
-## ☕ Support & Donations
+## ☕ Support, Community & Donations
 
-If you find this project valuable and would like to support ongoing development, maintenance, and infrastructure, contributions are deeply appreciated!
+If you find this project valuable and would like to support ongoing development:
 
-* **USDT (TRC-20)**:  
+* ⭐ **Star the Repository**: If yfinance-ta-patterns powers your market analysis or trading algorithms, give us a star on GitHub — it helps more traders and quants discover the tool!
+* 💬 **Join Discussions**: Have strategies, ideas, or custom patterns to share? Start or join a thread in [GitHub Discussions](https://github.com/eminsk/yfinance-ta-patterns/discussions)!
+* ☕ **Donate (USDT TRC-20)**:  
   `TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P`  
   *(Network: TRON / TRC-20 | [Verify on TronScan](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P))*
 
-[![Donate USDT](https://img.shields.io/badge/Donate-USDT_(TRC20)-26A17B?style=for-the-badge&logo=tether&logoColor=white)](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P)
+[![GitHub Repo stars](https://img.shields.io/github/stars/eminsk/yfinance-ta-patterns?style=social)](https://github.com/eminsk/yfinance-ta-patterns)
+[![GitHub Discussions](https://img.shields.io/badge/Discussions-Join_Community-blue?logo=github&style=flat-square)](https://github.com/eminsk/yfinance-ta-patterns/discussions)
+[![Donate USDT](https://img.shields.io/badge/Donate-USDT_(TRC20)-26A17B?style=flat-square&logo=tether&logoColor=white)](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P)
 
 ---
 

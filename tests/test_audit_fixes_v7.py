@@ -55,8 +55,8 @@ def test_risk_reward_recalculated_on_clipped_targets(sample_ohlcv_df: pd.DataFra
         atr=60.0,
     )
 
-    expected_actual_rr_tp1 = round((10.0 - setup.take_profit_1) / setup.risk_per_unit, 2)
-    expected_actual_rr_tp2 = round((10.0 - setup.take_profit_2) / setup.risk_per_unit, 2)
+    expected_actual_rr_tp1 = round(float((10.0 - setup.take_profit_1) / setup.risk_per_unit), 2)
+    expected_actual_rr_tp2 = round(float((10.0 - setup.take_profit_2) / setup.risk_per_unit), 2)
 
     assert setup.take_profit_1 > 0
     assert setup.risk_reward_ratio == expected_actual_rr_tp1

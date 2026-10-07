@@ -805,7 +805,7 @@ def run_cli(args: argparse.Namespace) -> int:
                                         "TakeProfit_2": tp2,
                                         "RR": f"1:{rr:.1f}",
                                         "Trend": res.trend_regime,
-                                        "RSI": round(res.rsi, 1),
+                                        "RSI": round(float(res.rsi), 1) if res.rsi is not None else None,
                                         "Score_Raw": score,
                                         "RR_Raw": rr,
                                         "df": df,

@@ -147,7 +147,7 @@ class AIMarketAnalyst:
             "last_high": high,
             "last_low": low,
             "last_volume": vol,
-            "return_20_bars_pct": round(ret_20, 2),
+            "return_20_bars_pct": round(float(ret_20), 2),
             "total_signals_detected": len(self.scored_results),
             "high_conviction_signals": sum(
                 1

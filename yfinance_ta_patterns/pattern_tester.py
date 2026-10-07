@@ -1202,7 +1202,11 @@ class PatternRankingTester:
 
         # Trade-level Sharpe ratio (scaled by annual trade frequency)
         pnls = [t["pnl"] for t in trades]
-        std_pnl = float(np.std(pnls)) if len(pnls) > 1 else 0.0
+        if len(pnls) > 1:
+            pnl_arr = np.asarray(pnls, dtype=float)
+            std_pnl = float(np.sqrt(np.mean((pnl_arr - np.mean(pnl_arr)) ** 2)))
+        else:
+            std_pnl = 0.0
         duration_years = max(n_bars / self._periods_per_year, 1e-6)
         trades_per_year = len(trades) / duration_years
         trade_sharpe = (
@@ -1220,7 +1224,11 @@ class PatternRankingTester:
                 non_zero
             ]
 
-        std_bar_ret = float(np.std(bar_returns))
+        std_bar_ret = (
+            float(np.sqrt(np.mean((bar_returns - np.mean(bar_returns)) ** 2)))
+            if bar_returns.size > 0
+            else 0.0
+        )
         periodic_sharpe = (
             (float(np.mean(bar_returns)) / std_bar_ret) * float(np.sqrt(self._periods_per_year))
             if std_bar_ret > 0

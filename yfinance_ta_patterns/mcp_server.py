@@ -1392,14 +1392,14 @@ class YFinanceTAMCPServer:
                     "pattern_name": r.pattern_name,
                     "total_signals": r.total_signals,
                     "total_trades": r.total_trades,
-                    "win_rate": round(r.win_rate, 2),
-                    "total_pnl": round(r.total_pnl, 2),
-                    "profit_factor": round(r.profit_factor, 2)
+                    "win_rate": _round_val(r.win_rate, 2),
+                    "total_pnl": _round_val(r.total_pnl, 2),
+                    "profit_factor": _round_val(r.profit_factor, 2)
                     if pd.notna(r.profit_factor) and r.profit_factor != float("inf")
                     else None,
-                    "sharpe_ratio": round(r.sharpe_ratio, 2),
-                    "max_drawdown": round(r.max_drawdown, 2),
-                    "score": round(r.score, 2),
+                    "sharpe_ratio": _round_val(r.sharpe_ratio, 2),
+                    "max_drawdown": _round_val(r.max_drawdown, 2),
+                    "score": _round_val(r.score, 2),
                 }
                 for r in top
             ]
