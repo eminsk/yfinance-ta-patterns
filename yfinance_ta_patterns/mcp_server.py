@@ -368,7 +368,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "date_from": {"type": "string"},
                 "date_to": {"type": "string"},
                 "importances": {"type": "array", "items": {"type": "string"}},
-                "source": {"type": "string", "enum": ["live", "unavailable"]},
+                "source": {"type": "string", "enum": ["live", "unavailable", "parse_failed"]},
                 "total_events": {"type": "integer"},
                 "events": {"type": "array"},
                 "message": {"type": "string"},
@@ -739,42 +739,95 @@ class YFinanceTAMCPServer:
             report["timezone"] = str(tz_obj) if tz_obj is not None else "UTC"
 
             raw_patterns = report.get("patterns", [])
-            raw_setups = report.get("setups", [])
             total_patterns_found = len(raw_patterns)
+            market_summary = report.get("market_summary", {})
+            curr_price = (
+                market_summary.get("current_price")
+                if isinstance(market_summary, dict)
+                else None
+            )
+            if curr_price is None and not df.empty and "Close" in df.columns:
+                curr_price = float(df["Close"].iloc[-1])
+
+            # Extract actionable trade setups from all detected patterns
+            extracted_setups: list[dict[str, Any]] = []
+            for p in raw_patterns:
+                ts = p.get("trade_setup")
+                if not ts:
+                    continue
+                dir_val = ts.get("direction") or (
+                    "BULLISH" if p.get("raw_signal", 0) > 0 else "BEARISH" if p.get("raw_signal", 0) < 0 else "NEUTRAL"
+                )
+                entry_val = ts.get("entry_price") or ts.get("entry") or curr_price
+                tp1_val = ts.get("take_profit_1") or ts.get("tp1")
+                tp2_val = ts.get("take_profit_2") or ts.get("tp2")
+                rr_val = ts.get("risk_reward_ratio") or ts.get("risk_reward")
+                score_val = p.get("confluence_score") or p.get("confidence_score")
+
+                setup_item = {
+                    "pattern": p.get("pattern"),
+                    "direction": dir_val,
+                    "confluence_score": score_val,
+                    "confidence_score": score_val,
+                    "timestamp": p.get("timestamp"),
+                    "price": entry_val,
+                    "entry": entry_val,
+                    "entry_price": entry_val,
+                    "stop_loss": ts.get("stop_loss"),
+                    "take_profit_1": tp1_val,
+                    "tp1": tp1_val,
+                    "take_profit_2": tp2_val,
+                    "tp2": tp2_val,
+                    "risk_reward_ratio": rr_val,
+                    "risk_reward": rr_val,
+                    "trend": p.get("trend_regime") or p.get("trend"),
+                }
+                extracted_setups.append(setup_item)
 
             if compact:
                 streamlined_patterns = []
                 for p in raw_patterns[:max_patterns]:
+                    ts = p.get("trade_setup") or {}
+                    metrics = p.get("metrics") or {}
+                    dir_val = (
+                        ts.get("direction")
+                        or ("BULLISH" if p.get("raw_signal", 0) > 0 else "BEARISH" if p.get("raw_signal", 0) < 0 else "NEUTRAL")
+                    )
+                    entry_val = ts.get("entry_price") or ts.get("entry") or curr_price
+                    score_val = p.get("confidence_score") or p.get("confluence_score")
+                    trend_val = p.get("trend_regime") or p.get("trend")
+                    rvol_val = metrics.get("rvol") if metrics.get("rvol") is not None else p.get("rvol")
+                    rsi_val = metrics.get("rsi") if metrics.get("rsi") is not None else p.get("rsi")
+
                     streamlined_patterns.append({
                         "pattern": p.get("pattern"),
-                        "direction": p.get("direction"),
-                        "confidence_score": p.get("confidence_score") or p.get("confluence_score"),
+                        "direction": dir_val,
+                        "confidence_score": score_val,
+                        "confluence_score": score_val,
                         "timestamp": p.get("timestamp"),
-                        "price": p.get("price"),
-                        "trend": p.get("trend"),
-                        "rvol": p.get("rvol"),
-                        "rsi": p.get("rsi"),
-                    })
-                streamlined_setups = []
-                for s in raw_setups[:max_patterns]:
-                    streamlined_setups.append({
-                        "pattern": s.get("pattern"),
-                        "direction": s.get("direction"),
-                        "confluence_score": s.get("confluence_score"),
-                        "timestamp": s.get("timestamp"),
-                        "price": s.get("price"),
-                        "entry": s.get("entry"),
-                        "stop_loss": s.get("stop_loss"),
-                        "tp1": s.get("tp1"),
-                        "tp2": s.get("tp2"),
-                        "risk_reward": s.get("risk_reward"),
+                        "price": entry_val,
+                        "trend": trend_val,
+                        "rvol": rvol_val,
+                        "rsi": rsi_val,
+                        "trade_setup": {
+                            "direction": dir_val,
+                            "entry": entry_val,
+                            "entry_price": entry_val,
+                            "stop_loss": ts.get("stop_loss"),
+                            "take_profit_1": ts.get("take_profit_1") or ts.get("tp1"),
+                            "tp1": ts.get("take_profit_1") or ts.get("tp1"),
+                            "take_profit_2": ts.get("take_profit_2") or ts.get("tp2"),
+                            "tp2": ts.get("take_profit_2") or ts.get("tp2"),
+                            "risk_reward_ratio": ts.get("risk_reward_ratio") or ts.get("risk_reward"),
+                            "risk_reward": ts.get("risk_reward_ratio") or ts.get("risk_reward"),
+                        } if ts else None,
                     })
                 report["patterns"] = streamlined_patterns
-                report["setups"] = streamlined_setups
+                report["setups"] = extracted_setups[:max_patterns]
                 report["compact"] = True
             else:
                 report["patterns"] = raw_patterns[:max_patterns]
-                report["setups"] = raw_setups[:max_patterns]
+                report["setups"] = extracted_setups[:max_patterns]
                 report["compact"] = False
 
             report["total_patterns_found"] = total_patterns_found
@@ -821,19 +874,38 @@ class YFinanceTAMCPServer:
                                 or d.get("confidence_score")
                                 or d.get("confidence")
                             )
+                            entry_val = (
+                                setup_info.get("entry_price")
+                                or setup_info.get("entry")
+                                or d.get("price")
+                            )
+                            tp1_val = setup_info.get("take_profit_1") or setup_info.get("tp1")
+                            tp2_val = setup_info.get("take_profit_2") or setup_info.get("tp2")
+                            rr_val = setup_info.get("risk_reward_ratio") or setup_info.get("risk_reward")
+                            dir_val = (
+                                d.get("direction")
+                                or setup_info.get("direction")
+                                or ("BULLISH" if d.get("raw_signal", 0) > 0 else "BEARISH" if d.get("raw_signal", 0) < 0 else None)
+                            )
                             compact_entry: dict[str, Any] = {
                                 "symbol": sym,
                                 "pattern": d.get("pattern"),
-                                "direction": d.get("direction") or setup_info.get("direction"),
+                                "direction": dir_val,
                                 "confluence_score": conf_score,
+                                "confidence_score": conf_score,
                                 "timestamp": d.get("timestamp"),
-                                "price": d.get("price"),
-                                "entry": setup_info.get("entry"),
+                                "price": d.get("price") or entry_val,
+                                "entry": entry_val,
+                                "entry_price": entry_val,
                                 "stop_loss": setup_info.get("stop_loss"),
-                                "take_profit_1": setup_info.get("take_profit_1"),
-                                "take_profit_2": setup_info.get("take_profit_2"),
-                                "risk_reward_ratio": setup_info.get("risk_reward_ratio"),
+                                "take_profit_1": tp1_val,
+                                "tp1": tp1_val,
+                                "take_profit_2": tp2_val,
+                                "tp2": tp2_val,
+                                "risk_reward_ratio": rr_val,
+                                "risk_reward": rr_val,
                                 "trend_regime": d.get("trend_regime"),
+                                "trend": d.get("trend_regime"),
                             }
                             sym_opps.append(compact_entry)
                         else:

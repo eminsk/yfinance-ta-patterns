@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import io
 import json
 from typing import Any
@@ -536,6 +537,8 @@ def test_mcp_encoding_utf8_preservation_and_watchlist_compactness() -> None:
         assert "pattern" in opp
         assert "direction" in opp
         assert "confluence_score" in opp
+        assert opp.get("entry") is not None
+        assert opp.get("entry_price") == opp.get("entry")
         # Compact mode must not include deep bulky indicator keys
         assert "confluence_factors" not in opp
         assert "risk_factors" not in opp
@@ -564,10 +567,11 @@ def test_mcp_encoding_utf8_preservation_and_watchlist_compactness() -> None:
         assert "raw_signal" in opp_full
 
     # 2. Test ensure_ascii=False output wire purity: Cyrillic and € should NOT be \uXXXX escaped
-    calendar_html_ru = """
+    today_iso = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
+    calendar_html_ru = f"""
     <table>
       <tr data-id="999" data-country="germany" data-event="ставка ецб" class="calendar-date-3">
-        <td class="2026-10-06">14:15</td>
+        <td class="{today_iso}">14:15</td>
         <td>DE</td>
         <td>Решение по процентной ставке ЕЦБ €</td>
         <td>3.25%</td>
@@ -669,10 +673,11 @@ def test_mcp_economic_calendar_unparseable_html_returns_parse_failed() -> None:
 def test_mcp_economic_calendar_currency_coverage_sweden_and_hongkong() -> None:
     """Verify Sweden (SEK) and Hong Kong (HKD) coverage with feed HTML."""
     df = _make_sample_ohlcv()
-    feed_html = """
+    today_iso = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
+    feed_html = f"""
     <table>
       <tr data-id="101" data-country="sweden" data-event="Riksbank Rate Decision" class="calendar-date-3">
-        <td class="2026-10-06">08:30</td>
+        <td class="{today_iso}">08:30</td>
         <td>SE</td>
         <td>Riksbank Interest Rate Decision</td>
         <td>2.75%</td>
@@ -680,7 +685,7 @@ def test_mcp_economic_calendar_currency_coverage_sweden_and_hongkong() -> None:
         <td>2.75%</td>
       </tr>
       <tr data-id="102" data-country="hong kong" data-event="HK Retail Sales" class="calendar-date-2">
-        <td class="2026-10-06">09:00</td>
+        <td class="{today_iso}">09:00</td>
         <td>HK</td>
         <td>Hong Kong Retail Sales YoY</td>
         <td>-1.2%</td>
@@ -760,7 +765,22 @@ def test_mcp_scan_symbol_compact_mode_and_limits() -> None:
     assert "total_patterns_found" in data
     assert "truncated_to" in data
     assert len(data["patterns"]) <= 5
+    assert len(data["patterns"]) > 0
+    p0 = data["patterns"][0]
+    assert p0["direction"] in ("BUY", "SELL", "BULLISH", "BEARISH")
+    assert p0["price"] is not None and p0["price"] > 0
+    assert p0["trend"] is not None
+    assert p0["rvol"] is not None and p0["rvol"] > 0
+    assert p0["rsi"] is not None
     assert len(data["setups"]) <= 5
+    assert len(data["setups"]) > 0
+    s0 = data["setups"][0]
+    assert s0["entry"] is not None and s0["entry"] > 0
+    assert s0["entry_price"] == s0["entry"]
+    assert s0["stop_loss"] is not None
+    assert s0["take_profit_1"] is not None
+    assert s0["tp1"] == s0["take_profit_1"]
+    assert s0["risk_reward_ratio"] is not None
     # Wire payload should be compact (well below 10,000 characters)
     wire_json = resp["result"]["content"][0]["text"]
     assert len(wire_json) < 10_000
