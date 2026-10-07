@@ -1,7 +1,7 @@
 # Market Candlestick & AI Pattern Scanner (`yfinance-ta-patterns`)
 
 [![PyPI](https://img.shields.io/pypi/v/yfinance-ta-patterns?color=blue)](https://pypi.org/project/yfinance-ta-patterns/)
-[![Conda Version](https://img.shields.io/conda/vn/conda-forge/yfinance-ta-patterns.svg)](https://anaconda.org/conda-forge/yfinance-ta-patterns)
+[![Conda](https://img.shields.io/conda/vn/m_n_nik/yfinance-ta-patterns.svg?style=flat&logo=anaconda)](https://anaconda.org/m_n_nik/yfinance-ta-patterns)
 [![Ubuntu / Debian PPA](https://img.shields.io/badge/Ubuntu%20%2F%20Debian-APT%20PPA-E95420?logo=ubuntu&logoColor=white)](https://eminsk.github.io/ppa/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/eminsk/yfinance-ta-patterns/blob/main/notebooks/yfinance_ta_patterns_quickstart.ipynb)
 [![Python](https://img.shields.io/pypi/pyversions/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
@@ -58,8 +58,8 @@ Universal runtime compatibility across **CPython 3.8 to 3.16, free-threaded No-G
 
 | Platform / Tool | Command | Description |
 |:---|:---|:---|
-| **Conda / Mamba** | `conda install -c conda-forge yfinance-ta-patterns` | Recommended for Quant, Finance & Data Science |
-| **Conda + Native TA-Lib** | `conda install -c conda-forge yfinance-ta-patterns ta-lib` | Full C-accelerated TA-Lib with **zero compilation** |
+| **Conda / Mamba** | `conda install -c m_n_nik yfinance-ta-patterns` | Recommended for Quant, Finance & Data Science |
+| **Conda + Native TA-Lib** | `conda install -c m_n_nik yfinance-ta-patterns` | Full C-accelerated TA-Lib with **zero compilation** |
 | **Pixi** | `pixi add yfinance-ta-patterns` | Modern high-speed reproducible Conda workflow |
 | **Ubuntu / Debian (APT PPA)** | `curl -sS https://eminsk.github.io/ppa/setup.sh \| sudo bash`<br>`sudo apt install python3-yfinance-ta-patterns` | Official PPA repository (pure apt, zero URLs) |
 | **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.49-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
@@ -84,12 +84,12 @@ uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h
 > **Why `--no-config`?** Passing `--no-config` tells `uv` to ignore any local or parent `uv.toml` settings (such as local wheel registries or find-links overrides), ensuring a clean, isolated, and reproducible installation directly from PyPI in any project directory.
 
 > [!IMPORTANT]
-> ### ⚡ Free-Threaded Python / No-GIL Guide (PEP 703: 3.13t, 3.14t, 3.15t)
+> ### ⚡ Free-Threaded Python / No-GIL Guide (PEP 703: 3.13t, 3.14t, 3.15t, 3.16t)
 >
 > Python 3.13+ introduces experimental free-threaded (No-GIL) builds. `yfinance-ta-patterns` is verified on Windows, Linux, and macOS under free-threaded CPython. Here is what you need to know for a smooth No-GIL setup on Windows:
 >
 > #### 1. Python Version Selection & Wheel Availability
-> - **Python 3.13t, 3.14t & 3.15t (Recommended)**: Fully supported out-of-the-box directly from PyPI. Our built-in vectorized engine runs with zero C compilation and full multi-core parallel scaling with the GIL disabled.
+> - **Python 3.13t, 3.14t, 3.15t & 3.16t (Recommended)**: Fully supported out-of-the-box directly from PyPI. Our built-in vectorized engine runs with zero C compilation and full multi-core parallel scaling with the GIL disabled.
 >
 > #### 2. Understanding Automatic GIL Re-Enablement
 > In free-threaded interpreters, `sys._is_gil_enabled()` may return `True` for two common reasons:
