@@ -11,10 +11,14 @@
 [![CI](https://github.com/eminsk/yfinance-ta-patterns/actions/workflows/ci.yml/badge.svg)](https://github.com/eminsk/yfinance-ta-patterns/actions)
 [![Downloads](https://static.pepy.tech/badge/yfinance-ta-patterns)](https://pepy.tech/project/yfinance-ta-patterns)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Donate USDT](https://img.shields.io/badge/Donate-USDT-26A17B?logo=tether&logoColor=white)](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P)
 
 High-performance Python library, CLI, and Native MCP Server (`yfinance-ta-mcp`) that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate multi-factor confluence scores (deterministic quantitative confluence heuristic, not uncalibrated win-rate probability), trade setups, and LLM-ready market briefs.
 
 Universal runtime compatibility across **CPython 3.8 to 3.16, free-threaded No-GIL 3.13t to 3.16t, PyPy 3.8 to 3.12 with high-speed JIT tracing, and legacy Windows 7+ support**, installed directly from PyPI with zero compilation required.
+
+> ⭐ **Enjoying yfinance-ta-patterns?** Give it a star on GitHub to support development!  
+> ☕ **Want to support the author?** USDT (TRC-20): `TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P` ([TronScan](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P))
 
 ---
 
@@ -521,6 +525,18 @@ All 435 tests pass with 100% success rate across **Python 3.8 through 3.16 (incl
 * 🛒 [**avito-sdk**](https://github.com/eminsk/avito-sdk) — Headless Avito scraping & data extraction SDK with price drop tracking, Playwright cookies, Telegram/VK bots, and Native MCP Server (`pip install avito-sdk`).
 * 📊 [**xlsx_vievers**](https://github.com/eminsk/xlsx_vievers) — Headless Excel formula engine (129+ functions), desktop spreadsheet processor, SIMD SSE2 math engine, and Native MCP Server (`pip install xlsx-viewer-pro`).
 * 🎥 [**screenvideo**](https://github.com/eminsk/screenvideo) — Lightweight desktop screen recorder with WASAPI audio and a standalone pure x64 Flat Assembler (FASM) native edition.
+
+---
+
+## ☕ Support & Donations
+
+If you find this project valuable and would like to support ongoing development, maintenance, and infrastructure, contributions are deeply appreciated!
+
+* **USDT (TRC-20)**:  
+  `TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P`  
+  *(Network: TRON / TRC-20 | [Verify on TronScan](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P))*
+
+[![Donate USDT](https://img.shields.io/badge/Donate-USDT_(TRC20)-26A17B?style=for-the-badge&logo=tether&logoColor=white)](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P)
 
 ---
 
