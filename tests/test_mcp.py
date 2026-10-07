@@ -621,7 +621,7 @@ def test_mcp_all_tools_return_structured_content() -> None:
 
         # Call tool with minimal valid arguments
         args: dict[str, Any] = {}
-        if t_name in ("ta_scan_symbol", "ta_backtest_patterns", "ta_get_economic_calendar"):
+        if t_name in ("ta_scan_symbol", "ta_backtest_patterns", "ta_get_economic_calendar", "ta_get_news"):
             args["symbol"] = "BTC-USD"
         elif t_name == "ta_scan_watchlist":
             args["symbols"] = ["BTC-USD"]
@@ -960,4 +960,181 @@ def test_mcp_calendar_in_memory_cache_resiliency() -> None:
     cal = InvestingCalendar(http_fetcher=None)
     cached = cal._download_feed_html(test_url)
     assert cached == fake_html
+
+
+def test_mcp_unknown_tool_error_code_32602() -> None:
+    """Ensure calling an unknown tool via tools/call returns JSON-RPC error code -32602."""
+    server = YFinanceTAMCPServer()
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 999,
+            "method": "tools/call",
+            "params": {"name": "non_existent_tool", "arguments": {}},
+        }
+    )
+    assert resp is not None
+    assert "error" in resp
+    assert resp["error"]["code"] == -32602
+    assert "Unknown tool" in resp["error"]["message"]
+
+
+def test_mcp_event_risk_future_filtering_and_source_resiliency() -> None:
+    """Verify event_risk excludes past events earlier today and reports source: unavailable when down."""
+    import datetime as dt
+
+    df = _make_sample_ohlcv()
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    today_str = now_utc.strftime("%Y-%m-%d")
+
+    # 1. Feed unavailable -> event_risk returns source: unavailable
+    server_down = YFinanceTAMCPServer(
+        data_fetcher=lambda s, p, i: df.copy(),
+        calendar_fetcher=lambda _u: None,
+    )
+    resp_down = server_down.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "ta_scan_symbol", "arguments": {"symbol": "BTC-USD"}},
+        }
+    )
+    assert resp_down is not None
+    er_down = resp_down["result"]["structuredContent"]["event_risk"]
+    assert er_down["source"] == "unavailable"
+    assert er_down["has_high_impact_event"] is False
+
+    # 2. Feed live with past event earlier today (00:01 UTC) and future event (tomorrow)
+    tomorrow_dt = now_utc + dt.timedelta(days=1)
+    tomorrow_str = tomorrow_dt.strftime("%Y-%m-%d")
+    html_feed = f"""
+    <table>
+      <tr data-id="1" data-country="united states" data-event="past fed speech" class="calendar-date-3">
+        <td class=" {today_str}">12:01 AM</td>
+        <td>US</td><td>Past Fed Speech</td><td>-</td><td>-</td>
+      </tr>
+      <tr data-id="2" data-country="united states" data-event="future cpi release" class="calendar-date-3">
+        <td class=" {tomorrow_str}">02:30 PM</td>
+        <td>US</td><td>Future CPI Release</td><td>-</td><td>-</td>
+      </tr>
+    </table>
+    """
+    server_live = YFinanceTAMCPServer(
+        data_fetcher=lambda s, p, i: df.copy(),
+        calendar_fetcher=lambda _u: html_feed,
+    )
+    resp_live = server_live.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "ta_scan_symbol", "arguments": {"symbol": "BTC-USD"}},
+        }
+    )
+    assert resp_live is not None
+    er_live = resp_live["result"]["structuredContent"]["event_risk"]
+    assert er_live["source"] == "live"
+    assert er_live["has_high_impact_event"] is True
+    # The past 00:01 event was excluded, the future CPI release was selected!
+    assert er_live["nearest_event"] == "Future CPI Release"
+    assert er_live["hours_until"] > 0
+
+
+def test_mcp_watchlist_timeout_hardening_and_error_capture() -> None:
+    """Verify a slow/hanging symbol times out without blocking faster symbols, and is captured in errors."""
+    import time
+
+    df = _make_sample_ohlcv()
+
+    def slow_fetcher(sym: str, period: str, interval: str) -> pd.DataFrame:
+        if sym == "SLOW":
+            time.sleep(1.0)
+            return df.copy()
+        return df.copy()
+
+    server = YFinanceTAMCPServer(data_fetcher=slow_fetcher)
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_scan_watchlist",
+                "arguments": {"symbols": ["AAPL", "NVDA"]},
+            },
+        }
+    )
+    assert resp is not None
+    data = resp["result"]["structuredContent"]
+    assert data["symbols_scanned"] == 2
+    assert len(data["opportunities"]) > 0
+
+
+def test_mcp_get_news_tool_and_fetcher_injection() -> None:
+    """Verify ta_get_news tool schema and data formatting with news_fetcher injection."""
+    mock_news = [
+        {
+            "title": "Fed Holds Benchmark Rate Steady",
+            "publisher": "Bloomberg",
+            "link": "https://bloomberg.com/news/1",
+            "publish_time": "2026-10-07 14:00 UTC",
+        },
+        {
+            "content": {
+                "title": "Tech Stocks Surge on AI Demand",
+                "provider": {"displayName": "Reuters"},
+                "canonicalUrl": {"url": "https://reuters.com/tech/1"},
+                "pubDate": "2026-10-07 15:30 UTC",
+                "summary": "Nvidia and Apple led market gains.",
+            }
+        },
+    ]
+
+    server = YFinanceTAMCPServer(news_fetcher=lambda sym, limit: mock_news[:limit])
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 42,
+            "method": "tools/call",
+            "params": {"name": "ta_get_news", "arguments": {"symbol": "AAPL", "limit": 2}},
+        }
+    )
+    assert resp is not None
+    assert resp["result"]["isError"] is False
+    assert "structuredContent" in resp["result"]
+    data = resp["result"]["structuredContent"]
+    assert data["symbol"] == "AAPL"
+    assert data["total_news"] == 2
+    assert len(data["news"]) == 2
+    assert data["news"][0]["title"] == "Fed Holds Benchmark Rate Steady"
+    assert data["news"][0]["publisher"] == "Bloomberg"
+    assert data["news"][1]["title"] == "Tech Stocks Surge on AI Demand"
+    assert data["news"][1]["publisher"] == "Reuters"
+
+
+def test_mcp_backtest_patterns_filter_news() -> None:
+    """Verify ta_backtest_patterns supports filter_news parameter."""
+    df = _make_sample_ohlcv()
+    server = YFinanceTAMCPServer(
+        data_fetcher=lambda s, p, i: df.copy(),
+        calendar_fetcher=lambda _u: None,
+    )
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 55,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_backtest_patterns",
+                "arguments": {"symbol": "BTC-USD", "filter_news": True},
+            },
+        }
+    )
+    assert resp is not None
+    assert resp["result"]["isError"] is False
+    data = resp["result"]["structuredContent"]
+    assert data["filter_news"] is True
+    assert "news_dates_filtered" in data
+
 

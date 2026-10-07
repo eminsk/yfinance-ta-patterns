@@ -493,6 +493,16 @@ def get_parser() -> argparse.ArgumentParser:
         help="Generate a structured prompt optimized for LLMs (ChatGPT, Claude, Gemini).",
     )
     parser.add_argument(
+        "--calendar",
+        action="store_true",
+        help="Fetch and display upcoming high-impact macroeconomic calendar events for the symbol.",
+    )
+    parser.add_argument(
+        "--news",
+        action="store_true",
+        help="Fetch and display recent market news headlines for the symbol.",
+    )
+    parser.add_argument(
         "--format",
         choices=["text", "json", "markdown"],
         default="text",
@@ -507,6 +517,93 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 build_parser = get_parser
+
+
+def _display_calendar_for_symbol(symbol: str, fmt: str = "text") -> None:
+    """Fetch and display upcoming macroeconomic calendar events for a symbol."""
+    try:
+        from .economic_calendar import InvestingCalendar
+
+        with InvestingCalendar(timeout=3.0) as cal:
+            cal_res = cal.get_events_for_symbol(symbol=symbol, days=7, importances=["2", "3"], limit=10)
+            events = cal_res.get("events", [])
+            source = cal_res.get("source", "unknown")
+            if fmt == "markdown":
+                print(f"### 📅 Upcoming Macroeconomic Events: {symbol} (Feed: `{source}`)\n")
+                if not events:
+                    print("_No upcoming high-impact macroeconomic events found._\n")
+                else:
+                    for ev in events:
+                        imp = ev.get("importance", "1")
+                        stars = "⭐" * int(imp) if str(imp).isdigit() else str(imp)
+                        time_str = ev.get("time", "")
+                        print(
+                            f"- **{time_str}** `[{ev.get('currency', '')}]` {ev.get('event', '')} ({stars}) | "
+                            f"Forecast: `{ev.get('forecast', '—')}` | Previous: `{ev.get('previous', '—')}`"
+                        )
+                    print()
+            else:
+                print(f"\n📅 UPCOMING MACROECONOMIC EVENTS: {symbol} (Feed: {source})")
+                print("=" * 76)
+                if not events:
+                    print("   No upcoming high-impact economic events found.")
+                else:
+                    for ev in events:
+                        imp = ev.get("importance", "1")
+                        stars = "⭐" * int(imp) if str(imp).isdigit() else str(imp)
+                        time_str = ev.get("time", "")
+                        curr = ev.get("currency", "")
+                        ev_name = ev.get("event", "")
+                        forecast = ev.get("forecast", "—")
+                        print(f"   • [{time_str}] ({curr}) {ev_name} [{stars}] Forecast: {forecast}")
+                print("=" * 76)
+    except Exception as exc:
+        if fmt != "json":
+            print(f"\n⚠️ Economic calendar unavailable for {symbol}: {exc}", file=sys.stderr)
+
+
+def _display_news_for_symbol(symbol: str, fmt: str = "text") -> None:
+    """Fetch and display recent market news headlines for a symbol."""
+    try:
+        import yfinance as yf
+
+        ticker = yf.Ticker(symbol)
+        raw_news = ticker.get_news(count=5) if hasattr(ticker, "get_news") else getattr(ticker, "news", [])
+        if fmt == "markdown":
+            print(f"### 📰 Recent Market News: {symbol}\n")
+            if not raw_news:
+                print("_No recent news headlines available._\n")
+            else:
+                for art in (raw_news or [])[:5]:
+                    if isinstance(art, dict):
+                        content = art.get("content", {}) if isinstance(art.get("content"), dict) else {}
+                        title = content.get("title") or art.get("title") or art.get("headline") or "News Headline"
+                        pub = (content.get("provider", {}) or {}).get("displayName") or art.get("publisher") or ""
+                        link = (content.get("canonicalUrl", {}) or {}).get("url") or art.get("link") or ""
+                        pub_str = f" *({pub})*" if pub else ""
+                        link_str = f" — [link]({link})" if link else ""
+                        print(f"- **{title}**{pub_str}{link_str}")
+                print()
+        else:
+            print(f"\n📰 RECENT MARKET NEWS HEADLINES: {symbol}")
+            print("=" * 76)
+            if not raw_news:
+                print("   No recent news headlines available.")
+            else:
+                for art in (raw_news or [])[:5]:
+                    if isinstance(art, dict):
+                        content = art.get("content", {}) if isinstance(art.get("content"), dict) else {}
+                        title = content.get("title") or art.get("title") or art.get("headline") or "News Headline"
+                        pub = (content.get("provider", {}) or {}).get("displayName") or art.get("publisher") or ""
+                        link = (content.get("canonicalUrl", {}) or {}).get("url") or art.get("link") or ""
+                        pub_str = f" ({pub})" if pub else ""
+                        print(f"   • {title}{pub_str}")
+                        if link:
+                            print(f"     {link}")
+            print("=" * 76)
+    except Exception as exc:
+        if fmt != "json":
+            print(f"\n⚠️ Market news unavailable for {symbol}: {exc}", file=sys.stderr)
 
 
 def run_cli(args: argparse.Namespace) -> int:
@@ -873,12 +970,27 @@ def run_cli(args: argparse.Namespace) -> int:
             analyst = AIMarketAnalyst(best["df"], [best["result"]])
             print(analyst.to_llm_prompt(best["Symbol"], interval))
 
+        if args.format != "json":
+            if getattr(args, "calendar", False):
+                _display_calendar_for_symbol(best["Symbol"], args.format)
+            if getattr(args, "news", False):
+                _display_news_for_symbol(best["Symbol"], args.format)
+
         return 0
 
     # ---------------------------------------------------------
     # SINGLE-SYMBOL MODE (100% Backwards Compatible)
     # ---------------------------------------------------------
     symbol = symbols[0]
+
+    def _finish(code: int = 0) -> int:
+        if args.format != "json":
+            if getattr(args, "calendar", False):
+                _display_calendar_for_symbol(symbol, args.format)
+            if getattr(args, "news", False):
+                _display_news_for_symbol(symbol, args.format)
+        return code
+
     loader = MarketDataLoader(
         symbol,
         period=args.period,
@@ -892,6 +1004,8 @@ def run_cli(args: argparse.Namespace) -> int:
     period = loader.period
 
     if data.empty:
+        if getattr(args, "calendar", False) or getattr(args, "news", False):
+            return _finish(0)
         print(
             f"Error: No data retrieved for symbol '{symbol}' ({period}, {interval}).",
             file=sys.stderr,
@@ -973,7 +1087,7 @@ def run_cli(args: argparse.Namespace) -> int:
     if args.prompt:
         analyst = AIMarketAnalyst(analyst_data, all_scored_results)
         print(analyst.to_llm_prompt(symbol, interval))
-        return 0
+        return _finish(0)
 
     # 2. AI Analyst Brief
     if args.ai_analyst:
@@ -987,13 +1101,13 @@ def run_cli(args: argparse.Namespace) -> int:
                 render_rich_ai_analyst_brief(analyst, symbol, interval)
             except Exception:
                 print(analyst.generate_brief(symbol, interval))
-        return 0
+        return _finish(0)
 
     # 3. AI Mode Output
     if args.ai:
         if not all_scored_results:
             print(f"No AI-scored signals found for {symbol} matching criteria{range_info}.")
-            return 0
+            return _finish(0)
 
         if args.format == "json":
             analyst = AIMarketAnalyst(analyst_data, all_scored_results)
@@ -1024,7 +1138,7 @@ def run_cli(args: argparse.Namespace) -> int:
                 if res.risk_factors:
                     print(f"- **Risks:** {', '.join(res.risk_factors)}")
                 print()
-            return 0
+            return _finish(0)
 
         print(f"=== AI Pattern Intelligence: {symbol} ({interval}, {period}){range_info} ===")
         for res in all_scored_results:
@@ -1049,7 +1163,7 @@ def run_cli(args: argparse.Namespace) -> int:
             if res.risk_factors:
                 print(f"  Risks: {', '.join(res.risk_factors)}")
             print("-" * 60)
-        return 0
+        return _finish(0)
 
     # 4. Classic TA-Lib Mode Output
     if not classic_signals:
@@ -1060,7 +1174,7 @@ def run_cli(args: argparse.Namespace) -> int:
             )
         else:
             print(f"No signals for any pattern on period {period} timeframe {interval}{range_info}")
-        return 0
+        return _finish(0)
 
     if args.format == "markdown":
         print(f"## 📈 Pattern Scan: {symbol} ({interval}, {period}){range_info}\n")
@@ -1069,7 +1183,7 @@ def run_cli(args: argparse.Namespace) -> int:
             print(f"### {pat_name}\n")
             print(format_markdown_table(table))
             print()
-        return 0
+        return _finish(0)
 
     print(f"Scanning patterns for {symbol} ({interval}, {period}){range_info}...")
     for pat_name, sig in classic_signals.items():
@@ -1077,7 +1191,7 @@ def run_cli(args: argparse.Namespace) -> int:
         print(sig.to_string())
         print("-" * 40)
 
-    return 0
+    return _finish(0)
 
 
 def main(argv: Sequence[str] | None = None) -> None:

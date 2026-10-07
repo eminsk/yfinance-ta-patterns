@@ -16,6 +16,7 @@ import logging
 import re
 import sys
 import threading
+import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -293,6 +294,11 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                     "default": 10,
                     "description": "Number of top-ranked patterns to return (default: 10)",
                 },
+                "filter_news": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "If true, skips trades on days with high-impact macroeconomic events using the economic calendar",
+                },
             },
             "required": ["symbol"],
             "additionalProperties": False,
@@ -305,6 +311,8 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "period": {"type": "string"},
                 "holding_period": {"type": "integer"},
                 "sort_by": {"type": "string"},
+                "filter_news": {"type": "boolean"},
+                "news_dates_filtered": {"type": "integer"},
                 "total_patterns_evaluated": {"type": "integer"},
                 "top_patterns": {"type": "array"},
             },
@@ -420,7 +428,49 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "name": "ta_get_news",
+        "title": "Get Market News Headlines",
+        "description": (
+            "Fetch recent market news headlines, publishers, and publication timestamps "
+            "for a given ticker symbol (e.g. 'AAPL', 'NVDA', 'BTC-USD')."
+        ),
+        "annotations": {
+            "readOnlyHint": True,
+            "openWorldHint": True,
+        },
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Ticker symbol (e.g. 'AAPL', 'NVDA', 'BTC-USD')",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "default": 10,
+                    "description": "Maximum number of news headlines to return (default: 10, max: 50)",
+                },
+            },
+            "required": ["symbol"],
+            "additionalProperties": False,
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string"},
+                "total_news": {"type": "integer"},
+                "news": {"type": "array"},
+                "message": {"type": "string"},
+            },
+        },
+    },
 ]
+
+MCP_KNOWN_TOOLS: set[str] = {t["name"] for t in MCP_TOOLS_SCHEMA}
 
 MCP_RESOURCES_SCHEMA: list[dict[str, Any]] = [
     {
@@ -539,6 +589,67 @@ def _normalize_watchlist_symbols(raw_symbols: Any) -> list[str]:
     return deduped
 
 
+def _parse_event_utc(time_str: Any) -> dt.datetime | None:
+    """Parse calendar event timestamp to UTC datetime for accurate temporal filtering."""
+    if not time_str or not isinstance(time_str, str):
+        return None
+    cleaned = time_str.replace("UTC", "").strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return dt.datetime.strptime(cleaned, fmt).replace(tzinfo=dt.timezone.utc)
+        except ValueError:
+            pass
+    try:
+        d = dt.datetime.strptime(cleaned, "%Y-%m-%d").date()
+        return dt.datetime(d.year, d.month, d.day, 23, 59, 59, tzinfo=dt.timezone.utc)
+    except ValueError:
+        return None
+
+
+def _format_news_item(article: dict[str, Any]) -> dict[str, Any]:
+    """Format and normalize a market news article dictionary from yfinance."""
+    content = article.get("content", {}) if isinstance(article.get("content"), dict) else {}
+    title = (
+        content.get("title")
+        or article.get("title")
+        or article.get("headline")
+        or ""
+    )
+    link = (
+        (content.get("canonicalUrl", {}) or {}).get("url")
+        or (content.get("clickThroughUrl", {}) or {}).get("url")
+        or article.get("link")
+        or article.get("url")
+        or ""
+    )
+    publisher = (
+        (content.get("provider", {}) or {}).get("displayName")
+        or article.get("publisher")
+        or article.get("source")
+        or ""
+    )
+    pub_time = (
+        content.get("pubDate")
+        or article.get("providerPublishTime")
+        or article.get("publish_time")
+        or article.get("publishedAt")
+        or ""
+    )
+    summary = (
+        content.get("summary")
+        or article.get("summary")
+        or article.get("description")
+        or ""
+    )
+    return {
+        "title": str(title).strip(),
+        "publisher": str(publisher).strip(),
+        "link": str(link).strip(),
+        "publish_time": str(pub_time).strip() if pub_time is not None else "",
+        "summary": str(summary).strip()[:300] if summary else "",
+    }
+
+
 class YFinanceTAMCPServer:
     """Zero-dependency Model Context Protocol (MCP) JSON-RPC 2.0 server for yfinance-ta-patterns."""
 
@@ -546,9 +657,11 @@ class YFinanceTAMCPServer:
         self,
         data_fetcher: Callable[[str, str, str], pd.DataFrame] | None = None,
         calendar_fetcher: Callable[[str], str | None] | None = None,
+        news_fetcher: Callable[[str, int], list[dict[str, Any]]] | None = None,
     ) -> None:
         self._data_fetcher = data_fetcher
         self._calendar_fetcher = calendar_fetcher
+        self._news_fetcher = news_fetcher
 
     def _fetch_ohlcv(self, symbol: str, period: str, interval: str) -> pd.DataFrame:
         if self._data_fetcher is not None:
@@ -714,6 +827,15 @@ class YFinanceTAMCPServer:
 
             if method == "tools/call":
                 tool_name = params.get("name", "")
+                if not tool_name or str(tool_name) not in MCP_KNOWN_TOOLS:
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "error": {
+                            "code": -32602,
+                            "message": f"Unknown tool: '{tool_name}'",
+                        },
+                    }
                 args = params.get("arguments") or {}
                 if not isinstance(args, dict):
                     return {
@@ -800,13 +922,13 @@ class YFinanceTAMCPServer:
             timeframe = normalize_interval(str(args.get("timeframe", "1d")))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="6mo")
             raw_min_conf = args.get("min_confidence")
-            min_conf = 0.4 if raw_min_conf is None else float(raw_min_conf)
+            min_conf = 0.4 if raw_min_conf is None else max(0.0, min(1.0, float(raw_min_conf)))
             raw_lookback = args.get("lookback_bars")
-            lookback = max(1, min(3 if raw_lookback is None else int(raw_lookback), 60))
+            lookback = max(1, min(60, 3 if raw_lookback is None else int(raw_lookback)))
             include_brief = bool(args.get("include_brief", False))
             compact = True if args.get("compact") is None else bool(args.get("compact"))
             raw_max_patterns = args.get("max_patterns")
-            max_patterns = max(1, min(25 if raw_max_patterns is None else int(raw_max_patterns), 50))
+            max_patterns = max(1, min(50, 25 if raw_max_patterns is None else int(raw_max_patterns)))
 
             df = self._fetch_ohlcv(symbol, period, timeframe)
             analyst = AIMarketAnalyst(df, symbol=symbol, timeframe=timeframe)
@@ -900,33 +1022,73 @@ class YFinanceTAMCPServer:
             report["truncated_to"] = len(report["patterns"])
 
             # Check imminent macroeconomic event risk (importance 3 within 48h)
-            event_risk: dict[str, Any] = {"has_high_impact_event": False, "event_count": 0}
+            now_utc = dt.datetime.now(dt.timezone.utc)
+            event_risk: dict[str, Any] = {
+                "source": "unavailable",
+                "status": "unavailable",
+                "has_high_impact_event": False,
+                "event_count": 0,
+            }
             try:
                 with InvestingCalendar(http_fetcher=self._calendar_fetcher, timeout=2.0) as cal:
-                    today_utc = dt.datetime.now(dt.timezone.utc).date()
+                    today_utc = now_utc.date()
                     cal_res = cal.get_events_for_symbol(
                         symbol=symbol,
                         date_from=today_utc.isoformat(),
                         days=2,
                         importances=["3"],
-                        limit=5,
+                        limit=20,
                     )
-                    high_events = cal_res.get("events", [])
-                    if high_events:
+                    feed_source = cal_res.get("source", "unavailable")
+                    if feed_source == "unavailable":
                         event_risk = {
-                            "has_high_impact_event": True,
-                            "event_count": len(high_events),
-                            "nearest_event": high_events[0].get("event"),
-                            "event_time": high_events[0].get("time"),
-                            "currency": high_events[0].get("currency"),
-                            "warning": (
-                                f"High-impact macroeconomic event imminent: "
-                                f"'{high_events[0].get('event')}' ({high_events[0].get('currency')}) "
-                                f"at {high_events[0].get('time')}."
-                            ),
+                            "source": "unavailable",
+                            "status": "unavailable",
+                            "has_high_impact_event": False,
+                            "event_count": 0,
+                            "message": cal_res.get("message", "Economic calendar feed is unavailable"),
                         }
-            except Exception:
-                pass
+                    else:
+                        raw_events = cal_res.get("events", [])
+                        upcoming: list[tuple[dt.datetime, dict[str, Any]]] = []
+                        for ev in raw_events:
+                            ev_dt = _parse_event_utc(ev.get("time"))
+                            if ev_dt is not None and ev_dt >= now_utc - dt.timedelta(minutes=15):
+                                upcoming.append((ev_dt, ev))
+                        upcoming.sort(key=lambda x: x[0])
+                        if upcoming:
+                            nearest_dt, nearest_ev = upcoming[0]
+                            hours_until = max(0.0, round((nearest_dt - now_utc).total_seconds() / 3600.0, 1))
+                            event_risk = {
+                                "source": "live",
+                                "status": "ok",
+                                "has_high_impact_event": True,
+                                "event_count": len(upcoming),
+                                "nearest_event": nearest_ev.get("event"),
+                                "event_time": nearest_ev.get("time"),
+                                "currency": nearest_ev.get("currency"),
+                                "hours_until": hours_until,
+                                "warning": (
+                                    f"High-impact macroeconomic event imminent: "
+                                    f"'{nearest_ev.get('event')}' ({nearest_ev.get('currency')}) "
+                                    f"in {hours_until}h at {nearest_ev.get('time')}."
+                                ),
+                            }
+                        else:
+                            event_risk = {
+                                "source": "live",
+                                "status": "ok",
+                                "has_high_impact_event": False,
+                                "event_count": 0,
+                            }
+            except Exception as exc:
+                event_risk = {
+                    "source": "unavailable",
+                    "status": "unavailable",
+                    "has_high_impact_event": False,
+                    "event_count": 0,
+                    "message": str(exc),
+                }
             report["event_risk"] = event_risk
 
             if include_brief:
@@ -938,11 +1100,11 @@ class YFinanceTAMCPServer:
             timeframe = normalize_interval(str(args.get("timeframe", "1d")))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="6mo")
             raw_min_conf = args.get("min_confidence")
-            min_conf = 0.55 if raw_min_conf is None else float(raw_min_conf)
+            min_conf = 0.55 if raw_min_conf is None else max(0.0, min(1.0, float(raw_min_conf)))
             raw_lookback = args.get("lookback_bars")
-            lookback = 2 if raw_lookback is None else int(raw_lookback)
+            lookback = max(1, min(60, 2 if raw_lookback is None else int(raw_lookback)))
             raw_max_results = args.get("max_results")
-            max_results = max(1, min(DEFAULT_MAX_RESULTS if raw_max_results is None else int(raw_max_results), MAX_RESULTS_LIMIT))
+            max_results = max(1, min(50, DEFAULT_MAX_RESULTS if raw_max_results is None else int(raw_max_results)))
             compact = True if args.get("compact") is None else bool(args.get("compact"))
 
             opportunities: list[dict[str, Any]] = []
@@ -1006,17 +1168,40 @@ class YFinanceTAMCPServer:
                     return sym, None, str(exc)
 
             max_workers = min(len(symbols), 8)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                try:
-                    for sym, sym_opps, err in executor.map(_scan_one, symbols, timeout=20.0):
+            timeout_limit = 20.0
+            deadline = time.monotonic() + timeout_limit
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+            future_to_sym = {executor.submit(_scan_one, sym): sym for sym in symbols}
+            try:
+                for future in concurrent.futures.as_completed(future_to_sym, timeout=timeout_limit):
+                    sym = future_to_sym[future]
+                    try:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            errors[sym] = f"Scan timed out after {timeout_limit:.1f}s"
+                            continue
+                        res_sym, sym_opps, err = future.result(timeout=max(0.01, remaining))
                         if err is not None:
-                            errors[sym] = err
+                            errors[res_sym] = err
                         else:
                             symbols_succeeded += 1
                             if sym_opps:
                                 opportunities.extend(sym_opps)
-                except TimeoutError:
-                    logger.warning("ta_scan_watchlist timed out waiting for symbols")
+                    except (TimeoutError, concurrent.futures.TimeoutError):
+                        errors[sym] = f"Scan timed out after {timeout_limit:.1f}s"
+                    except Exception as exc:
+                        errors[sym] = str(exc)
+            except (TimeoutError, concurrent.futures.TimeoutError):
+                logger.warning("ta_scan_watchlist timed out waiting for symbols")
+            finally:
+                for f, s in future_to_sym.items():
+                    if s not in errors and not f.done():
+                        errors[s] = f"Scan timed out after {timeout_limit:.1f}s"
+                    f.cancel()
+                if sys.version_info >= (3, 9):
+                    executor.shutdown(wait=False, cancel_futures=True)
+                else:
+                    executor.shutdown(wait=False)
 
             if symbols_succeeded == 0 and errors:
                 first_sym, first_err = next(iter(errors.items()))
@@ -1062,25 +1247,47 @@ class YFinanceTAMCPServer:
             timeframe = normalize_interval(str(args.get("timeframe", "1d")))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="1y")
             raw_hp = args.get("holding_period")
-            holding_period = 5 if raw_hp is None else int(raw_hp)
+            holding_period = max(1, min(60, 5 if raw_hp is None else int(raw_hp)))
             raw_sig = args.get("min_signals")
-            min_signals = max(1, 1 if raw_sig is None else int(raw_sig))
+            min_signals = max(1, min(100, 1 if raw_sig is None else int(raw_sig)))
             sort_by = str(args.get("sort_by") or "composite").strip().lower()
             if sort_by not in ("composite", "win_rate"):
                 raise ValueError("Parameter 'sort_by' must be 'composite' or 'win_rate'.")
             raw_top = args.get("top_n")
-            top_n = max(1, min(10 if raw_top is None else int(raw_top), 61))
+            top_n = max(1, min(50, 10 if raw_top is None else int(raw_top)))
+            filter_news = bool(args.get("filter_news", False))
 
             df = self._fetch_ohlcv(symbol, period, timeframe)
+            news_dates: list[str] | None = None
+            if filter_news:
+                try:
+                    with InvestingCalendar(http_fetcher=self._calendar_fetcher, timeout=2.0) as cal:
+                        start_date_str = str(df.index[0])[:10] if not df.empty else None
+                        end_date_str = str(df.index[-1])[:10] if not df.empty else None
+                        if start_date_str and end_date_str:
+                            cal_res = cal.get_events_for_symbol(
+                                symbol=symbol,
+                                date_from=start_date_str,
+                                date_to=end_date_str,
+                                importances=["3"],
+                                limit=100,
+                            )
+                            evs = cal_res.get("events", [])
+                            news_dates = [str(e.get("time", ""))[:10] for e in evs if e.get("time")]
+                except Exception as exc:
+                    logger.debug("Failed fetching macroeconomic news dates for backtest: %s", exc)
+                    news_dates = None
+
             tester = PatternRankingTester(
                 df,
                 timeframe=timeframe,
                 holding_period=holding_period,
                 min_signals=min_signals,
+                news_dates=news_dates,
                 symbol=symbol,
                 verbose=False,
             )
-            ranked = tester.test_all_patterns(filter_news=False, min_signals=min_signals, sort_by=sort_by)
+            ranked = tester.test_all_patterns(filter_news=filter_news, min_signals=min_signals, sort_by=sort_by)
             top = tester.get_top_patterns(n=top_n)
             top_patterns_list = [
                 {
@@ -1105,6 +1312,8 @@ class YFinanceTAMCPServer:
                 "holding_period": holding_period,
                 "min_signals": min_signals,
                 "sort_by": sort_by,
+                "filter_news": filter_news,
+                "news_dates_filtered": len(news_dates) if news_dates else 0,
                 "total_patterns_evaluated": len(ranked),
                 "top_patterns": top_patterns_list,
             }
@@ -1153,6 +1362,42 @@ class YFinanceTAMCPServer:
                     countries=countries,
                     limit=max_results,
                 )
+
+        if name == "ta_get_news":
+            symbol = str(args.get("symbol", "")).strip()
+            if not symbol:
+                raise ValueError("Parameter 'symbol' is required and cannot be empty.")
+            raw_lim = args.get("limit")
+            limit = max(1, min(50, 10 if raw_lim is None else int(raw_lim)))
+            if self._news_fetcher is not None:
+                try:
+                    raw_news = self._news_fetcher(symbol, limit)
+                except Exception as exc:
+                    return {
+                        "symbol": symbol,
+                        "total_news": 0,
+                        "news": [],
+                        "message": f"News fetcher failed for {symbol}: {exc}",
+                    }
+            else:
+                try:
+                    import yfinance as yf
+                    ticker = yf.Ticker(symbol)
+                    raw_news = ticker.get_news(count=limit) if hasattr(ticker, "get_news") else getattr(ticker, "news", [])
+                except Exception as exc:
+                    return {
+                        "symbol": symbol,
+                        "total_news": 0,
+                        "news": [],
+                        "message": f"News service unreachable or error fetching news for {symbol}: {exc}",
+                    }
+            articles = [_format_news_item(a) for a in (raw_news or []) if isinstance(a, dict)]
+            articles = [a for a in articles if a.get("title")]
+            return {
+                "symbol": symbol,
+                "total_news": len(articles),
+                "news": articles[:limit],
+            }
 
         raise ValueError(f"Unknown MCP tool: {name}")
 

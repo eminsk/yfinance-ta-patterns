@@ -763,8 +763,8 @@ class InvestingCalendar:
             if len(country_name) > 60:
                 country_name = country_name[:57] + "..."
 
-            actual = (tds[3].text or "—").strip()[:30]
-            previous = (tds[4].text or "—").strip()[:30]
+            actual = (tds[3].text or "—").strip()[:30] if len(tds) > 3 else "—"
+            previous = (tds[4].text or "—").strip()[:30] if len(tds) > 4 else "—"
             forecast_val = tds[5].text if len(tds) > 5 else ""
             if not forecast_val and len(tds) > 6:
                 forecast_val = tds[6].text
