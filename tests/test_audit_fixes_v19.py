@@ -14,17 +14,13 @@ Covers:
 from __future__ import annotations
 
 import datetime as dt
-import json
-import time
-from typing import Any
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from yfinance_ta_patterns import cli
-from yfinance_ta_patterns.economic_calendar import InvestingCalendar
-from yfinance_ta_patterns.mcp_server import YFinanceTAMCPServer, _parse_event_utc, _format_news_item
+from yfinance_ta_patterns.mcp_server import YFinanceTAMCPServer
 
 
 def _sample_ohlcv(periods: int = 50) -> pd.DataFrame:
