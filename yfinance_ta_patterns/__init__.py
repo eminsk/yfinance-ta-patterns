@@ -7,7 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("yfinance-ta-patterns")
 except PackageNotFoundError:  # pragma: no cover - during editable installs
-    __version__ = "0.3.54"
+    __version__ = "0.3.55"
 
 import sys
 
@@ -15,6 +15,17 @@ if sys.version_info < (3, 9) and sys.implementation.name != "pypy":
     from ._compat_hook import install_compat_hook
 
     install_compat_hook()
+
+if sys.platform == "win32" and sys.implementation.name == "pypy":
+    try:
+        import ctypes
+        import dateutil.tz.win
+
+        dateutil.tz.win.tzres.load_name = lambda self, offset: (
+            lambda buf: buf[: self.LoadStringW(int(self._tzres._handle), offset, buf, 1024)]
+        )(ctypes.create_unicode_buffer(1024))
+    except Exception:
+        pass
 
 from .talib_compat import (
     ALL_CDL_PATTERNS,

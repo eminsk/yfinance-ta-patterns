@@ -1,6 +1,6 @@
 [project]
 name = "yfinance-ta-patterns"
-version = "0.3.54"
+version = "0.3.55"
 description = "Institutional-grade market candlestick pattern scanner with multi-asset backtesting, AI confluence scoring, and LLM market intelligence."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -46,15 +46,14 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "yfinance>=0.2.54; implementation_name != 'pypy' or python_version < '3.12'",
+    "yfinance>=0.2.54; implementation_name != 'pypy'",
     "pandas>=1.3.0, <=2.0.3; implementation_name == 'pypy' and python_version < '3.9'",
     "pandas>=1.3.0, <=2.3.3; implementation_name == 'pypy' and python_version == '3.9'",
     "pandas>=1.3.0, <=2.3.3; implementation_name == 'pypy' and python_version == '3.10'",
-    "pandas>=1.3.0, <=3.0.5; implementation_name == 'pypy' and python_version >= '3.11' and python_version < '3.12'",
     "pandas>=1.3.0; implementation_name != 'pypy'",
     "pytz>=2022.5",
     "numpy>=1.20, <2; implementation_name == 'pypy' and python_version < '3.10'",
-    "numpy>=1.20; (implementation_name == 'pypy' and python_version >= '3.10' and python_version < '3.12') or implementation_name != 'pypy'",
+    "numpy>=1.20; (implementation_name == 'pypy' and python_version >= '3.10') or implementation_name != 'pypy'",
     "rich>=10.0.0",
     "typing-extensions>=4.0; python_version < '3.11'",
     "multitasking<0.0.12; python_version < '3.9'",
@@ -71,6 +70,13 @@ talib = [
 ]
 repair = [
     "scikit-learn>=1.0.0; implementation_name == 'cpython'",
+]
+yfinance = [
+    "yfinance>=0.2.54",
+]
+pandas = [
+    "pandas>=1.3.0, <=3.0.5; implementation_name == 'pypy' and python_version >= '3.11' and python_version < '3.12'",
+    "pandas>=1.3.0; implementation_name != 'pypy'",
 ]
 all = [
     "ta-lib>=0.4.19,<=0.7.1; implementation_name == 'pypy' and python_version < '3.12'",
@@ -125,6 +131,8 @@ filterwarnings = [
     "ignore:Corrupted OHLC data anomaly detected.*:UserWarning",
     "ignore:cython\\.collection_type only works on PyPy.*:RuntimeWarning",
     "ignore:.*urllib3 v2 only supports OpenSSL.*:Warning",
+    "ignore:Numpy built with MINGW-W64.*:UserWarning",
+    "ignore:Numpy built with MINGW-W64.*:Warning",
     "ignore::pytest.PytestUnraisableExceptionWarning",
 ]
 

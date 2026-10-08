@@ -3,8 +3,9 @@
 import concurrent.futures
 
 import numpy as np
-import pandas as pd
 import pytest
+
+pd = pytest.importorskip("pandas")
 
 from yfinance_ta_patterns.pattern_analyzer import PatternAnalyzer
 from yfinance_ta_patterns.talib_compat import ALL_CDL_PATTERNS, TALibWrapper
