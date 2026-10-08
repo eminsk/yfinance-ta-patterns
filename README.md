@@ -530,15 +530,17 @@ All 469 tests pass with 100% success rate across **Python 3.8 through 3.16 (incl
 
 ## ☕ Support, Community & Donations
 
-If you find this project valuable and would like to support ongoing development:
+If you find this project valuable, encounter issues, or would like to support ongoing development:
 
 * ⭐ **Star the Repository**: If yfinance-ta-patterns powers your market analysis or trading algorithms, give us a star on GitHub — it helps more traders and quants discover the tool!
+* 🐛 **Report Issues & Bugs**: Found a bug, pattern calculation discrepancy, or edge case? Please [open an Issue](https://github.com/eminsk/yfinance-ta-patterns/issues)!
 * 💬 **Join Discussions**: Have strategies, ideas, or custom patterns to share? Start or join a thread in [GitHub Discussions](https://github.com/eminsk/yfinance-ta-patterns/discussions)!
 * ☕ **Donate (USDT TRC-20)**:  
   `TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P`  
   *(Network: TRON / TRC-20 | [Verify on TronScan](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P))*
 
 [![GitHub Repo stars](https://img.shields.io/github/stars/eminsk/yfinance-ta-patterns?style=social)](https://github.com/eminsk/yfinance-ta-patterns)
+[![GitHub Issues](https://img.shields.io/github/issues/eminsk/yfinance-ta-patterns?color=red&style=flat-square)](https://github.com/eminsk/yfinance-ta-patterns/issues)
 [![GitHub Discussions](https://img.shields.io/badge/Discussions-Join_Community-blue?logo=github&style=flat-square)](https://github.com/eminsk/yfinance-ta-patterns/discussions)
 [![Donate USDT](https://img.shields.io/badge/Donate-USDT_(TRC20)-26A17B?style=flat-square&logo=tether&logoColor=white)](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P)
 
