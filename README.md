@@ -1,24 +1,30 @@
 # Market Candlestick & AI Pattern Scanner (`yfinance-ta-patterns`)
 
 [![PyPI](https://img.shields.io/pypi/v/yfinance-ta-patterns?color=blue)](https://pypi.org/project/yfinance-ta-patterns/)
-[![Conda](https://img.shields.io/conda/vn/m_n_nik/yfinance-ta-patterns.svg?style=flat&logo=anaconda)](https://anaconda.org/m_n_nik/yfinance-ta-patterns)
+[![Conda-Forge](https://img.shields.io/conda/vn/conda-forge/yfinance-ta-patterns.svg?style=flat&logo=condaforge)](https://anaconda.org/conda-forge/yfinance-ta-patterns)
 [![Ubuntu / Debian PPA](https://img.shields.io/badge/Ubuntu%20%2F%20Debian-APT%20PPA-E95420?logo=ubuntu&logoColor=white)](https://eminsk.github.io/ppa/)
+[![Downloads](https://static.pepy.tech/badge/yfinance-ta-patterns)](https://pepy.tech/project/yfinance-ta-patterns)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/eminsk/yfinance-ta-patterns/blob/main/notebooks/yfinance_ta_patterns_quickstart.ipynb)
 [![Python](https://img.shields.io/pypi/pyversions/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
 [![PyPy](https://img.shields.io/badge/PyPy-3.8%20--%203.12-orange.svg)](https://www.pypy.org/)
 [![No-GIL](https://img.shields.io/badge/No--GIL-3.13t%20--%203.16t-purple.svg)](https://peps.python.org/pep-0703/)
 [![MCP Server](https://img.shields.io/badge/MCP-Native_Stdio_Server-00a67e.svg)](#native-mcp-model-context-protocol-server-for-ai-agents)
 [![CI](https://github.com/eminsk/yfinance-ta-patterns/actions/workflows/ci.yml/badge.svg)](https://github.com/eminsk/yfinance-ta-patterns/actions)
-[![Downloads](https://static.pepy.tech/badge/yfinance-ta-patterns)](https://pepy.tech/project/yfinance-ta-patterns)
+[![GitHub Stars](https://img.shields.io/github/stars/eminsk/yfinance-ta-patterns?style=flat&logo=github)](https://github.com/eminsk/yfinance-ta-patterns/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/eminsk/yfinance-ta-patterns?style=flat&color=red&logo=github)](https://github.com/eminsk/yfinance-ta-patterns/issues)
+[![GitHub Discussions](https://img.shields.io/badge/Discussions-Join_Community-blue?style=flat&logo=github)](https://github.com/eminsk/yfinance-ta-patterns/discussions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Donate USDT](https://img.shields.io/badge/Donate-USDT-26A17B?logo=tether&logoColor=white)](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P)
+[![Donate USDT](https://img.shields.io/badge/Donate-USDT_(TRC20)-26A17B?style=flat&logo=tether&logoColor=white)](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P)
 
 High-performance Python library, CLI, and Native MCP Server (`yfinance-ta-mcp`) that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate multi-factor confluence scores (deterministic quantitative confluence heuristic, not uncalibrated win-rate probability), trade setups, and LLM-ready market briefs.
 
 Universal runtime compatibility across **CPython 3.8 to 3.16, free-threaded No-GIL 3.13t to 3.16t, PyPy 3.8 to 3.12 with high-speed JIT tracing, and legacy Windows 7+ support**, installed directly from PyPI with zero compilation required.
 
-> ⭐ **Enjoying yfinance-ta-patterns?** Give it a star on GitHub to support development!  
-> ☕ **Want to support the author?** USDT (TRC-20): `TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P` ([TronScan](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P))
+> ### 🤝 Community, Issues & Support
+> - 🐛 **Found a bug or calculation issue?** Please [Open an Issue](https://github.com/eminsk/yfinance-ta-patterns/issues) — reports are tracked and resolved quickly!
+> - 💬 **Questions, strategies, or feature requests?** Join the conversation in [GitHub Discussions](https://github.com/eminsk/yfinance-ta-patterns/discussions).
+> - ⭐ **Find this project useful?** Give it a star on GitHub — it helps more traders and quants discover the tool!
+> - ☕ **Support development (USDT TRC-20):** `TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P` ([Verify on TronScan](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P))
 
 ---
 

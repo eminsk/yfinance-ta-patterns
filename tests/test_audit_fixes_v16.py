@@ -12,12 +12,12 @@ from unittest.mock import patch
 
 import pandas as pd
 import pytest
+import yfinance as _yf
 
+import yfinance_ta_patterns.data as _data_mod
 from yfinance_ta_patterns.cli import build_parser
 from yfinance_ta_patterns.data import MarketDataLoader
 from yfinance_ta_patterns.pattern_analyzer import PatternAnalyzer
-import yfinance_ta_patterns.data as _data_mod
-import yfinance as _yf
 
 if _data_mod.yf is None:
     _data_mod.yf = _yf
