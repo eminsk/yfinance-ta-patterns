@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 import pandas as pd
 import pytest
-import yfinance  # noqa: F401
+
+pytest.importorskip("yfinance")
 
 from yfinance_ta_patterns.data import MarketDataLoader
 from yfinance_ta_patterns.forex_data_loader import ForexDataLoader
