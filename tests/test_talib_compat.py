@@ -7,8 +7,8 @@ import pytest
 
 pd = pytest.importorskip("pandas")
 
-from yfinance_ta_patterns.pattern_analyzer import PatternAnalyzer
-from yfinance_ta_patterns.talib_compat import ALL_CDL_PATTERNS, TALibWrapper
+from yfinance_ta_patterns.pattern_analyzer import PatternAnalyzer  # noqa: E402
+from yfinance_ta_patterns.talib_compat import ALL_CDL_PATTERNS, TALibWrapper  # noqa: E402
 
 
 @pytest.fixture

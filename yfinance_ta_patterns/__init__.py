@@ -19,6 +19,7 @@ if sys.version_info < (3, 9) and sys.implementation.name != "pypy":
 if sys.platform == "win32" and sys.implementation.name == "pypy":
     try:
         import ctypes
+
         import dateutil.tz.win
 
         dateutil.tz.win.tzres.load_name = lambda self, offset: (
