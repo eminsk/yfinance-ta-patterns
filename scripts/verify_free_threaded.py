@@ -22,8 +22,33 @@ def main() -> int:
             "GIL is enabled. Set PYTHON_GIL=0 or pass -X gil=0 when starting Python."
         )
 
-    import numpy as np
-    import pandas as pd
+    try:
+        import numpy as np
+        import pandas as pd
+        has_pandas = True
+    except ImportError:
+        has_pandas = False
+
+    if not has_pandas:
+        from yfinance_ta_patterns.talib_compat import ALL_CDL_PATTERNS, TALibWrapper
+
+        tw = TALibWrapper()
+        count = 64
+        opens = [1.0 + (i * 0.001) for i in range(count)]
+        closes = [1.001 + (i * 0.001) for i in range(count)]
+        highs = [max(o, c) + 0.002 for o, c in zip(opens, closes)]
+        lows = [min(o, c) - 0.002 for o, c in zip(opens, closes)]
+        for pat in ALL_CDL_PATTERNS:
+            fn = getattr(tw, pat)
+            res = fn(opens, highs, lows, closes)
+            assert len(res) == count
+        if _gil_enabled():
+            raise AssertionError("A dependency enabled the GIL during verification.")
+        print(
+            "Free-threaded pure-Python verification passed: "
+            f"Python {sys.version.split()[0]}, patterns: {len(ALL_CDL_PATTERNS)}, GIL disabled."
+        )
+        return 0
 
     try:
         import sklearn
