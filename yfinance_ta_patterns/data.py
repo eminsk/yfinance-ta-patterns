@@ -7,8 +7,20 @@ import importlib.util
 import warnings
 from typing import Any, cast
 
-import numpy as np
-import pandas as pd
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except (ImportError, ModuleNotFoundError, RuntimeError, TypeError):  # pragma: no cover
+    from .talib_compat import np  # type: ignore[no-redef]
+    HAS_NUMPY = False
+
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except (ImportError, ModuleNotFoundError, RuntimeError, TypeError):  # pragma: no cover
+    pd = None  # type: ignore[assignment]
+    HAS_PANDAS = False
+
 import pytz
 
 # yfinance is loaded lazily on demand in _fetch_yfinance

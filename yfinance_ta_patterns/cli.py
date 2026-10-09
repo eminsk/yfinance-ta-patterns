@@ -9,14 +9,41 @@ import unicodedata
 from collections.abc import Sequence
 from typing import Any
 
-import pandas as pd
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except ImportError:
+    pd = None  # type: ignore[assignment]
+    HAS_PANDAS = False
 
 from . import __version__
-from .ai.analyst import AIMarketAnalyst
-from .ai.scorer import AIPatternScorer, PatternConfidenceResult
-from .data import MarketDataLoader, format_price, format_timestamp, normalize_interval
-from .forex_data_loader import FOREX_56_PAIRS
-from .pattern_analyzer import PatternAnalyzer
+
+try:
+    from .ai.analyst import AIMarketAnalyst
+    from .ai.scorer import AIPatternScorer, PatternConfidenceResult
+except ImportError:
+    AIMarketAnalyst = None  # type: ignore[assignment, misc]
+    AIPatternScorer = None  # type: ignore[assignment, misc]
+    PatternConfidenceResult = None  # type: ignore[assignment, misc]
+
+try:
+    from .data import MarketDataLoader, format_price, format_timestamp, normalize_interval
+except ImportError:
+    MarketDataLoader = None  # type: ignore[assignment, misc]
+    format_price = None  # type: ignore[assignment]
+    format_timestamp = None  # type: ignore[assignment]
+    normalize_interval = None  # type: ignore[assignment]
+
+try:
+    from .forex_data_loader import FOREX_56_PAIRS
+except ImportError:
+    FOREX_56_PAIRS = ()  # type: ignore[assignment]
+
+try:
+    from .pattern_analyzer import PatternAnalyzer
+except ImportError:
+    PatternAnalyzer = None  # type: ignore[assignment, misc]
+
 from .talib_compat import HAS_NATIVE_TALIB, get_talib_install_hint, get_talib_status
 
 TIMEFRAME_MAP: dict[str, str] = {

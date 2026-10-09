@@ -19,8 +19,6 @@ def test_all_61_patterns_present():
 
 
 def test_pattern_execution_with_lists():
-    import numpy as np
-
     from yfinance_ta_patterns.talib_compat import HAS_NATIVE_TALIB, TALibWrapper
 
     n = 30
@@ -36,6 +34,8 @@ def test_pattern_execution_with_lists():
 
     # Test talib entry point based on environment
     if HAS_NATIVE_TALIB:
+        import numpy as np
+
         res_native = talib.CDLDOJI(
             np.asarray(open_vals),
             np.asarray(high_vals),
