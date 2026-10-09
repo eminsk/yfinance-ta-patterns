@@ -239,6 +239,7 @@ def test_last_4h_bucket_preserved_after_market_close() -> None:
 # ==============================================================================
 def test_repair_without_sklearn_emits_user_warning() -> None:
     """Issue 6: fetch(repair=True) emits UserWarning when HAS_SKLEARN is False."""
+    pytest.importorskip("yfinance")
     loader = MarketDataLoader(symbol="AAPL", interval="1d", repair=True)
 
     with patch("yfinance_ta_patterns.data.HAS_SKLEARN", False), patch(

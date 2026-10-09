@@ -247,7 +247,7 @@ jobs:
         run: |
           mkdir -p release_wheels
           for i in 1 2 3; do
-            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels --clobber -p "*${{ matrix.abi }}*linux*" 2>/dev/null && break || sleep 3
+            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels --clobber -p "*${{ matrix.abi }}*linux*" -p "*yfinance*" 2>/dev/null && break || sleep 3
           done || true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -268,7 +268,7 @@ jobs:
           if [ "${{ matrix.pypy-version }}" = "pypy-3.11.15" ]; then
             uv add "pandas<=3.0.5" --find-links ../release_wheels
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.10" ]; then
-            uv add "pandas<=2.2.3" "numpy==2.2.6" --find-links ../release_wheels
+            uv add "pandas<=2.2.3" "numpy==2.2.6" "yfinance<=1.2.0" --find-links ../release_wheels
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.9" ]; then
             uv add "pandas<=2.2.3" "numpy<2" --find-links ../release_wheels
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.8" ]; then
@@ -313,7 +313,7 @@ jobs:
         run: |
           mkdir -p release_wheels
           for i in 1 2 3; do
-            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels --clobber -p "*${{ matrix.abi }}*macosx*" 2>/dev/null && break || sleep 3
+            gh release download v0.3.30 -R eminsk/yfinance-ta-patterns -D release_wheels --clobber -p "*${{ matrix.abi }}*macosx*" -p "*yfinance*" 2>/dev/null && break || sleep 3
           done || true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -340,7 +340,7 @@ jobs:
           if [ "${{ matrix.pypy-version }}" = "pypy-3.11.15" ]; then
             uv add "pandas<=3.0.5" --find-links ../release_wheels
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.10" ]; then
-            uv add "pandas<=2.2.3" "numpy==2.2.6" --find-links ../release_wheels
+            uv add "pandas<=2.2.3" "numpy==2.2.6" "yfinance<=1.2.0" --find-links ../release_wheels
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.9" ]; then
             uv add "pandas<=2.2.3" "numpy<2" --find-links ../release_wheels
           elif [ "${{ matrix.pypy-version }}" = "pypy-3.8" ]; then

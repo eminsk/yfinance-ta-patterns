@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 
 from yfinance_ta_patterns.forex_data_loader import ForexDataLoader
 
@@ -54,6 +55,7 @@ def test_process_timezone_and_multiindex():
 
 
 def test_get_data_with_mock():
+    pytest.importorskip("yfinance")
     loader = ForexDataLoader("EURUSD", period="5d", interval="15m")
     assert loader.ticker == "EURUSD=X"
 
