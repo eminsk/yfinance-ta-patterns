@@ -64,9 +64,6 @@ talib = [
     "ta-lib==0.7.1; implementation_name == 'cpython' and python_version >= '3.14'",
     "ta-lib>=0.4.19; implementation_name == 'cpython' and python_version < '3.14'",
 ]
-repair = [
-    "scikit-learn>=1.0.0; implementation_name == 'cpython'",
-]
 yfinance = [
     "yfinance>=0.2.54",
 ]
@@ -81,7 +78,6 @@ all = [
     "ta-lib>=0.4.19,<=0.7.1; implementation_name == 'pypy' and python_version < '3.13'",
     "ta-lib==0.7.1; implementation_name == 'cpython' and python_version >= '3.14'",
     "ta-lib>=0.4.19; implementation_name == 'cpython' and python_version < '3.14'",
-    "scikit-learn>=1.0.0; implementation_name == 'cpython'",
 ]
 dev = [
     "pytest>=8.0; python_version >= '3.9'",

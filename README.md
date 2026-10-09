@@ -76,11 +76,11 @@ Universal runtime compatibility across **CPython 3.8 to 3.16, free-threaded No-G
 #### Option A: Using `uv` (Fastest & Recommended)
 
 ```bash
-# 1. Full institutional setup with all extras (TA-Lib + Scikit-Learn repair + AI):
-uv add "yfinance-ta-patterns[all]"
-
-# 2. Standard install (pure-Python fallback, zero C compiler required):
+# 1. Standard install (100% Autonomous AI + Pattern Engine, zero C compiler or Scikit-Learn required):
 uv add yfinance-ta-patterns
+
+# 2. Optional: with C TA-Lib extension if you already have local C headers:
+uv add "yfinance-ta-patterns[talib]"
 
 # 3. Instant execution without installing into environment:
 uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h --ai
