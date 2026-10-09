@@ -133,8 +133,6 @@ __all__ = [
     "ALLOWED_ASSET_TYPES",
     "ALL_CDL_PATTERNS",
     "CUSTOM_PATTERNS",
-    "get_all_patterns",
-
     "FOREX_56_PAIRS",
     "FOREX_MAJOR_CURRENCIES",
     "HAS_NATIVE_TALIB",
@@ -159,6 +157,7 @@ __all__ = [
     "classify_asset",
     "format_price",
     "format_timestamp",
+    "get_all_patterns",
     "get_talib_install_hint",
     "get_talib_status",
     "is_freethreaded",

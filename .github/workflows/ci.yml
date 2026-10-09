@@ -436,7 +436,8 @@ jobs:
       - name: Install yfinance-ta-patterns directly from git source
         run: |
           python -m pip install --upgrade pip
-          python -m pip install . pytest rich pytz
+          python -m pip install --no-deps .
+          python -m pip install pytest rich pytz
 
       - name: Run test suite from git source (No-GIL)
         env:

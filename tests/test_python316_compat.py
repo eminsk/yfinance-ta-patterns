@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import concurrent.futures
-import sys
 
 import yfinance_ta_patterns as ytp
 from yfinance_ta_patterns.talib_compat import (
@@ -12,7 +11,6 @@ from yfinance_ta_patterns.talib_compat import (
     get_talib_status,
     is_freethreaded,
     is_gil_enabled,
-    talib,
 )
 
 
@@ -90,11 +88,11 @@ def test_python316t_multithreaded_parallel_execution():
 def test_pure_python_wrapper_fallback_vector_equivalence():
     """Verify TALibWrapper correctly returns list or vector matching input length."""
     wrapper = TALibWrapper(force_fallback=True)
-    o = [10.0, 11.0, 12.0]
-    h = [12.0, 13.0, 14.0]
-    l = [9.0, 10.0, 11.0]
-    c = [11.0, 12.0, 13.0]
+    open_v = [10.0, 11.0, 12.0]
+    high_v = [12.0, 13.0, 14.0]
+    low_v = [9.0, 10.0, 11.0]
+    close_v = [11.0, 12.0, 13.0]
 
-    out = wrapper.CDLDOJI(o, h, l, c)
+    out = wrapper.CDLDOJI(open_v, high_v, low_v, close_v)
     assert len(out) == 3
     assert hasattr(out, "__getitem__")

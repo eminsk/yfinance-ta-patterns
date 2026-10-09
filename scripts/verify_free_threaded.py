@@ -64,9 +64,8 @@ def main() -> int:
 
     analyzer = PatternAnalyzer(data)
     assert len(analyzer.pattern_functions) == 61, "PatternAnalyzer must expose 61 patterns"
-    if HAS_NATIVE_TALIB:
-        if set(analyzer.pattern_functions) != set(ALL_CDL_PATTERNS):
-            raise AssertionError("PatternAnalyzer does not expose all 61 native TA-Lib patterns.")
+    if HAS_NATIVE_TALIB and set(analyzer.pattern_functions) != set(ALL_CDL_PATTERNS):
+        raise AssertionError("PatternAnalyzer does not expose all 61 native TA-Lib patterns.")
 
     for pattern in analyzer.pattern_functions:
         analyzer.get_signals(pattern)

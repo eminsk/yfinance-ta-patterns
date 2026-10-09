@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import ast
 import warnings
+
+import pytest
 
 # Ignore LibreSSL runtime warning from urllib3 on older macOS Python builds
 warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*")
@@ -18,9 +21,6 @@ except (ImportError, ModuleNotFoundError):
     mock_ssl.create_default_context.return_value = MagicMock()
     sys.modules["ssl"] = mock_ssl
     sys.modules["_ssl"] = mock_ssl
-
-import ast
-import pytest
 
 try:
     import pandas  # noqa: F401
@@ -38,7 +38,7 @@ except ImportError:
 def _get_top_level_imports(filepath: str) -> set[str]:
     """Parse top-level imports of a test module without executing it."""
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             tree = ast.parse(f.read(), filename=filepath)
         needed: set[str] = set()
         for node in tree.body:
