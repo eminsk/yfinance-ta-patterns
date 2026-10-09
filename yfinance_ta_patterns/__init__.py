@@ -7,7 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("yfinance-ta-patterns")
 except PackageNotFoundError:  # pragma: no cover - during editable installs
-    __version__ = "0.3.57"
+    __version__ = "0.3.58"
 
 import sys
 
@@ -124,10 +124,17 @@ def __getattr__(name: str) -> object:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
+def get_all_patterns() -> list[str]:
+    """Return a list of all 61 supported candlestick pattern names."""
+    return list(ALL_CDL_PATTERNS)
+
+
 __all__ = [
     "ALLOWED_ASSET_TYPES",
     "ALL_CDL_PATTERNS",
     "CUSTOM_PATTERNS",
+    "get_all_patterns",
+
     "FOREX_56_PAIRS",
     "FOREX_MAJOR_CURRENCIES",
     "HAS_NATIVE_TALIB",
