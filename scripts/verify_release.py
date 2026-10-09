@@ -70,7 +70,13 @@ def check_2_dependencies() -> None:
     import numpy as np
     import pandas as pd
     import rich
-    import yfinance
+
+    try:
+        import yfinance
+
+        yf_ver = getattr(yfinance, "__version__", "installed")
+    except (ImportError, ModuleNotFoundError):
+        yf_ver = "optional (not installed)"
 
     from yfinance_ta_patterns.talib_compat import HAS_NATIVE_TALIB, SUPPORTED_FALLBACK_PATTERNS
 
@@ -85,7 +91,7 @@ def check_2_dependencies() -> None:
         else f"Pure-Python Fallback ({len(SUPPORTED_FALLBACK_PATTERNS)} patterns)"
     )
     print(
-        f"\n       [Dependencies: numpy {np.__version__}, pandas {pd.__version__}, rich {rich_ver}, yfinance {yfinance.__version__} | TA-Lib: {mode}]",
+        f"\n       [Dependencies: numpy {np.__version__}, pandas {pd.__version__}, rich {rich_ver}, yfinance {yf_ver} | TA-Lib: {mode}]",
         end="",
     )
 

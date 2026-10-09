@@ -415,6 +415,6 @@ jobs:
           uv init --no-workspace test_pypy12 --python pypy-3.12
           cd test_pypy12
           uv python pin pypy-3.12
-          uv add "$GITHUB_WORKSPACE"
+          uv add --no-deps "$GITHUB_WORKSPACE"
           uv run python "$GITHUB_WORKSPACE/scripts/verify_pypy_312.py"
 
