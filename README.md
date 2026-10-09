@@ -1,6 +1,6 @@
 # Market Candlestick & AI Pattern Scanner (`yfinance-ta-patterns`)
 
-[![PyPI](https://img.shields.io/pypi/v/yfinance-ta-patterns?color=blue)](https://pypi.org/project/yfinance-ta-patterns/)
+[![PyPI](https://img.shields.io/pypi/v/yfinance-ta-patterns.svg?style=flat&logo=pypi)](https://pypi.org/project/yfinance-ta-patterns/)
 [![Conda-Forge](https://img.shields.io/conda/vn/conda-forge/yfinance-ta-patterns.svg?style=flat&logo=condaforge)](https://anaconda.org/conda-forge/yfinance-ta-patterns)
 [![Ubuntu / Debian PPA](https://img.shields.io/badge/Ubuntu%20%2F%20Debian-APT%20PPA-E95420?logo=ubuntu&logoColor=white)](https://eminsk.github.io/ppa/)
 [![Downloads](https://static.pepy.tech/badge/yfinance-ta-patterns)](https://pepy.tech/project/yfinance-ta-patterns)
@@ -64,8 +64,8 @@ Universal runtime compatibility across **CPython 3.8 to 3.16, free-threaded No-G
 
 | Platform / Tool | Command | Description |
 |:---|:---|:---|
-| **Conda / Mamba** | `conda install -c m_n_nik yfinance-ta-patterns` | Recommended for Quant, Finance & Data Science |
-| **Conda + Native TA-Lib** | `conda install -c m_n_nik yfinance-ta-patterns` | Full C-accelerated TA-Lib with **zero compilation** |
+| **Conda / Mamba** | `conda install -c conda-forge yfinance-ta-patterns` | Recommended for Quant, Finance & Data Science |
+| **Conda + Native TA-Lib** | `conda install -c conda-forge yfinance-ta-patterns ta-lib` | Full C-accelerated TA-Lib with **zero compilation** |
 | **Pixi** | `pixi add yfinance-ta-patterns` | Modern high-speed reproducible Conda workflow |
 | **Ubuntu / Debian (APT PPA)** | `curl -sS https://eminsk.github.io/ppa/setup.sh \| sudo bash`<br>`sudo apt install python3-yfinance-ta-patterns` | Official PPA repository (pure apt, zero URLs) |
 | **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.49-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
