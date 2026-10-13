@@ -540,6 +540,12 @@ def get_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Launch native Model Context Protocol (MCP) stdio server for AI agents.",
     )
+    parser.add_argument(
+        "positional_symbols",
+        nargs="*",
+        default=[],
+        help="Optional positional ticker symbol(s), e.g. 'yftp SPY' or 'yftp NVDA AAPL MSFT'.",
+    )
     return parser
 
 
@@ -686,6 +692,8 @@ def run_cli(args: argparse.Namespace) -> int:
         args.all_patterns = True
 
     symbol_input = args.symbol or getattr(args, "symbol_alias", None)
+    if not symbol_input and getattr(args, "positional_symbols", None):
+        symbol_input = ",".join(args.positional_symbols)
     symbols = resolve_symbols(symbol_input, getattr(args, "all_pairs", False))
 
     min_confidence: float = (
