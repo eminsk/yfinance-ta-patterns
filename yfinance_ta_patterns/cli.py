@@ -535,6 +535,11 @@ def get_parser() -> argparse.ArgumentParser:
         default="text",
         help="Output presentation format.",
     )
+    parser.add_argument(
+        "--mcp",
+        action="store_true",
+        help="Launch native Model Context Protocol (MCP) stdio server for AI agents.",
+    )
     return parser
 
 
@@ -647,6 +652,11 @@ def run_cli(args: argparse.Namespace) -> int:
     if sys.stderr and hasattr(sys.stderr, "reconfigure"):
         with contextlib.suppress(Exception):
             sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+    if getattr(args, "mcp", False):
+        from .mcp_server import main_mcp
+
+        return main_mcp()
 
     if getattr(args, "check_talib", False):
         status = get_talib_status()
