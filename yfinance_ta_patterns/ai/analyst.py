@@ -52,7 +52,7 @@ class AIMarketAnalyst:
     Aggregates scored candlestick patterns and macro-technical context to generate:
     1. Human-readable executive market briefs.
     2. Structured JSON payloads for automated trading systems.
-    3. Context-rich prompt templates optimized for LLMs (GPT-4o, Claude 3.5, Gemini).
+    3. Context-rich prompt templates optimized for frontier reasoning LLMs (Claude 3.7 Sonnet, o3-mini, DeepSeek-R1, Gemini 2.5).
     """
 
     def __init__(
@@ -284,13 +284,15 @@ class AIMarketAnalyst:
         symbol_or_results: str | list[PatternConfidenceResult] | None = None,
         timeframe: str | None = None,
     ) -> str:
-        """Create a tailored prompt for Large Language Models to provide second-opinion analysis."""
+        """Create a tailored prompt for frontier reasoning LLMs (Claude 3.7 Sonnet, o3-mini, DeepSeek-R1, Gemini 2.5) to provide second-opinion analysis."""
         brief = self.generate_brief(symbol_or_results, timeframe)
         return (
-            "You are a Senior Quantitative Portfolio Manager and Technical Analyst. "
-            "Review the following algorithmic pattern detection and market intelligence report. "
-            "Evaluate whether the identified setups offer positive expected value (+EV), "
-            "assess potential macroeconomic or correlation risks, and advise on optimal position sizing.\n\n"
+            "You are a Senior Quantitative Portfolio Manager and Technical Analyst.\n"
+            "Review the following algorithmic pattern detection and market intelligence report.\n"
+            "Perform a rigorous step-by-step risk-adjusted evaluation:\n"
+            "1. Evaluate whether the identified pattern setups offer positive expected value (+EV) under current trend regime.\n"
+            "2. Assess macroeconomic, liquidity, volatility (Wilder ATR), and correlation risks.\n"
+            "3. Critique the ATR-based stop-loss and take-profit targets, and recommend optimal risk-adjusted position sizing.\n\n"
             f"{brief}\n\n"
-            "Provide your structured investment committee assessment."
+            "Provide your structured investment committee assessment with clear trade execution guidance."
         )

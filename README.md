@@ -40,7 +40,7 @@ Universal runtime compatibility across **CPython 3.8 to 3.16, free-threaded No-G
   - Canonical Wilder's RSI (14) momentum exhaustion & divergence
   - Canonical Wilder's ATR (14) volatility expansion & candle body dominance
 - **Automated Trade Setups**: Computes entry price, ATR-based invalidation stop-loss, and multi-tier take-profit targets (1.5x / 3.0x risk/reward).
-- **AI Market Analyst & LLM Integration**: Generates executive markdown briefs, JSON payloads, and engineered prompts tailored for external AI agents (GPT-4o, Claude 3.5, Gemini, Ollama).
+- **AI Market Analyst & LLM Integration**: Generates executive markdown briefs, JSON payloads, and engineered reasoning prompts tailored for frontier AI agents and reasoning models (**Claude 3.7 Sonnet**, **OpenAI o3-mini / o1**, **DeepSeek-R1 / V3**, **Gemini 2.5 Flash / Pro**, **GPT-4.5**, Ollama).
 - **Quantitative Pattern Ranking & Backtesting**: Unbiased next-open execution (`Open[i+1]`), symmetric Long/Short trading, universal FX quote-currency conversion, transaction cost modeling (commissions & slippage), overfitting filters (`min_signals`), and periodic Sharpe ratio accounting for non-trading hold periods.
 
 ---
@@ -343,7 +343,7 @@ yftp --symbol GBPUSD --timeframe 5m --period 30d --all-patterns --ai-analyst
 # 5. Detect a single pattern with classic output:
 yftp --pattern HAMMER --symbol AAPL --timeframe 1h --period 60d
 
-# 6. Generate an LLM-ready prompt template for GPT-4o / Claude:
+# 6. Generate an LLM-ready prompt template for Frontier Reasoning Models (Claude 3.7 Sonnet / o3-mini / DeepSeek-R1):
 yftp --all-patterns --symbol EURUSD --timeframe 1h --period 60d --prompt
 ```
 
@@ -452,7 +452,7 @@ results = analyst.analyze(min_confidence=0.65)
 brief = analyst.generate_brief(results)
 print(brief)
 
-# 2. Prompt for GPT-4o / Claude / Local LLM
+# 2. Prompt for Frontier Reasoning Models (Claude 3.7 Sonnet / o3-mini / DeepSeek-R1 / Gemini 2.5)
 llm_prompt = analyst.to_llm_prompt(results)
 
 # 3. JSON Payload for APIs / Microservices
@@ -494,6 +494,69 @@ for r in top_patterns:
 report_df = tester.get_comparison_report()
 print(report_df)
 ```
+
+---
+
+<a id="native-mcp-model-context-protocol-server-for-ai-agents"></a>
+## 🤖 Native MCP (Model Context Protocol) Server for AI Agents
+
+`yfinance-ta-patterns` includes a built-in, zero-overhead **Native MCP JSON-RPC 2.0 Server** (`yfinance-ta-mcp`) that exposes institutional technical analysis, candlestick pattern scanning, AI confluence scoring, trade setups, macroeconomic calendars, and market news directly to AI coding assistants and autonomous agent runtimes (**Claude Code**, **Claude Desktop**, **Cursor**, **Windsurf**, **Google Antigravity**, **Gemini CLI**, and any client supporting the [Model Context Protocol](https://modelcontextprotocol.io/)).
+
+Optimized for **Frontier Reasoning Models** (**Claude 3.7 Sonnet** with Extended Thinking, **OpenAI o3-mini / o1**, **DeepSeek-R1**, **Gemini 2.5 Pro / Flash**, and **GPT-4.5**).
+
+### 🚀 Instant Launch
+
+```bash
+# Direct execution without prior installation (via uvx):
+uvx --from yfinance-ta-patterns yfinance-ta-mcp
+
+# Or if installed in your Python environment:
+yfinance-ta-mcp
+```
+
+### ⚙️ Client Configurations
+
+#### 1. Claude Desktop (`claude_desktop_config.json`)
+```json
+{
+  "mcpServers": {
+    "yfinance-ta": {
+      "command": "uvx",
+      "args": ["--from", "yfinance-ta-patterns", "yfinance-ta-mcp"]
+    }
+  }
+}
+```
+
+#### 2. Cursor / Windsurf (`mcp.json` or Extension Settings)
+```json
+{
+  "mcpServers": {
+    "yfinance-ta": {
+      "command": "uvx",
+      "args": ["--from", "yfinance-ta-patterns", "yfinance-ta-mcp"]
+    }
+  }
+}
+```
+
+### 🛠️ Available MCP Tools
+
+| Tool | Description | Key Arguments |
+|:---|:---|:---|
+| `ta_scan_symbol` | Scans a symbol for active candlestick patterns, computes deterministic AI Confluence Scores (0.0–1.0), and generates ATR-based Trade Setups (Entry, Stop-Loss, TP1, TP2). | `symbol`, `timeframe`, `period`, `min_confidence`, `compact` |
+| `ta_scan_watchlist` | High-throughput concurrent scanner across up to 25 symbols with isolated timeouts and aggregated trade opportunities. | `symbols` (list), `timeframe`, `min_confidence` |
+| `ta_backtest_patterns` | Institutional unbiased next-open backtester ranking patterns by win rate, total PnL, periodic Sharpe, and max drawdown. | `symbol`, `period`, `timeframe`, `min_signals`, `execution` |
+| `ta_get_economic_calendar` | Live high-impact macroeconomic calendar events relevant to the asset's currency with in-memory caching. | `symbol` (e.g. 'EURUSD', 'AAPL') |
+| `ta_get_news` | Live market news headlines, publishers, and publication timestamps for an asset. | `symbol`, `limit` |
+
+### 📚 MCP Resources & Prompts
+
+* **Resources:**
+  * `ta://patterns/catalog` — Canonical catalog of all 61 candlestick patterns with recognition rules and runtime mode.
+  * `ta://forex/56-pairs` — Canonical universe of 56 major and cross currency pairs.
+* **Prompts:**
+  * `ta_market_analyst_prompt` — Generates structured quantitative portfolio manager reasoning prompts tailored for Claude 3.7 Sonnet, o3-mini, and DeepSeek-R1.
 
 ---
 

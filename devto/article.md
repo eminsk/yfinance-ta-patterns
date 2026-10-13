@@ -19,7 +19,7 @@ Today, I’m open-sourcing **[yfinance-ta-patterns](https://github.com/eminsk/yf
 - **Full 61-Pattern Scanning:** Native TA-Lib acceleration supported with pre-built binary wheels for Windows x64 across Python 3.12, 3.13, 3.14, and Python 3.15 (including Free-Threaded No-GIL).
 - **Multi-Factor AI Confluence Engine:** Calculates a deterministic quantitative confluence score ($0.0 - 1.0$) evaluating EMA trend alignment (20/50/200), zero-lookahead Relative Volume (RVOL), canonical Wilder's RSI (14), and ATR volatility expansion.
 - **Automated Trade Setup Generator:** Instantly calculates Entry, ATR-based Invalidation Stop-Loss, and Multi-Tier Take-Profit targets (1.5R and 3.0R risk/reward).
-- **LLM-Ready Market Intelligence:** Generates executive Markdown briefs and structured JSON payloads tailored for autonomous AI agents (Claude 3.5, GPT-4o, Gemini, DeepSeek, Ollama).
+- **LLM-Ready Market Intelligence:** Generates executive Markdown briefs and structured JSON payloads tailored for autonomous AI agents and frontier reasoning models (Claude 3.7 Sonnet, OpenAI o3-mini/o1, DeepSeek-R1, Gemini 2.5, Ollama).
 - **Unbiased Quantitative Backtester:** Simulates realistic execution on the next bar open (`Open[i+1]`), accounting for slippage, trading fees, FX currency conversion, and periodic Sharpe ratios.
 - **Python 3.8 to 3.15 & Free-Threaded (PEP 703 No-GIL) Ready:** Optimized for high-throughput multi-pair parallel scanning without GIL contention.
 

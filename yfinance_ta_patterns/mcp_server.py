@@ -56,7 +56,9 @@ MCP_SERVER_INSTRUCTIONS = (
     "yfinance-ta-patterns MCP server for multi-asset candlestick pattern scanning, "
     "deterministic AI Confluence Scoring (EMA 20/50/200 + RVOL + Wilder RSI-14 + Wilder ATR-14), "
     "ATR-based Trade Setups (Entry, Stop-Loss, TP1, TP2), unbiased next-open backtesting, "
-    "and macroeconomic calendar events filtered for a selected asset. "
+    "macroeconomic calendar events, and real-time market news. "
+    "Optimized for tool-calling and reasoning workflows by frontier AI models "
+    "(Claude 3.7 Sonnet, OpenAI o3-mini/o1, DeepSeek-R1, Gemini 2.5). "
     "Supported tickers: Stocks ('AAPL', 'NVDA'), Crypto ('BTC-USD'), Forex ('EURUSD=X'), "
     "Indices ('^GSPC'), Commodities ('GC=F'). Yahoo Finance lookback limits apply to intraday "
     "intervals ('1m' <= '7d', '5m'/'15m'/'30m' <= '60d', '1h'/'4h' <= '730d') and are "
@@ -494,7 +496,11 @@ MCP_RESOURCES_SCHEMA: list[dict[str, Any]] = [
 MCP_PROMPTS_SCHEMA: list[dict[str, Any]] = [
     {
         "name": "ta_market_analyst_prompt",
-        "description": "Generate an institutional Quantitative Portfolio Manager prompt with live pattern setups for a symbol.",
+        "description": (
+            "Generate an institutional Quantitative Portfolio Manager reasoning prompt "
+            "(optimized for Claude 3.7 Sonnet, OpenAI o3-mini, DeepSeek-R1, Gemini 2.5) "
+            "with live pattern setups for a symbol."
+        ),
         "arguments": [
             {
                 "name": "symbol",
