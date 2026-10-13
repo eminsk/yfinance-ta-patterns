@@ -14,6 +14,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/eminsk/yfinance-ta-patterns?style=flat&color=red&logo=github)](https://github.com/eminsk/yfinance-ta-patterns/issues)
 [![GitHub Discussions](https://img.shields.io/badge/Discussions-Join_Community-blue?style=flat&logo=github)](https://github.com/eminsk/yfinance-ta-patterns/discussions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Featured on Context Unfiltered](https://img.shields.io/badge/Featured%20on-Context%20Unfiltered-E4405F?style=flat&logo=instagram&logoColor=white)](https://www.instagram.com/reels/Ddz3Qs5IwKH/)
 [![Donate USDT](https://img.shields.io/badge/Donate-USDT_(TRC20)-26A17B?style=flat&logo=tether&logoColor=white)](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P)
 
 High-performance Python library, CLI, and Native MCP Server (`yfinance-ta-mcp`) that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate multi-factor confluence scores (deterministic quantitative confluence heuristic, not uncalibrated win-rate probability), trade setups, and LLM-ready market briefs.
@@ -21,6 +22,7 @@ High-performance Python library, CLI, and Native MCP Server (`yfinance-ta-mcp`) 
 Universal runtime compatibility across **CPython 3.8 to 3.16, free-threaded No-GIL 3.13t to 3.16t, PyPy 3.8 to 3.12 with high-speed JIT tracing, and legacy Windows 7+ support**, installed directly from PyPI with zero compilation required.
 
 > ### 🤝 Community, Issues & Support
+> - 🎬 **Featured on Video:** In-depth walkthrough by **Context Unfiltered (Tech & Science)**: *"New Python Library Combines Candlestick Patterns With AI"* — [Watch on Instagram Reels](https://www.instagram.com/reels/Ddz3Qs5IwKH/)
 > - 🐛 **Found a bug or calculation issue?** Please [Open an Issue](https://github.com/eminsk/yfinance-ta-patterns/issues) — reports are tracked and resolved quickly!
 > - 💬 **Questions, strategies, or feature requests?** Join the conversation in [GitHub Discussions](https://github.com/eminsk/yfinance-ta-patterns/discussions).
 > - ⭐ **Find this project useful?** Give it a star on GitHub — it helps more traders and quants discover the tool!
