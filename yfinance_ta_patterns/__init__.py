@@ -20,7 +20,7 @@ if sys.platform == "win32" and sys.implementation.name == "pypy":
     try:
         import ctypes
 
-        import dateutil.tz.win
+        import dateutil.tz.win  # type: ignore[import-untyped,import-not-found]
 
         dateutil.tz.win.tzres.load_name = lambda self, offset: (
             lambda buf: buf[: self.LoadStringW(int(self._tzres._handle), offset, buf, 1024)]
