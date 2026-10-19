@@ -11,6 +11,7 @@ from typing import Any
 
 try:
     import pandas as pd
+
     HAS_PANDAS = True
 except ImportError:
     pd = None  # type: ignore[assignment]
@@ -27,9 +28,16 @@ except ImportError:
     PatternConfidenceResult = None  # type: ignore[assignment, misc]
 
 try:
-    from .data import MarketDataLoader, format_price, format_timestamp, normalize_interval
+    from .data import (
+        MarketDataLoader,
+        classify_asset,
+        format_price,
+        format_timestamp,
+        normalize_interval,
+    )
 except ImportError:
     MarketDataLoader = None  # type: ignore[assignment, misc]
+    classify_asset = None  # type: ignore[assignment]
     format_price = None  # type: ignore[assignment]
     format_timestamp = None  # type: ignore[assignment]
     normalize_interval = None  # type: ignore[assignment]
@@ -131,14 +139,19 @@ def format_markdown_table(df: pd.DataFrame) -> str:
 def resolve_symbols(symbol_arg: str | None, all_pairs_flag: bool = False) -> list[str]:
     """Resolve target symbols from CLI arguments.
 
-    If symbol_arg is None, empty, 'ALL', 'FOREX', 'PAIRS', or all_pairs_flag is True,
+    If symbol_arg is None, 'ALL', 'FOREX', 'PAIRS', or all_pairs_flag is True,
     returns all 56 major Forex currency pairs.
     If symbol_arg contains comma-separated values (e.g. 'EURUSD,GBPUSD'), returns the list.
     Otherwise returns [symbol_arg].
     """
     if all_pairs_flag:
         return list(FOREX_56_PAIRS)
-    if not symbol_arg or symbol_arg.strip().upper() in (
+    if symbol_arg is None:
+        return list(FOREX_56_PAIRS)
+    cleaned = symbol_arg.strip()
+    if not cleaned:
+        raise ValueError("Symbol cannot be empty.")
+    if cleaned.upper() in (
         "ALL",
         "FOREX",
         "PAIRS",
@@ -147,9 +160,12 @@ def resolve_symbols(symbol_arg: str | None, all_pairs_flag: bool = False) -> lis
         "*",
     ):
         return list(FOREX_56_PAIRS)
-    if "," in symbol_arg:
-        return [s.strip() for s in symbol_arg.split(",") if s.strip()]
-    return [symbol_arg.strip()]
+    if "," in cleaned:
+        parts = [s.strip() for s in cleaned.split(",") if s.strip()]
+        if not parts:
+            raise ValueError("No valid symbols specified.")
+        return parts
+    return [cleaned]
 
 
 def render_rich_opportunity_ranking(
@@ -541,6 +557,13 @@ def get_parser() -> argparse.ArgumentParser:
         help="Launch native Model Context Protocol (MCP) stdio server for AI agents.",
     )
     parser.add_argument(
+        "--backtest",
+        "--test",
+        dest="backtest",
+        action="store_true",
+        help="Run quantitative pattern backtester and rank patterns by performance (uses --execution, --commission, --slippage, --min-signals).",
+    )
+    parser.add_argument(
         "positional_symbols",
         nargs="*",
         default=[],
@@ -550,8 +573,20 @@ def get_parser() -> argparse.ArgumentParser:
 
 
 def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
-    """Parse CLI arguments."""
-    return get_parser().parse_args(args)
+    """Parse CLI arguments supporting intermixed positional arguments and flags."""
+    parsed = get_parser().parse_intermixed_args(args)
+    pos = getattr(parsed, "positional_symbols", None) or []
+    sym = getattr(parsed, "symbol", None) or getattr(parsed, "symbol_alias", None)
+    if sym or pos:
+        combined: list[str] = []
+        if sym:
+            combined.extend([s.strip() for s in sym.split(",") if s.strip()])
+        if pos:
+            for p in pos:
+                combined.extend([s.strip() for s in p.split(",") if s.strip()])
+        if combined:
+            parsed.symbol = ",".join(combined)
+    return parsed
 
 
 build_parser = get_parser
@@ -563,7 +598,9 @@ def _display_calendar_for_symbol(symbol: str, fmt: str = "text") -> None:
         from .economic_calendar import InvestingCalendar
 
         with InvestingCalendar(timeout=3.0) as cal:
-            cal_res = cal.get_events_for_symbol(symbol=symbol, days=7, importances=["2", "3"], limit=10)
+            cal_res = cal.get_events_for_symbol(
+                symbol=symbol, days=7, importances=["2", "3"], limit=10
+            )
             events = cal_res.get("events", [])
             source = cal_res.get("source", "unknown")
             if fmt == "markdown":
@@ -593,7 +630,9 @@ def _display_calendar_for_symbol(symbol: str, fmt: str = "text") -> None:
                         curr = ev.get("currency", "")
                         ev_name = ev.get("event", "")
                         forecast = ev.get("forecast", "—")
-                        print(f"   • [{time_str}] ({curr}) {ev_name} [{stars}] Forecast: {forecast}")
+                        print(
+                            f"   • [{time_str}] ({curr}) {ev_name} [{stars}] Forecast: {forecast}"
+                        )
                 print("=" * 76)
     except Exception as exc:
         if fmt != "json":
@@ -606,7 +645,9 @@ def _display_news_for_symbol(symbol: str, fmt: str = "text") -> None:
         import yfinance as yf
 
         ticker = yf.Ticker(symbol)
-        raw_news = ticker.get_news(count=5) if hasattr(ticker, "get_news") else getattr(ticker, "news", [])
+        raw_news = (
+            ticker.get_news(count=5) if hasattr(ticker, "get_news") else getattr(ticker, "news", [])
+        )
         if fmt == "markdown":
             print(f"### 📰 Recent Market News: {symbol}\n")
             if not raw_news:
@@ -614,10 +655,25 @@ def _display_news_for_symbol(symbol: str, fmt: str = "text") -> None:
             else:
                 for art in (raw_news or [])[:5]:
                     if isinstance(art, dict):
-                        content = art.get("content", {}) if isinstance(art.get("content"), dict) else {}
-                        title = content.get("title") or art.get("title") or art.get("headline") or "News Headline"
-                        pub = (content.get("provider", {}) or {}).get("displayName") or art.get("publisher") or ""
-                        link = (content.get("canonicalUrl", {}) or {}).get("url") or art.get("link") or ""
+                        content = (
+                            art.get("content", {}) if isinstance(art.get("content"), dict) else {}
+                        )
+                        title = (
+                            content.get("title")
+                            or art.get("title")
+                            or art.get("headline")
+                            or "News Headline"
+                        )
+                        pub = (
+                            (content.get("provider", {}) or {}).get("displayName")
+                            or art.get("publisher")
+                            or ""
+                        )
+                        link = (
+                            (content.get("canonicalUrl", {}) or {}).get("url")
+                            or art.get("link")
+                            or ""
+                        )
                         pub_str = f" *({pub})*" if pub else ""
                         link_str = f" — [link]({link})" if link else ""
                         print(f"- **{title}**{pub_str}{link_str}")
@@ -630,10 +686,25 @@ def _display_news_for_symbol(symbol: str, fmt: str = "text") -> None:
             else:
                 for art in (raw_news or [])[:5]:
                     if isinstance(art, dict):
-                        content = art.get("content", {}) if isinstance(art.get("content"), dict) else {}
-                        title = content.get("title") or art.get("title") or art.get("headline") or "News Headline"
-                        pub = (content.get("provider", {}) or {}).get("displayName") or art.get("publisher") or ""
-                        link = (content.get("canonicalUrl", {}) or {}).get("url") or art.get("link") or ""
+                        content = (
+                            art.get("content", {}) if isinstance(art.get("content"), dict) else {}
+                        )
+                        title = (
+                            content.get("title")
+                            or art.get("title")
+                            or art.get("headline")
+                            or "News Headline"
+                        )
+                        pub = (
+                            (content.get("provider", {}) or {}).get("displayName")
+                            or art.get("publisher")
+                            or ""
+                        )
+                        link = (
+                            (content.get("canonicalUrl", {}) or {}).get("url")
+                            or art.get("link")
+                            or ""
+                        )
                         pub_str = f" ({pub})" if pub else ""
                         print(f"   • {title}{pub_str}")
                         if link:
@@ -662,7 +733,7 @@ def run_cli(args: argparse.Namespace) -> int:
     if getattr(args, "mcp", False):
         from .mcp_server import main_mcp
 
-        return main_mcp()
+        return main_mcp([])
 
     if getattr(args, "check_talib", False):
         status = get_talib_status()
@@ -692,9 +763,18 @@ def run_cli(args: argparse.Namespace) -> int:
         args.all_patterns = True
 
     symbol_input = args.symbol or getattr(args, "symbol_alias", None)
-    if not symbol_input and getattr(args, "positional_symbols", None):
-        symbol_input = ",".join(args.positional_symbols)
-    symbols = resolve_symbols(symbol_input, getattr(args, "all_pairs", False))
+    positionals = getattr(args, "positional_symbols", None) or []
+    if symbol_input is not None and positionals:
+        combined = [s.strip() for s in symbol_input.split(",") if s.strip()]
+        for p in positionals:
+            combined.extend([s.strip() for s in p.split(",") if s.strip()])
+        symbols = combined
+    elif symbol_input is not None:
+        symbols = resolve_symbols(symbol_input, getattr(args, "all_pairs", False))
+    elif positionals:
+        symbols = resolve_symbols(",".join(positionals), getattr(args, "all_pairs", False))
+    else:
+        symbols = resolve_symbols(None, getattr(args, "all_pairs", False))
 
     min_confidence: float = (
         float(args.min_confidence)
@@ -711,7 +791,11 @@ def run_cli(args: argparse.Namespace) -> int:
     if args.date:
         # Scale lookback buffer based on timeframe so indicators (EMA200, RSI, ATR) have enough warm-up history
         target_dt = pd.to_datetime(args.date)
-        if interval in ("1d", "1wk", "1mo"):
+        if interval in ("3mo",):
+            lookback_days = 365 * 10  # 10 years for quarterly bars (~40 bars)
+        elif interval in ("1mo", "1wk", "5d"):
+            lookback_days = 365 * 3  # 3 years
+        elif interval == "1d":
             lookback_days = 365  # 1 full year (~252 trading days) to ensure full EMA200 warm-up
         elif interval in ("4h", "1h", "60m"):
             lookback_days = 90
@@ -731,14 +815,27 @@ def run_cli(args: argparse.Namespace) -> int:
     # MULTI-SYMBOL / FOREX PORTFOLIO SCANNING MODE
     # ---------------------------------------------------------
     if len(symbols) > 1:
-        print("=" * 95)
-        print(
-            f"🌍 SCANNING {len(symbols)} FOREX CURRENCY PAIRS (Timeframe: {interval}, Period: {args.period})"
+        all_fx = all(
+            s.endswith("=X")
+            or (classify_asset is not None and classify_asset(s, "auto") == "forex")
+            for s in symbols
         )
-        print(
-            "Identifying high-probability setups via AI Confluence Scoring (Trend + RSI + Volume + ATR)"
-        )
-        print("=" * 95)
+        kind = "FOREX CURRENCY PAIRS" if all_fx else "INSTRUMENTS"
+
+        if getattr(args, "format", "text") == "json":
+            print(
+                f"🌍 SCANNING {len(symbols)} {kind} (Timeframe: {interval}, Period: {args.period})",
+                file=sys.stderr,
+            )
+        else:
+            print("=" * 95)
+            print(
+                f"🌍 SCANNING {len(symbols)} {kind} (Timeframe: {interval}, Period: {args.period})"
+            )
+            print(
+                "Identifying high-probability setups via AI Confluence Scoring (Trend + RSI + Volume + ATR)"
+            )
+            print("=" * 95)
 
         if not HAS_NATIVE_TALIB and not args.pattern:
             fallback_count = len(PatternAnalyzer.get_supported_fallback_patterns())
@@ -850,7 +947,9 @@ def run_cli(args: argparse.Namespace) -> int:
                                         "TakeProfit_2": tp2,
                                         "RR": f"1:{rr:.1f}",
                                         "Trend": res.trend_regime,
-                                        "RSI": round(float(res.rsi), 1) if res.rsi is not None else None,
+                                        "RSI": round(float(res.rsi), 1)
+                                        if res.rsi is not None
+                                        else None,
                                         "Score_Raw": score,
                                         "RR_Raw": rr,
                                         "df": df,
@@ -879,9 +978,17 @@ def run_cli(args: argparse.Namespace) -> int:
                 skipped_symbols.append((clean_sym, f"{type(exc).__name__}: {exc}"))
                 continue
 
-        if sys.stdout and hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
+        if (
+            sys.stdout
+            and hasattr(sys.stdout, "isatty")
+            and sys.stdout.isatty()
+            and getattr(args, "format", "text") != "json"
+        ):
             print(" " * 60, end="\r")
-        print(f"✔ Scanned: {active_pairs_count} active pairs out of {len(symbols)}")
+        print(
+            f"✔ Scanned: {active_pairs_count} active pairs out of {len(symbols)}",
+            file=sys.stderr if getattr(args, "format", "text") == "json" else sys.stdout,
+        )
 
         if skipped_symbols:
             print(
@@ -892,6 +999,9 @@ def run_cli(args: argparse.Namespace) -> int:
                 print(f"   • {skipped_sym}: {reason}", file=sys.stderr)
 
         if not all_signals_records:
+            if getattr(args, "format", "text") == "json":
+                print("[]")
+                return 0
             bars_info = (
                 f"over the last {lookback} bar(s)" if lookback > 0 else "over the selected period"
             )
@@ -907,6 +1017,9 @@ def run_cli(args: argparse.Namespace) -> int:
             classic_df = pd.DataFrame(all_signals_records)[
                 ["Time", "Symbol", "Direction", "Pattern", "Price"]
             ]
+            if getattr(args, "format", "text") == "json":
+                print(classic_df.to_json(orient="records", date_format="iso"))
+                return 0
             print("\n" + "=" * 80)
             print(f"📊 DETECTED SIGNALS ({len(classic_df)} patterns):")
             print("=" * 80)
@@ -1057,6 +1170,59 @@ def run_cli(args: argparse.Namespace) -> int:
         )
         return 1
 
+    if getattr(args, "backtest", False):
+        from .pattern_tester import PatternRankingTester
+
+        tester = PatternRankingTester(
+            data,
+            symbol=symbol,
+            timeframe=interval,
+            execution=args.execution,
+            commission=args.commission,
+            slippage=args.slippage,
+            min_signals=args.min_signals,
+            verbose=False,
+        )
+        tester.test_all_patterns(min_signals=args.min_signals)
+        top = tester.get_top_patterns(n=20)
+
+        if getattr(args, "format", "text") == "json":
+            import json
+
+            data_out = [
+                {
+                    "pattern": r.pattern_name,
+                    "total_signals": r.total_signals,
+                    "total_trades": r.total_trades,
+                    "winning_trades": r.winning_trades,
+                    "losing_trades": r.losing_trades,
+                    "win_rate": round(r.win_rate, 2),
+                    "total_pnl": round(r.total_pnl, 2),
+                    "avg_pnl": round(r.avg_pnl, 2),
+                    "sharpe_ratio": round(r.sharpe_ratio, 2),
+                    "max_drawdown": round(r.max_drawdown, 2),
+                }
+                for r in top
+            ]
+            print(json.dumps(data_out, indent=2))
+            return _finish(0)
+
+        report_df = tester.get_comparison_report()
+        if getattr(args, "format", "text") == "markdown":
+            print(f"## 🏆 Quantitative Pattern Ranking: {symbol} ({interval}, {period})\n")
+            print(format_markdown_table(report_df))
+            return _finish(0)
+
+        print("\n" + "=" * 100)
+        print(f"🏆 QUANTITATIVE PATTERN RANKING: {symbol} ({interval}, {period})")
+        print(
+            f"Execution: {args.execution} | Commission: ${args.commission:.2f} | "
+            f"Slippage: {args.slippage} | Min Signals: {args.min_signals}"
+        )
+        print("=" * 100)
+        print(report_df.to_string(index=False))
+        return _finish(0)
+
     analyzer = PatternAnalyzer(data)
     range_info = ""
     if args.date:
@@ -1151,6 +1317,9 @@ def run_cli(args: argparse.Namespace) -> int:
     # 3. AI Mode Output
     if args.ai:
         if not all_scored_results:
+            if getattr(args, "format", "text") == "json":
+                print("[]")
+                return _finish(0)
             print(f"No AI-scored signals found for {symbol} matching criteria{range_info}.")
             return _finish(0)
 
@@ -1212,6 +1381,9 @@ def run_cli(args: argparse.Namespace) -> int:
 
     # 4. Classic TA-Lib Mode Output
     if not classic_signals:
+        if getattr(args, "format", "text") == "json":
+            print("[]")
+            return _finish(0)
         if args.pattern:
             print(
                 f"No signals for pattern {args.pattern} "
@@ -1219,6 +1391,22 @@ def run_cli(args: argparse.Namespace) -> int:
             )
         else:
             print(f"No signals for any pattern on period {period} timeframe {interval}{range_info}")
+        return _finish(0)
+
+    if getattr(args, "format", "text") == "json":
+        import json
+
+        records = []
+        for pat_name, sig in classic_signals.items():
+            for ts, val in sig.items():
+                records.append(
+                    {
+                        "pattern": pat_name,
+                        "timestamp": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
+                        "signal": int(val),
+                    }
+                )
+        print(json.dumps(records, indent=2))
         return _finish(0)
 
     if args.format == "markdown":

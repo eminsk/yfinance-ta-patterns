@@ -10,7 +10,6 @@ def test_version_matches():
     assert ytp.__version__ == "0.3.60"
 
 
-
 def test_all_61_patterns_present():
     assert len(ALL_CDL_PATTERNS) == 61
     for name in ALL_CDL_PATTERNS:

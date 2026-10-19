@@ -14,7 +14,12 @@ from yfinance_ta_patterns.mcp_server import MCP_TOOLS_SCHEMA, YFinanceTAMCPServe
 
 def _call(server: YFinanceTAMCPServer, name: str, args: dict[str, Any]) -> dict[str, Any]:
     resp = server.handle_request(
-        {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args}}
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": args},
+        }
     )
     assert resp is not None and "result" in resp
     return resp["result"]
@@ -28,7 +33,8 @@ def _synthetic_ohlcv(n: int = 260) -> pd.DataFrame:
     low = np.minimum(open_, close) * 0.995
     idx = pd.date_range("2025-01-01", periods=n, freq="D", tz="UTC")
     return pd.DataFrame(
-        {"Open": open_, "High": high, "Low": low, "Close": close, "Volume": np.full(n, 1e6)}, index=idx
+        {"Open": open_, "High": high, "Low": low, "Close": close, "Volume": np.full(n, 1e6)},
+        index=idx,
     )
 
 
@@ -75,7 +81,13 @@ def test_news_empty_result_is_not_reported_as_live_success() -> None:
 
 
 def test_news_with_articles_still_reports_live() -> None:
-    article = {"content": {"title": "Headline", "provider": {"displayName": "Wire"}, "pubDate": "2026-10-07T08:00:00Z"}}
+    article = {
+        "content": {
+            "title": "Headline",
+            "provider": {"displayName": "Wire"},
+            "pubDate": "2026-10-07T08:00:00Z",
+        }
+    }
     server = YFinanceTAMCPServer(news_fetcher=lambda symbol, limit: [article])
     out = _call(server, "ta_get_news", {"symbol": "AAPL"})["structuredContent"]
     assert out["status"] == "live"
@@ -102,13 +114,17 @@ def test_negative_cache_from_short_probe_does_not_block_longer_timeout_caller() 
     try:
         with ec.InvestingCalendar(timeout=3.5) as cal:
             cal._curl_session = _FakeSession()
-            assert cal._download_feed_html(url) is not None  # longer timeout => retried, not cached-failure
+            assert (
+                cal._download_feed_html(url) is not None
+            )  # longer timeout => retried, not cached-failure
 
         ec._CALENDAR_CACHE[url] = (time.monotonic(), None)
         ec._CALENDAR_FAIL_TIMEOUT[url] = 2.0
         with ec.InvestingCalendar(timeout=2.0) as cal:
             cal._curl_session = _FakeSession()
-            assert cal._download_feed_html(url) is None  # same timeout => negative cache still honoured
+            assert (
+                cal._download_feed_html(url) is None
+            )  # same timeout => negative cache still honoured
     finally:
         ec._CALENDAR_CACHE.pop(url, None)
         ec._CALENDAR_FAIL_TIMEOUT.pop(url, None)

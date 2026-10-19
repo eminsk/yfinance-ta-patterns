@@ -13,14 +13,14 @@ from collections.abc import Callable, Iterable, Mapping
 from html.parser import HTMLParser
 from typing import Any, ClassVar
 
-from .data import _CURRENCY_CODES, normalize_ticker, resolve_asset_currencies
+from .data import _CURRENCY_CODES, classify_asset, normalize_ticker, resolve_asset_currencies
 
 logger = logging.getLogger(__name__)
 
 # Module-level TTL cache for economic calendar feeds: key -> (timestamp, html_content)
 _CALENDAR_CACHE: dict[str, tuple[float, str | None]] = {}
 _CACHE_TTL_SUCCESS: float = 900.0  # 15 minutes
-_CACHE_TTL_FAILURE: float = 60.0   # 1 minute negative caching
+_CACHE_TTL_FAILURE: float = 60.0  # 1 minute negative caching
 # Timeout used by the attempt that produced a negative-cache entry: a caller with a LONGER
 # timeout must retry instead of inheriting a failure caused by someone else's short probe.
 _CALENDAR_FAIL_TIMEOUT: dict[str, float] = {}
@@ -252,19 +252,44 @@ def resolve_symbol_currencies(symbol: str, asset_type: str = "auto") -> list[str
     if clean in _INDEX_CURRENCY_MAP:
         return [_INDEX_CURRENCY_MAP[clean]]
 
-    # Direct 3-letter currency code or 2-letter ISO country code
-    aliased_direct = _CURRENCY_ALIASES.get(clean, clean)
-    if aliased_direct in _CURRENCY_CODES:
-        return [aliased_direct]
-    if clean in InvestingCalendar.ISO_TO_CURRENCY:
-        return [InvestingCalendar.ISO_TO_CURRENCY[clean]]
+    # Explicit country mode
+    if asset_type == "country":
+        if clean in InvestingCalendar.ISO_TO_CURRENCY:
+            return [InvestingCalendar.ISO_TO_CURRENCY[clean]]
+        lower_clean = symbol.strip().lower()
+        if lower_clean in InvestingCalendar.COUNTRY_MAP:
+            return [InvestingCalendar.COUNTRY_MAP[lower_clean][1]]
+
+    # Major global reserve currencies when passed directly
+    _MAJOR_FX_CURRENCIES = {"USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD"}
+    if asset_type in ("currency", "forex"):
+        aliased_direct = _CURRENCY_ALIASES.get(clean, clean)
+        if aliased_direct in _CURRENCY_CODES:
+            return [aliased_direct]
+    elif asset_type == "auto" and clean in _MAJOR_FX_CURRENCIES:
+        return [clean]
+
+    # Full country name (e.g. 'germany', 'united states', 'france', not short uppercase ticker)
     lower_clean = symbol.strip().lower()
-    if lower_clean in InvestingCalendar.COUNTRY_MAP:
+    if (
+        asset_type not in ("stock",)
+        and lower_clean in InvestingCalendar.COUNTRY_MAP
+        and len(symbol.strip()) > 3
+    ):
         return [InvestingCalendar.COUNTRY_MAP[lower_clean][1]]
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         base, quote = resolve_asset_currencies(symbol, asset_type=asset_type)
+
+    # For stocks (e.g. COP, DE, IT, AAPL, SAP.DE), economic exposure is the trading/quote currency
+    if asset_type == "stock" or (
+        asset_type == "auto" and classify_asset(symbol, "auto") == "stock"
+    ):
+        norm_q = _CURRENCY_ALIASES.get(quote.strip().upper(), quote.strip().upper())
+        if norm_q in _CURRENCY_CODES:
+            return [norm_q]
+        return ["USD"]
 
     currencies: list[str] = []
     for candidate in (base, quote):
@@ -692,19 +717,29 @@ class InvestingCalendar:
         """Fetch economic events from the primary live feed."""
         html_text = self._download_feed_html(self.TE_URL)
         if html_text is None:
-            return [], "unavailable", (
-                "Live macroeconomic calendar feed is currently unreachable; "
-                "no unverified synthetic data generated."
+            return (
+                [],
+                "unavailable",
+                (
+                    "Live macroeconomic calendar feed is currently unreachable; "
+                    "no unverified synthetic data generated."
+                ),
             )
 
         parser = _TableHTMLParser()
         parser.feed(html_text)
         rows = [r for r in parser.rows if r.attrs.get("data-id")]
         if not rows:
-            logger.warning("No calendar rows with 'data-id' found in feed HTML (anti-bot challenge or layout changed).")
-            return [], "unavailable", (
-                "Calendar feed page received but no economic event rows could be parsed "
-                "(anti-bot challenge, captcha, or changed layout); treated as unavailable."
+            logger.warning(
+                "No calendar rows with 'data-id' found in feed HTML (anti-bot challenge or layout changed)."
+            )
+            return (
+                [],
+                "unavailable",
+                (
+                    "Calendar feed page received but no economic event rows could be parsed "
+                    "(anti-bot challenge, captcha, or changed layout); treated as unavailable."
+                ),
             )
 
         events: list[dict[str, Any]] = []

@@ -584,7 +584,7 @@ def cdl_3linestrike(open_: Any, high: Any, low: Any, close: Any) -> Any:
 def cdl_3outside(open_: Any, high: Any, low: Any, close: Any) -> Any:
     d = _CandleData(open_, high, low, close)
     res = [0] * d.n
-    for i in range(2, d.n):
+    for i in range(3, d.n):
         if (
             d.color[i - 1] == 1
             and d.color[i - 2] == -1
@@ -1168,34 +1168,7 @@ def cdl_hikkakemod(open_: Any, high: Any, low: Any, close: Any) -> Any:
     res = [0] * d.n
     pattern_idx = 0
     pattern_result = 0
-    for i in range(2, min(5, d.n)):
-        if (
-            d.h[i - 2] < d.h[i - 3]
-            and d.l[i - 2] > d.l[i - 3]
-            and d.h[i - 1] < d.h[i - 2]
-            and d.l[i - 1] > d.l[i - 2]
-            and (
-                (
-                    d.h[i] < d.h[i - 1]
-                    and d.l[i] < d.l[i - 1]
-                    and d.c[i - 2] <= d.l[i - 2] + d.avg_near[i - 2]
-                )
-                or (
-                    d.h[i] > d.h[i - 1]
-                    and d.l[i] > d.l[i - 1]
-                    and d.c[i - 2] >= d.h[i - 2] - d.avg_near[i - 2]
-                )
-            )
-        ):
-            pattern_result = 100 * (1 if d.h[i] < d.h[i - 1] else -1)
-            pattern_idx = i
-        elif i <= pattern_idx + 3 and (
-            (pattern_result > 0 and d.c[i] > d.h[pattern_idx - 1])
-            or (pattern_result < 0 and d.c[i] < d.l[pattern_idx - 1])
-        ):
-            pattern_idx = 0
-
-    for i in range(5, d.n):
+    for i in range(10, d.n):
         if (
             d.h[i - 2] < d.h[i - 3]
             and d.l[i - 2] > d.l[i - 3]

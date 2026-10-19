@@ -9,13 +9,16 @@ from typing import Any, cast
 
 try:
     import numpy as np
+
     HAS_NUMPY = True
 except (ImportError, ModuleNotFoundError, RuntimeError, TypeError):  # pragma: no cover
     from .talib_compat import np  # type: ignore[no-redef]
+
     HAS_NUMPY = False
 
 try:
     import pandas as pd
+
     HAS_PANDAS = True
 except (ImportError, ModuleNotFoundError, RuntimeError, TypeError):  # pragma: no cover
     pd = None  # type: ignore[assignment]
@@ -113,6 +116,10 @@ _CURRENCY_CODES = {
     "HRK",  # Croatian Kuna
     "RSD",  # Serbian Dinar
     "ISK",  # Icelandic Krona
+    "XAU",  # Gold Ounce (ISO 4217)
+    "XAG",  # Silver Ounce (ISO 4217)
+    "XPT",  # Platinum Ounce (ISO 4217)
+    "XPD",  # Palladium Ounce (ISO 4217)
 }
 
 _KNOWN_CRYPTO_SYMBOLS: set[str] = {
@@ -1073,11 +1080,19 @@ class MarketDataLoader:
         self.asset_type: str = validate_asset_type(asset_type)
         self.closed_only: bool = closed_only
         self.ticker: str = normalize_ticker(symbol, asset_type=self.asset_type)
+        is_fx = self.asset_type == "forex" or self.ticker.endswith("=X")
+        if clean_forex_daily and norm_interval == "1d" and is_fx:
+            self._download_interval: str = "1h"
+            self._resample_rule: str | None = "1D"
+        else:
+            self._download_interval = self._resolve_download_interval(norm_interval)
+            self._resample_rule = "4h" if norm_interval == "4h" else None
+
         # Yahoo Finance restricts intraday lookback windows:
         # - 1m: max 7-8 days
         # - 2m, 5m, 15m, 30m, 90m: max 60 days
         # - 60m, 1h, 4h (resampled from 1h): max 730 days (2y)
-        self.period: str = self._clamp_period_for_interval(period, norm_interval)
+        self.period: str = self._clamp_period_for_interval(period, self._download_interval)
         self.interval: str = norm_interval
         self.timezone: str = timezone
         self.start: str | None = start
@@ -1087,14 +1102,6 @@ class MarketDataLoader:
         self.auto_adjust: bool = auto_adjust
         self.repair: bool | None = repair
         self.clean_forex_daily: bool = clean_forex_daily
-
-        is_fx = self.asset_type == "forex" or self.ticker.endswith("=X")
-        if clean_forex_daily and norm_interval == "1d" and is_fx:
-            self._download_interval: str = "1h"
-            self._resample_rule: str | None = "1D"
-        else:
-            self._download_interval = self._resolve_download_interval(norm_interval)
-            self._resample_rule = "4h" if norm_interval == "4h" else None
 
     @staticmethod
     def _clamp_period_for_interval(period: str, norm_interval: str) -> str:
@@ -1517,10 +1524,39 @@ class MarketDataLoader:
                         else s_close.tz_localize(None)
                     )
                     effective_end = min(b_end, s_close_cmp) if b_start <= s_close_cmp else b_end
+                elif is_forex:
+                    b_ny = (
+                        b_start.tz_convert("America/New_York")
+                        if b_start.tz is not None
+                        else b_start.tz_localize("UTC").tz_convert("America/New_York")
+                    )
+                    days_to_friday = (4 - b_ny.weekday()) % 7
+                    friday_date = (b_ny + pd.Timedelta(days=days_to_friday)).date()
+                    fx_close_ny = pd.Timestamp(
+                        year=friday_date.year,
+                        month=friday_date.month,
+                        day=friday_date.day,
+                        hour=17,
+                        minute=0,
+                        tz="America/New_York",
+                    )
+                    fx_close_cmp = (
+                        fx_close_ny.tz_convert(ends_tz)
+                        if ends_tz is not None
+                        else fx_close_ny.tz_convert("UTC").tz_localize(None)
+                    )
+                    effective_end = fx_close_cmp if b_start < fx_close_cmp <= b_end else b_end
                 else:
                     effective_end = b_end
 
-                is_complete = (effective_end <= now) and (effective_end <= max_input_end)
+                is_complete = (effective_end <= now) and (
+                    effective_end <= max_input_end
+                    or (
+                        is_forex
+                        and effective_end < b_end
+                        and max_input_end >= effective_end - pd.Timedelta(minutes=5)
+                    )
+                )
                 valid_completed_mask.append(is_complete)
 
             resampled = resampled.loc[valid_completed_mask]
@@ -1531,6 +1567,9 @@ class MarketDataLoader:
         """Normalize column indexing, validate OHLC, resample in UTC, and convert timezone."""
         if data.empty:
             return data
+
+        # Avoid modifying caller's DataFrame in place
+        data = data.copy(deep=False)
 
         # Drop extra MultiIndex level if present (yfinance >= 0.2.40)
         if isinstance(data.columns, pd.MultiIndex):

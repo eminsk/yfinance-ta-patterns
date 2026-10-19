@@ -25,6 +25,7 @@ def main() -> int:
     try:
         import numpy as np
         import pandas as pd
+
         has_pandas = True
     except ImportError:
         has_pandas = False

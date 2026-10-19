@@ -70,7 +70,13 @@ def test_python316t_multithreaded_parallel_execution():
         wrapper = TALibWrapper(force_fallback=True)
 
         for _ in range(iterations_per_thread):
-            for pat in ("CDLDOJI", "CDLHAMMER", "CDLENGULFING", "CDLMORNINGSTAR", "CDLSHOOTINGSTAR"):
+            for pat in (
+                "CDLDOJI",
+                "CDLHAMMER",
+                "CDLENGULFING",
+                "CDLMORNINGSTAR",
+                "CDLSHOOTINGSTAR",
+            ):
                 res = getattr(wrapper, pat)(open_v, high_v, low_v, close_v)
                 assert len(res) == n
                 signals_detected += sum(1 for x in res if x != 0)

@@ -621,7 +621,12 @@ def test_mcp_all_tools_return_structured_content() -> None:
 
         # Call tool with minimal valid arguments
         args: dict[str, Any] = {}
-        if t_name in ("ta_scan_symbol", "ta_backtest_patterns", "ta_get_economic_calendar", "ta_get_news"):
+        if t_name in (
+            "ta_scan_symbol",
+            "ta_backtest_patterns",
+            "ta_get_economic_calendar",
+            "ta_get_news",
+        ):
             args["symbol"] = "BTC-USD"
         elif t_name == "ta_scan_watchlist":
             args["symbols"] = ["BTC-USD"]
@@ -1136,5 +1141,3 @@ def test_mcp_backtest_patterns_filter_news() -> None:
     data = resp["result"]["structuredContent"]
     assert data["filter_news"] is True
     assert "news_dates_filtered" in data
-
-

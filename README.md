@@ -353,9 +353,9 @@ yftp --all-patterns --symbol EURUSD --timeframe 1h --period 60d --prompt
 ## CLI Reference
 
 ```text
-yfinance-ta-patterns [-h] [-v] (--pattern PATTERN | --all-patterns)
-                     [--symbol SYMBOL] [--period PERIOD] [--timeframe TIMEFRAME]
-                     [--date YYYY-MM-DD] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD]
+yfinance-ta-patterns [-h] [-v] (--pattern PATTERN | --all-patterns | --mcp | --calendar | --news | --backtest)
+                     [--symbol SYMBOL] [--all-pairs] [--period PERIOD] [--timeframe TIMEFRAME]
+                     [--lookback-bars LOOKBACK_BARS] [--date YYYY-MM-DD] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD]
                      [--execution {next_open,close}] [--min-signals MIN_SIGNALS]
                      [--commission COMMISSION] [--slippage SLIPPAGE] [--auto-adjust]
                      [--ai] [--min-confidence MIN_CONFIDENCE]
@@ -367,20 +367,26 @@ yfinance-ta-patterns [-h] [-v] (--pattern PATTERN | --all-patterns)
 | Flag | Description |
 |------|-------------|
 | `-v`, `--version` | Show package version. |
+| `--mcp` | Launch the native JSON-RPC 2.0 Model Context Protocol (MCP) server over stdio. |
 | `--pattern` | Single candlestick pattern (e.g. `HAMMER`, `DOJI`, `CDLKICKING`). |
 | `--all-patterns` | Scan and display signals for all available candlestick patterns. |
-| `--symbol` | Ticker symbol (e.g. `AAPL`, `BTC-USD`, `GC=F`, `EURUSD`). |
+| `--symbol` | Ticker symbol(s) (e.g. `AAPL`, `NVDA`, `BTC-USD`, `EURUSD`). Supports space- or comma-separated lists and positional arguments. |
+| `--all-pairs` | Scan all 56 major, minor, and exotic Forex currency pairs. |
 | `--period` | History period (`5d`, `60d`, `1y`, `max`). |
 | `--timeframe` | Interval alias (`M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`) or `yfinance` interval (`1m`, `5m`, `15m`, `1h`, `4h`, `1d`). |
+| `--lookback-bars` | Number of recent historical bars to inspect for signals (default: `5`). |
 | `--date` | Filter signals for a specific date (`YYYY-MM-DD`). |
 | `--start-date` / `--end-date` | Date range filter (`YYYY-MM-DD`). |
+| `--calendar` | Fetch and display high/medium impact macro economic calendar releases. |
+| `--news` | Fetch and display real-time market news for the symbol. |
+| `--backtest`, `--test` | Run institutional quantitative pattern ranking backtest. |
 | `--execution` | Execution timing: `next_open` (unbiased, enters on bar i+1) or `close` (legacy). |
 | `--min-signals` | Minimum signal count required for ranking (reduces overfitting from 1-trade samples). |
 | `--commission` | Fixed transaction cost per round-trip trade in backtester. |
 | `--slippage` | Slippage in price units applied adversely to entries and exits. |
 | `--auto-adjust` | Enable dividend and split adjustments (recommended for long multi-year stock backtests). |
 | `--ai` | Enrich detected patterns with AI confidence scoring, signal grade, and trade setups. |
-| `--min-confidence` | Minimum confidence threshold for AI scoring ($0.0$ to $1.0$, default: $0.0$). |
+| `--min-confidence` | Minimum confidence threshold for AI scoring ($0.0$ to $1.0$, default: $0.0$ in single mode, $0.55$ in multi-symbol mode). |
 | `--ai-analyst` | Run executive AI market analysis with synthesis and trade setups. |
 | `--prompt` | Generate an LLM prompt ready to pass to ChatGPT, Claude, or local LLMs. |
 | `--format` | Output format: `text` (default), `json`, or `markdown`. |
@@ -565,7 +571,7 @@ yfinance-ta-mcp
 Run the test suite and quality checks:
 
 ```bash
-# Run pytest across full test suite (429 tests)
+# Run pytest across full test suite (480+ tests)
 uv run --extra dev pytest -v
 # or with standard pytest
 pytest -v
@@ -581,7 +587,7 @@ uv run --extra dev mypy yfinance_ta_patterns
 uv build
 ```
 
-All 469 tests pass with 100% success rate across **Python 3.8 through 3.16 (including No-GIL free-threaded 3.13t–3.16t)** and **PyPy 3.8 through 3.12**.
+All 480+ tests pass with 100% success rate across **Python 3.8 through 3.16 (including No-GIL free-threaded 3.13t–3.16t)** and **PyPy 3.8 through 3.12**.
 
 ---
 

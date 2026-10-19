@@ -38,12 +38,14 @@ def _sample_ohlcv(periods: int = 50) -> pd.DataFrame:
 
 def test_unknown_tool_returns_32602() -> None:
     server = YFinanceTAMCPServer()
-    resp = server.handle_request({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/call",
-        "params": {"name": "invalid_tool_name", "arguments": {}},
-    })
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "invalid_tool_name", "arguments": {}},
+        }
+    )
     assert resp is not None
     assert "error" in resp
     assert resp["error"]["code"] == -32602
@@ -56,12 +58,14 @@ def test_event_risk_feed_unavailable_returns_source_unavailable() -> None:
         data_fetcher=lambda s, p, i: df.copy(),
         calendar_fetcher=lambda _u: None,
     )
-    resp = server.handle_request({
-        "jsonrpc": "2.0",
-        "id": 10,
-        "method": "tools/call",
-        "params": {"name": "ta_scan_symbol", "arguments": {"symbol": "AAPL"}},
-    })
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "tools/call",
+            "params": {"name": "ta_scan_symbol", "arguments": {"symbol": "AAPL"}},
+        }
+    )
     assert resp is not None
     data = resp["result"]["structuredContent"]
     er = data["event_risk"]
@@ -93,12 +97,14 @@ def test_event_risk_future_event_filter() -> None:
         data_fetcher=lambda s, p, i: df.copy(),
         calendar_fetcher=lambda _u: html_feed,
     )
-    resp = server.handle_request({
-        "jsonrpc": "2.0",
-        "id": 11,
-        "method": "tools/call",
-        "params": {"name": "ta_scan_symbol", "arguments": {"symbol": "AAPL"}},
-    })
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "tools/call",
+            "params": {"name": "ta_scan_symbol", "arguments": {"symbol": "AAPL"}},
+        }
+    )
     assert resp is not None
     data = resp["result"]["structuredContent"]
     er = data["event_risk"]
@@ -112,20 +118,22 @@ def test_event_risk_future_event_filter() -> None:
 def test_watchlist_argument_clamping() -> None:
     df = _sample_ohlcv()
     server = YFinanceTAMCPServer(data_fetcher=lambda s, p, i: df.copy())
-    resp = server.handle_request({
-        "jsonrpc": "2.0",
-        "id": 20,
-        "method": "tools/call",
-        "params": {
-            "name": "ta_scan_watchlist",
-            "arguments": {
-                "symbols": ["AAPL"],
-                "min_confidence": -0.5,
-                "lookback_bars": 999,
-                "max_results": 200,
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 20,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_scan_watchlist",
+                "arguments": {
+                    "symbols": ["AAPL"],
+                    "min_confidence": -0.5,
+                    "lookback_bars": 999,
+                    "max_results": 200,
+                },
             },
-        },
-    })
+        }
+    )
     assert resp is not None
     assert resp["result"]["isError"] is False
 
@@ -136,21 +144,23 @@ def test_backtest_argument_clamping_and_filter_news() -> None:
         data_fetcher=lambda s, p, i: df.copy(),
         calendar_fetcher=lambda _u: None,
     )
-    resp = server.handle_request({
-        "jsonrpc": "2.0",
-        "id": 30,
-        "method": "tools/call",
-        "params": {
-            "name": "ta_backtest_patterns",
-            "arguments": {
-                "symbol": "AAPL",
-                "holding_period": 999,
-                "min_signals": 999,
-                "top_n": 999,
-                "filter_news": True,
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 30,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_backtest_patterns",
+                "arguments": {
+                    "symbol": "AAPL",
+                    "holding_period": 999,
+                    "min_signals": 999,
+                    "top_n": 999,
+                    "filter_news": True,
+                },
             },
-        },
-    })
+        }
+    )
     assert resp is not None
     assert resp["result"]["isError"] is False
     data = resp["result"]["structuredContent"]
@@ -169,12 +179,14 @@ def test_ta_get_news_tool() -> None:
         }
     ]
     server = YFinanceTAMCPServer(news_fetcher=lambda sym, lim: mock_articles)
-    resp = server.handle_request({
-        "jsonrpc": "2.0",
-        "id": 40,
-        "method": "tools/call",
-        "params": {"name": "ta_get_news", "arguments": {"symbol": "AAPL", "limit": 5}},
-    })
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 40,
+            "method": "tools/call",
+            "params": {"name": "ta_get_news", "arguments": {"symbol": "AAPL", "limit": 5}},
+        }
+    )
     assert resp is not None
     assert resp["result"]["isError"] is False
     data = resp["result"]["structuredContent"]
@@ -183,7 +195,9 @@ def test_ta_get_news_tool() -> None:
     assert data["news"][0]["title"] == "US GDP Expands 3.0%"
 
 
-def test_cli_calendar_and_news_flags(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_calendar_and_news_flags(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
     parser = cli.get_parser()
     args = parser.parse_args(["--symbol", "AAPL", "--calendar", "--news"])
     assert args.calendar is True
@@ -191,12 +205,21 @@ def test_cli_calendar_and_news_flags(capsys: pytest.CaptureFixture[str], monkeyp
 
     # Run cli with mock
     df = _sample_ohlcv()
-    monkeypatch.setattr("yfinance_ta_patterns.data.MarketDataLoader.get_data", lambda self: df.copy())
+    monkeypatch.setattr(
+        "yfinance_ta_patterns.data.MarketDataLoader.get_data", lambda self: df.copy()
+    )
     monkeypatch.setattr(
         "yfinance_ta_patterns.economic_calendar.InvestingCalendar.get_events_for_symbol",
         lambda self, **kw: {
             "source": "live",
-            "events": [{"time": "2026-10-08 14:30 UTC", "currency": "USD", "event": "CPI", "importance": "3"}],
+            "events": [
+                {
+                    "time": "2026-10-08 14:30 UTC",
+                    "currency": "USD",
+                    "event": "CPI",
+                    "importance": "3",
+                }
+            ],
         },
     )
     code = cli.run_cli(args)

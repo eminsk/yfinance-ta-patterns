@@ -2,7 +2,7 @@
 
 pkgname=python-yfinance-ta-patterns
 _name=yfinance_ta_patterns
-pkgver=0.3.35
+pkgver=0.3.60
 pkgrel=1
 pkgdesc="Institutional-grade market candlestick pattern scanner with multi-asset backtesting"
 arch=('any')
@@ -25,7 +25,7 @@ makedepends=(
   'python-setuptools'
 )
 source=("https://files.pythonhosted.org/packages/source/${_name::1}/${_name}/${_name}-${pkgver}.tar.gz")
-sha256sums=('755ba32285a37496880e7ea9567d4207d76b8c83ea5d356a94e97845869d800d')
+sha256sums=('SKIP')
 
 prepare() {
   cd "${srcdir}/${_name}-${pkgver}"

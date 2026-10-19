@@ -15,6 +15,7 @@ try:
 except (ImportError, ModuleNotFoundError):
     import sys
     from unittest.mock import MagicMock
+
     mock_ssl = MagicMock()
     mock_ssl.OPENSSL_VERSION_INFO = (3, 0, 0, 0, 0)
     mock_ssl.OPENSSL_VERSION = "OpenSSL 3.0.0"
@@ -24,12 +25,14 @@ except (ImportError, ModuleNotFoundError):
 
 try:
     import pandas  # noqa: F401
+
     HAS_PANDAS = True
 except ImportError:
     HAS_PANDAS = False
 
 try:
     import numpy  # noqa: F401
+
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False

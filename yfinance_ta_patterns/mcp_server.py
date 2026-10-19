@@ -49,7 +49,20 @@ DEFAULT_MAX_RESULTS = 25
 MAX_RESULTS_LIMIT = 50
 
 SUPPORTED_TIMEFRAMES = [
-    "1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "4h", "1d", "5d", "1wk", "1mo", "3mo"
+    "1m",
+    "2m",
+    "5m",
+    "15m",
+    "30m",
+    "60m",
+    "90m",
+    "1h",
+    "4h",
+    "1d",
+    "5d",
+    "1wk",
+    "1mo",
+    "3mo",
 ]
 
 MCP_SERVER_INSTRUCTIONS = (
@@ -549,6 +562,7 @@ def _parse_int_param(
     min_val: int | None = None,
     max_val: int | None = None,
     default: int | None = None,
+    clamp: bool = True,
 ) -> int:
     """Parse, type-check, and clamp integer parameters with clean schema error messages."""
     if val is None:
@@ -562,9 +576,15 @@ def _parse_int_param(
     except (ValueError, TypeError):
         raise ValueError(f"Invalid parameter '{name}': expected integer, got {val!r}.") from None
     if min_val is not None and iv < min_val:
-        iv = min_val
+        if clamp:
+            iv = min_val
+        else:
+            raise ValueError(f"Parameter '{name}' must be >= {min_val}, got {iv}.")
     if max_val is not None and iv > max_val:
-        iv = max_val
+        if clamp:
+            iv = max_val
+        else:
+            raise ValueError(f"Parameter '{name}' must be <= {max_val}, got {iv}.")
     return iv
 
 
@@ -574,8 +594,9 @@ def _parse_float_param(
     min_val: float | None = None,
     max_val: float | None = None,
     default: float | None = None,
+    clamp: bool = True,
 ) -> float:
-    """Parse, type-check, and clamp float parameters with clean schema error messages."""
+    """Parse, type-check, and validate float parameters with clean schema error messages."""
     if val is None:
         if default is not None:
             return default
@@ -587,10 +608,31 @@ def _parse_float_param(
     except (ValueError, TypeError):
         raise ValueError(f"Invalid parameter '{name}': expected number, got {val!r}.") from None
     if min_val is not None and fv < min_val:
-        fv = min_val
+        if clamp:
+            fv = min_val
+        else:
+            raise ValueError(f"Parameter '{name}' must be >= {min_val}, got {fv}.")
     if max_val is not None and fv > max_val:
-        fv = max_val
+        if clamp:
+            fv = max_val
+        else:
+            raise ValueError(f"Parameter '{name}' must be <= {max_val}, got {fv}.")
     return fv
+
+
+def _validate_mcp_timeframe(raw_tf: Any, default: str = "1d") -> str:
+    """Validate and normalize timeframe parameter against SUPPORTED_TIMEFRAMES schema enum."""
+    if raw_tf is None:
+        return default
+    tf_str = str(raw_tf).strip()
+    if not tf_str:
+        return default
+    norm_tf = normalize_interval(tf_str)
+    if norm_tf not in SUPPORTED_TIMEFRAMES:
+        raise ValueError(
+            f"Parameter 'timeframe' must be one of {SUPPORTED_TIMEFRAMES}, got {raw_tf!r}."
+        )
+    return norm_tf
 
 
 def _resolve_mcp_period(timeframe: str, period: Any, default_period: str = "6mo") -> str:
@@ -669,12 +711,7 @@ def _parse_event_utc(time_str: Any) -> dt.datetime | None:
 def _format_news_item(article: dict[str, Any]) -> dict[str, Any]:
     """Format and normalize a market news article dictionary from yfinance."""
     content = article.get("content", {}) if isinstance(article.get("content"), dict) else {}
-    title = (
-        content.get("title")
-        or article.get("title")
-        or article.get("headline")
-        or ""
-    )
+    title = content.get("title") or article.get("title") or article.get("headline") or ""
     link = (
         (content.get("canonicalUrl", {}) or {}).get("url")
         or (content.get("clickThroughUrl", {}) or {}).get("url")
@@ -695,12 +732,7 @@ def _format_news_item(article: dict[str, Any]) -> dict[str, Any]:
         or article.get("publishedAt")
         or ""
     )
-    summary = (
-        content.get("summary")
-        or article.get("summary")
-        or article.get("description")
-        or ""
-    )
+    summary = content.get("summary") or article.get("summary") or article.get("description") or ""
     return {
         "title": str(title).strip(),
         "publisher": str(publisher).strip(),
@@ -759,13 +791,36 @@ class YFinanceTAMCPServer:
         loader = MarketDataLoader(symbol, period=period, interval=interval, timezone="UTC")
         return loader.get_data()
 
-    def handle_request(self, request: Any) -> dict[str, Any] | None:
-        """Process a single JSON-RPC 2.0 MCP message."""
+    def handle_request(self, request: Any) -> dict[str, Any] | list[dict[str, Any]] | None:
+        """Process a single JSON-RPC 2.0 MCP message or batch array."""
+        if isinstance(request, list):
+            if not request or not any(isinstance(x, dict) for x in request):
+                return {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {
+                        "code": -32600,
+                        "message": "Invalid Request: expected JSON object or valid batch array",
+                    },
+                }
+            batch_responses: list[dict[str, Any]] = []
+            for item in request:
+                resp = self.handle_request(item)
+                if resp is not None:
+                    if isinstance(resp, list):
+                        batch_responses.extend(resp)
+                    else:
+                        batch_responses.append(resp)
+            return batch_responses if batch_responses else None
+
         if not isinstance(request, dict):
             return {
                 "jsonrpc": "2.0",
                 "id": None,
-                "error": {"code": -32600, "message": "Invalid Request: expected JSON object"},
+                "error": {
+                    "code": -32600,
+                    "message": "Invalid Request: expected JSON object or batch array",
+                },
             }
 
         req_id = request.get("id")
@@ -941,7 +996,9 @@ class YFinanceTAMCPServer:
                     if timeout is not None and timeout > 0:
                         try:
                             output = _json_safe(
-                                _run_with_timeout(lambda: self._call_tool(str(tool_name), args), timeout)
+                                _run_with_timeout(
+                                    lambda: self._call_tool(str(tool_name), args), timeout
+                                )
                             )
                         except _ToolTimeout:
                             return {
@@ -1030,13 +1087,19 @@ class YFinanceTAMCPServer:
             symbol = str(args.get("symbol", "")).strip()
             if not symbol:
                 raise ValueError("Parameter 'symbol' is required and cannot be empty.")
-            timeframe = normalize_interval(str(args.get("timeframe", "1d")))
+            timeframe = _validate_mcp_timeframe(args.get("timeframe"))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="6mo")
-            min_conf = _parse_float_param(args.get("min_confidence"), "min_confidence", 0.0, 1.0, default=0.4)
-            lookback = _parse_int_param(args.get("lookback_bars"), "lookback_bars", 1, 60, default=3)
+            min_conf = _parse_float_param(
+                args.get("min_confidence"), "min_confidence", 0.0, 1.0, default=0.4
+            )
+            lookback = _parse_int_param(
+                args.get("lookback_bars"), "lookback_bars", 1, 60, default=3
+            )
             include_brief = bool(args.get("include_brief", False))
             compact = True if args.get("compact") is None else bool(args.get("compact"))
-            max_patterns = _parse_int_param(args.get("max_patterns"), "max_patterns", 1, 50, default=25)
+            max_patterns = _parse_int_param(
+                args.get("max_patterns"), "max_patterns", 1, 50, default=25
+            )
 
             df = self._fetch_ohlcv(symbol, period, timeframe)
             analyst = AIMarketAnalyst(df, symbol=symbol, timeframe=timeframe)
@@ -1051,9 +1114,7 @@ class YFinanceTAMCPServer:
             total_patterns_found = len(raw_patterns)
             market_summary = report.get("market_summary", {})
             curr_price = (
-                market_summary.get("current_price")
-                if isinstance(market_summary, dict)
-                else None
+                market_summary.get("current_price") if isinstance(market_summary, dict) else None
             )
             if curr_price is None and not df.empty and "Close" in df.columns:
                 curr_price = float(df["Close"].iloc[-1])
@@ -1063,7 +1124,9 @@ class YFinanceTAMCPServer:
                     if k in market_summary:
                         market_summary[k] = _round_price(market_summary[k])
                 if "return_20_bars_pct" in market_summary:
-                    market_summary["return_20_bars_pct"] = _round_val(market_summary["return_20_bars_pct"], 2)
+                    market_summary["return_20_bars_pct"] = _round_val(
+                        market_summary["return_20_bars_pct"], 2
+                    )
 
             # Extract actionable trade setups with clean canonical keys and rounded figures
             extracted_setups: list[dict[str, Any]] = []
@@ -1072,13 +1135,21 @@ class YFinanceTAMCPServer:
                 if not ts:
                     continue
                 dir_val = ts.get("direction") or (
-                    "BULLISH" if p.get("raw_signal", 0) > 0 else "BEARISH" if p.get("raw_signal", 0) < 0 else "NEUTRAL"
+                    "BULLISH"
+                    if p.get("raw_signal", 0) > 0
+                    else "BEARISH"
+                    if p.get("raw_signal", 0) < 0
+                    else "NEUTRAL"
                 )
                 entry_val = ts.get("entry_price") or ts.get("entry") or curr_price
                 tp1_val = ts.get("take_profit_1") or ts.get("tp1")
                 tp2_val = ts.get("take_profit_2") or ts.get("tp2")
                 rr_val = ts.get("risk_reward_ratio") or ts.get("risk_reward")
-                score_val = p.get("confluence_score") if p.get("confluence_score") is not None else p.get("confidence_score")
+                score_val = (
+                    p.get("confluence_score")
+                    if p.get("confluence_score") is not None
+                    else p.get("confidence_score")
+                )
 
                 setup_item = {
                     "pattern": p.get("pattern"),
@@ -1099,26 +1170,37 @@ class YFinanceTAMCPServer:
                 for p in raw_patterns[:max_patterns]:
                     ts = p.get("trade_setup") or {}
                     metrics = p.get("metrics") or {}
-                    dir_val = (
-                        ts.get("direction")
-                        or ("BULLISH" if p.get("raw_signal", 0) > 0 else "BEARISH" if p.get("raw_signal", 0) < 0 else "NEUTRAL")
+                    dir_val = ts.get("direction") or (
+                        "BULLISH"
+                        if p.get("raw_signal", 0) > 0
+                        else "BEARISH"
+                        if p.get("raw_signal", 0) < 0
+                        else "NEUTRAL"
                     )
                     entry_val = ts.get("entry_price") or ts.get("entry") or curr_price
-                    score_val = p.get("confluence_score") if p.get("confluence_score") is not None else p.get("confidence_score")
+                    score_val = (
+                        p.get("confluence_score")
+                        if p.get("confluence_score") is not None
+                        else p.get("confidence_score")
+                    )
                     trend_val = p.get("trend_regime") or p.get("trend")
-                    rvol_val = metrics.get("rvol") if metrics.get("rvol") is not None else p.get("rvol")
+                    rvol_val = (
+                        metrics.get("rvol") if metrics.get("rvol") is not None else p.get("rvol")
+                    )
                     rsi_val = metrics.get("rsi") if metrics.get("rsi") is not None else p.get("rsi")
 
-                    streamlined_patterns.append({
-                        "pattern": p.get("pattern"),
-                        "direction": dir_val,
-                        "confluence_score": _round_val(score_val, 2),
-                        "timestamp": p.get("timestamp"),
-                        "price": _round_price(entry_val),
-                        "trend": trend_val,
-                        "rvol": _round_val(rvol_val, 2),
-                        "rsi": _round_val(rsi_val, 1),
-                    })
+                    streamlined_patterns.append(
+                        {
+                            "pattern": p.get("pattern"),
+                            "direction": dir_val,
+                            "confluence_score": _round_val(score_val, 2),
+                            "timestamp": p.get("timestamp"),
+                            "price": _round_price(entry_val),
+                            "trend": trend_val,
+                            "rvol": _round_val(rvol_val, 2),
+                            "rsi": _round_val(rsi_val, 1),
+                        }
+                    )
                 report["patterns"] = streamlined_patterns
                 report["setups"] = extracted_setups[:max_patterns]
                 report["compact"] = True
@@ -1155,7 +1237,9 @@ class YFinanceTAMCPServer:
                             "status": "unavailable",
                             "has_high_impact_event": None,
                             "event_count": 0,
-                            "message": cal_res.get("message", "Economic calendar feed is unavailable"),
+                            "message": cal_res.get(
+                                "message", "Economic calendar feed is unavailable"
+                            ),
                         }
                     else:
                         raw_events = cal_res.get("events", [])
@@ -1167,7 +1251,9 @@ class YFinanceTAMCPServer:
                         upcoming.sort(key=lambda x: x[0])
                         if upcoming:
                             nearest_dt, nearest_ev = upcoming[0]
-                            hours_until = max(0.0, round((nearest_dt - now_utc).total_seconds() / 3600.0, 1))
+                            hours_until = max(
+                                0.0, round((nearest_dt - now_utc).total_seconds() / 3600.0, 1)
+                            )
                             event_risk = {
                                 "source": "live",
                                 "status": "ok",
@@ -1206,11 +1292,17 @@ class YFinanceTAMCPServer:
 
         if name == "ta_scan_watchlist":
             symbols = _normalize_watchlist_symbols(args.get("symbols"))
-            timeframe = normalize_interval(str(args.get("timeframe", "1d")))
+            timeframe = _validate_mcp_timeframe(args.get("timeframe"))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="6mo")
-            min_conf = _parse_float_param(args.get("min_confidence"), "min_confidence", 0.0, 1.0, default=0.55)
-            lookback = _parse_int_param(args.get("lookback_bars"), "lookback_bars", 1, 60, default=2)
-            max_results = _parse_int_param(args.get("max_results"), "max_results", 1, 50, default=DEFAULT_MAX_RESULTS)
+            min_conf = _parse_float_param(
+                args.get("min_confidence"), "min_confidence", 0.0, 1.0, default=0.55
+            )
+            lookback = _parse_int_param(
+                args.get("lookback_bars"), "lookback_bars", 1, 60, default=2
+            )
+            max_results = _parse_int_param(
+                args.get("max_results"), "max_results", 1, 50, default=DEFAULT_MAX_RESULTS
+            )
             compact = True if args.get("compact") is None else bool(args.get("compact"))
 
             opportunities: list[dict[str, Any]] = []
@@ -1247,11 +1339,19 @@ class YFinanceTAMCPServer:
                             )
                             tp1_val = setup_info.get("take_profit_1") or setup_info.get("tp1")
                             tp2_val = setup_info.get("take_profit_2") or setup_info.get("tp2")
-                            rr_val = setup_info.get("risk_reward_ratio") or setup_info.get("risk_reward")
+                            rr_val = setup_info.get("risk_reward_ratio") or setup_info.get(
+                                "risk_reward"
+                            )
                             dir_val = (
                                 d.get("direction")
                                 or setup_info.get("direction")
-                                or ("BULLISH" if d.get("raw_signal", 0) > 0 else "BEARISH" if d.get("raw_signal", 0) < 0 else None)
+                                or (
+                                    "BULLISH"
+                                    if d.get("raw_signal", 0) > 0
+                                    else "BEARISH"
+                                    if d.get("raw_signal", 0) < 0
+                                    else None
+                                )
                             )
                             compact_entry: dict[str, Any] = {
                                 "symbol": sym,
@@ -1351,10 +1451,14 @@ class YFinanceTAMCPServer:
             symbol = str(args.get("symbol", "")).strip()
             if not symbol:
                 raise ValueError("Parameter 'symbol' is required and cannot be empty.")
-            timeframe = normalize_interval(str(args.get("timeframe", "1d")))
+            timeframe = _validate_mcp_timeframe(args.get("timeframe"))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="1y")
-            holding_period = _parse_int_param(args.get("holding_period"), "holding_period", 1, 60, default=5)
-            min_signals = _parse_int_param(args.get("min_signals"), "min_signals", 1, 100, default=1)
+            holding_period = _parse_int_param(
+                args.get("holding_period"), "holding_period", 1, 60, default=5
+            )
+            min_signals = _parse_int_param(
+                args.get("min_signals"), "min_signals", 1, 100, default=1
+            )
             sort_by = str(args.get("sort_by") or "composite").strip().lower()
             if sort_by not in ("composite", "win_rate"):
                 raise ValueError("Parameter 'sort_by' must be 'composite' or 'win_rate'.")
@@ -1391,7 +1495,9 @@ class YFinanceTAMCPServer:
                 symbol=symbol,
                 verbose=False,
             )
-            ranked = tester.test_all_patterns(filter_news=filter_news, min_signals=min_signals, sort_by=sort_by)
+            ranked = tester.test_all_patterns(
+                filter_news=filter_news, min_signals=min_signals, sort_by=sort_by
+            )
             top = tester.get_top_patterns(n=top_n)
             top_patterns_list = [
                 {
@@ -1452,7 +1558,9 @@ class YFinanceTAMCPServer:
             days = _parse_int_param(args.get("days"), "days", 1, 60, default=7)
             importances = args.get("importances")
             countries = args.get("countries")
-            max_results = _parse_int_param(args.get("max_results"), "max_results", 1, 100, default=30)
+            max_results = _parse_int_param(
+                args.get("max_results"), "max_results", 1, 100, default=30
+            )
 
             with InvestingCalendar(http_fetcher=self._calendar_fetcher) as calendar:
                 return calendar.get_events_for_symbol(
@@ -1485,8 +1593,13 @@ class YFinanceTAMCPServer:
             else:
                 try:
                     import yfinance as yf
+
                     ticker = yf.Ticker(symbol)
-                    raw_news = ticker.get_news(count=limit) if hasattr(ticker, "get_news") else getattr(ticker, "news", [])
+                    raw_news = (
+                        ticker.get_news(count=limit)
+                        if hasattr(ticker, "get_news")
+                        else getattr(ticker, "news", [])
+                    )
                 except Exception as exc:
                     return {
                         "symbol": symbol,
@@ -1542,7 +1655,7 @@ class YFinanceTAMCPServer:
 
         write_lock = threading.Lock()
 
-        def _send(obj: dict[str, Any]) -> None:
+        def _send(obj: dict[str, Any] | list[dict[str, Any]]) -> None:
             raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), default=str) + "\n"
             with write_lock:
                 proto_out.write(raw)
@@ -1553,18 +1666,20 @@ class YFinanceTAMCPServer:
             thread_name_prefix="yfinance-mcp-worker",
         )
 
-        def _worker_task(req: dict[str, Any]) -> None:
+        def _worker_task(req: Any) -> None:
             try:
                 resp = self.handle_request(req)
                 if resp is not None:
                     _send(resp)
             except Exception as exc:
                 req_id = req.get("id") if isinstance(req, dict) else None
-                _send({
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "error": {"code": -32603, "message": f"Internal error: {exc}"},
-                })
+                _send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "error": {"code": -32603, "message": f"Internal error: {exc}"},
+                    }
+                )
 
         try:
             for raw_line in in_stream:
@@ -1574,19 +1689,42 @@ class YFinanceTAMCPServer:
                 try:
                     req = json.loads(line)
                 except json.JSONDecodeError as exc:
-                    _send({
-                        "jsonrpc": "2.0",
-                        "id": None,
-                        "error": {"code": -32700, "message": f"Parse error: {exc.msg}"},
-                    })
+                    _send(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": None,
+                            "error": {"code": -32700, "message": f"Parse error: {exc.msg}"},
+                        }
+                    )
+                    continue
+
+                if isinstance(req, list):
+                    if not req or not any(isinstance(x, dict) for x in req):
+                        _send(
+                            {
+                                "jsonrpc": "2.0",
+                                "id": None,
+                                "error": {
+                                    "code": -32600,
+                                    "message": "Invalid Request: expected JSON object or valid batch array",
+                                },
+                            }
+                        )
+                        continue
+                    executor.submit(_worker_task, req)
                     continue
 
                 if not isinstance(req, dict):
-                    _send({
-                        "jsonrpc": "2.0",
-                        "id": None,
-                        "error": {"code": -32600, "message": "Invalid Request: expected JSON object"},
-                    })
+                    _send(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": None,
+                            "error": {
+                                "code": -32600,
+                                "message": "Invalid Request: expected JSON object or batch array",
+                            },
+                        }
+                    )
                     continue
 
                 # JSON-RPC notifications (without id) must never be replied to
