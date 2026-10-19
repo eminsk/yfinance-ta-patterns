@@ -112,6 +112,25 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover
     InvestingCalendar = None  # type: ignore[assignment, misc]
     resolve_symbol_currencies = None  # type: ignore[assignment]
 
+try:
+    from .gemm import (
+        HAS_NANOGEMM,
+        cosine_similarity_matrix,
+        fast_matmul,
+        fast_score_batch,
+        get_gemm_backend,
+    )
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
+    HAS_NANOGEMM = False
+    cosine_similarity_matrix = None  # type: ignore[assignment]
+    fast_matmul = None  # type: ignore[assignment]
+    fast_score_batch = None  # type: ignore[assignment]
+
+    def _fallback_get_gemm_backend() -> str:
+        return "Unavailable"
+
+    get_gemm_backend = _fallback_get_gemm_backend  # type: ignore[assignment]
+
 
 def __getattr__(name: str) -> object:
     if name == "YFinanceTAMCPServer":
@@ -135,6 +154,7 @@ __all__ = [
     "CUSTOM_PATTERNS",
     "FOREX_56_PAIRS",
     "FOREX_MAJOR_CURRENCIES",
+    "HAS_NANOGEMM",
     "HAS_NATIVE_TALIB",
     "SUPPORTED_FALLBACK_PATTERNS",
     "TALIB_IMPORT_ERROR",
@@ -155,9 +175,13 @@ __all__ = [
     "YFinanceTAMCPServer",
     "__version__",
     "classify_asset",
+    "cosine_similarity_matrix",
+    "fast_matmul",
+    "fast_score_batch",
     "format_price",
     "format_timestamp",
     "get_all_patterns",
+    "get_gemm_backend",
     "get_talib_install_hint",
     "get_talib_status",
     "is_freethreaded",

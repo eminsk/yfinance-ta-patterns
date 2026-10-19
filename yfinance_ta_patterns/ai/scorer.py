@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from ..data import validate_ohlc
+from ..gemm import fast_score_batch, get_gemm_backend
 
 try:
     from enum import StrEnum
@@ -443,6 +444,25 @@ class AIPatternScorer:
                 self.df["_RVOL"] = 1.0
         else:
             self.df["_RVOL"] = 1.0
+
+    @property
+    def gemm_backend(self) -> str:
+        """Active matrix calculation engine (NanoGEMM AVX2 SIMD or NumPy fallback)."""
+        return get_gemm_backend()
+
+    def score_batch_matrix(
+        self,
+        features: Any,
+        weights: Any,
+        bias: float = 0.0,
+        activation: str = "sigmoid",
+    ) -> Any:
+        """Compute high-speed batched quantitative scores using the best available GEMM engine.
+
+        Dispatches to NanoGEMM AVX2/FMA bare-metal microkernel when available,
+        or falls back gracefully to NumPy / pure-Python with full numerical parity.
+        """
+        return fast_score_batch(features, weights, bias=bias, activation=activation)
 
     def _determine_trend_regime(
         self, close: float, ema20: float, ema50: float, ema200: float

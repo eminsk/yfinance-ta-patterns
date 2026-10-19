@@ -66,6 +66,9 @@ pandas = [
 numpy = [
     "numpy>=1.20; implementation_name == 'pypy' and python_version >= '3.12'",
 ]
+gemm = [
+    "nanogemm>=0.3.13",
+]
 dev = [
     "pytest>=8.0; python_version >= '3.9'",
     "pytest>=7.4.0, <8.1; python_version < '3.9'",
