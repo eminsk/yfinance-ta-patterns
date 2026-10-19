@@ -3,6 +3,8 @@
 [![PyPI](https://img.shields.io/pypi/v/yfinance-ta-patterns?style=flat&logo=pypi)](https://pypi.org/project/yfinance-ta-patterns/)
 [![Conda-Forge](https://img.shields.io/conda/vn/conda-forge/yfinance-ta-patterns?style=flat&logo=condaforge)](https://anaconda.org/conda-forge/yfinance-ta-patterns)
 [![Ubuntu / Debian PPA](https://img.shields.io/badge/Ubuntu%20%2F%20Debian-APT%20PPA-E95420?logo=ubuntu&logoColor=white)](https://eminsk.github.io/ppa/)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/yfinance-ta-patterns.svg?style=flat&logo=pypi)](https://pypi.org/project/yfinance-ta-patterns/)
+[![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/yfinance-ta-patterns.svg?style=flat&logo=condaforge)](https://anaconda.org/conda-forge/yfinance-ta-patterns)
 [![Downloads](https://static.pepy.tech/badge/yfinance-ta-patterns)](https://pepy.tech/project/yfinance-ta-patterns)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/eminsk/yfinance-ta-patterns/blob/main/notebooks/yfinance_ta_patterns_quickstart.ipynb)
 [![Python](https://img.shields.io/pypi/pyversions/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
