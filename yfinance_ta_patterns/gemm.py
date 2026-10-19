@@ -163,9 +163,18 @@ def fast_score_batch(
         if x.shape[1] != w.shape[0]:
             raise ValueError(f"Incompatible shapes for scoring: features {x.shape} vs weights {w.shape}")
 
-        logits = np.matmul(x, w)[:, 0]
-        if bias != 0.0:
-            logits += np.float32(bias)
+        logits = np.matmul(x, w)
+        if logits.ndim == 2 and logits.shape[1] == 1:
+            logits = logits[:, 0]
+
+        if bias is not None:
+            if np.isscalar(bias):
+                if bias != 0.0:
+                    logits += np.float32(bias)
+            else:
+                bias_arr = np.asarray(bias, dtype=np.float32)
+                if bias_arr.size > 0:
+                    logits += bias_arr
 
         if activation == "sigmoid":
             # Numerically stable sigmoid without overflow

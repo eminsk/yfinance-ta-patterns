@@ -114,6 +114,19 @@ def test_fast_score_batch_activations(activation: str):
     assert np.allclose(scores, expected, atol=1e-4)
 
 
+def test_fast_score_batch_array_bias_and_multi_weights():
+    features = np.ones((4, 3), dtype=np.float32)
+    weights = np.ones((3, 2), dtype=np.float32)
+    bias = np.array([0.5, 1.0], dtype=np.float32)
+
+    scores = fast_score_batch(features, weights, bias=bias, activation="linear")
+    assert scores.shape == (4, 2)
+    # 1*1*3 + [0.5, 1.0] = [3.5, 4.0]
+    expected = np.tile(np.array([3.5, 4.0], dtype=np.float32), (4, 1))
+    assert np.allclose(scores, expected)
+
+
+
 def test_fast_score_batch_pure_python_fallback():
     features = [[1.0, -1.0], [0.5, 0.5]]
     weights = [2.0, 1.0]
