@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.64] - 2026-10-19
+
+### Changed
+- **CLI Output Modernization**: Replaced verbose native TA-Lib compilation prompts in standard market scanning commands with a clean, confident status banner:
+  - Displays built-in autonomous engine status (`61/61 patterns active`).
+  - Displays the active hardware matrix SIMD backend (`NanoGEMM AVX2+FMA`).
+  - Retains full manual C-binary installation guides and environment diagnostics strictly for `yftp --check-talib`.
+
+---
+
 ## [0.3.63] - 2026-10-19
 
 ### Changed

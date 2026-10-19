@@ -1,3 +1,11 @@
+yfinance-ta-patterns (0.3.64-1) unstable; urgency=medium
+
+  * Release v0.3.64: Streamline CLI output banners with built-in TA-Lib engine status and active
+    SIMD backend display. Remove confusing native TA-Lib compilation prompts from standard scan commands,
+    reserving full installation diagnostics strictly for 'yftp --check-talib'.
+
+ -- eminsk <M_N_N@tut.by>  Mon, 19 Oct 2026 13:10:00 +0000
+
 yfinance-ta-patterns (0.3.63-1) unstable; urgency=medium
 
   * Release v0.3.63: Include nanogemm in core dependencies by default, enabling out-of-the-box
