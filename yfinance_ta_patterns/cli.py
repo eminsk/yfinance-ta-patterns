@@ -841,9 +841,10 @@ def run_cli(args: argparse.Namespace) -> int:
 
         if not HAS_NATIVE_TALIB and not args.pattern:
             fallback_count = len(PatternAnalyzer.get_supported_fallback_patterns())
+            backend = get_gemm_backend()
             print(
-                f"ℹ️ Native TA-Lib binary not found. Scanning {fallback_count} pure-Python fallback patterns.\n"
-                f"{get_talib_install_hint()}\n",
+                f"⚡ Engine: Built-in autonomous TA-Lib ({fallback_count}/61 patterns | SIMD: {backend})\n"
+                f"ℹ️ Notice: Native TA-Lib binary not found. Scanning {fallback_count} built-in patterns. (Run 'yftp --check-talib' for C-binary info)\n",
                 file=sys.stderr,
             )
 
@@ -1234,9 +1235,10 @@ def run_cli(args: argparse.Namespace) -> int:
 
     patterns_to_scan = [args.pattern] if args.pattern else sorted(analyzer.pattern_functions)
     if not HAS_NATIVE_TALIB and args.all_patterns:
+        backend = get_gemm_backend()
         print(
-            f"Notice: Native TA-Lib binary not found. Scanning {len(analyzer.pattern_functions)} pure-Python fallback patterns.\n"
-            f"{get_talib_install_hint()}",
+            f"⚡ Engine: Built-in autonomous TA-Lib ({len(analyzer.pattern_functions)}/61 patterns | SIMD: {backend})\n"
+            f"Notice: Native TA-Lib binary not found. Scanning {len(analyzer.pattern_functions)} built-in patterns. (Run 'yftp --check-talib' for C-binary info)\n",
             file=sys.stderr,
         )
 
