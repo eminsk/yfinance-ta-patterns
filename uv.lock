@@ -2,11 +2,11 @@ version = 1
 revision = 5
 requires-python = ">=3.8"
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -232,11 +232,11 @@ name = "cffi"
 version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -633,11 +633,11 @@ name = "coverage"
 version = "7.10.7"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -792,11 +792,11 @@ name = "curl-cffi"
 version = "0.13.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -926,11 +926,11 @@ name = "idna"
 version = "3.19"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -1420,10 +1420,10 @@ name = "numpy"
 version = "2.5.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
+    "python_full_version >= '3.14' and implementation_name == 'cpython'",
     "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
+    "python_full_version >= '3.12' and implementation_name == 'pypy'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/13/01/11703282db468b85f6f7b8c7f22d058de5970d5c7e60a3a8aaa313c3de36/numpy-2.5.3.tar.gz", hash = "sha256:df2d5874ff183595a4ba404edd04f6bd9b5505c1d7708573f6a6c17489a67563", size = 20791231, upload-time = "2026-09-06T16:27:47.073Z" }
 wheels = [
@@ -1513,11 +1513,11 @@ name = "packaging"
 version = "26.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -1582,11 +1582,11 @@ name = "pandas"
 version = "2.2.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -1705,11 +1705,11 @@ name = "platformdirs"
 version = "4.4.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -1745,11 +1745,11 @@ name = "pluggy"
 version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -1794,11 +1794,11 @@ name = "protobuf"
 version = "6.33.6"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -1851,11 +1851,11 @@ name = "pygments"
 version = "2.21.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -1899,11 +1899,11 @@ name = "pytest"
 version = "8.4.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -1952,11 +1952,11 @@ name = "pytest-cov"
 version = "7.1.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -2024,11 +2024,11 @@ name = "requests"
 version = "2.32.5"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -2074,11 +2074,11 @@ name = "rich"
 version = "15.0.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -2152,11 +2152,11 @@ name = "soupsieve"
 version = "2.8.4"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -2246,11 +2246,11 @@ name = "types-pytz"
 version = "2025.2.0.20251108"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -2286,11 +2286,11 @@ name = "typing-extensions"
 version = "4.16.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -2335,11 +2335,11 @@ name = "urllib3"
 version = "2.6.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -2459,11 +2459,11 @@ name = "websockets"
 version = "15.0.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.14' and implementation_name == 'cpython'",
+    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and implementation_name == 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name == 'cpython'",
-    "python_full_version >= '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
-    "python_full_version >= '3.14' and python_full_version < '3.16' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and implementation_name != 'cpython' and implementation_name != 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'pypy'",
     "python_full_version == '3.11.*' and implementation_name == 'cpython'",
@@ -2582,7 +2582,7 @@ wheels = [
 
 [[package]]
 name = "yfinance-ta-patterns"
-version = "0.3.61"
+version = "0.3.62"
 source = { editable = "." }
 dependencies = [
     { name = "multitasking", marker = "python_full_version < '3.9'" },

@@ -1,3 +1,11 @@
+yfinance-ta-patterns (0.3.62-1) unstable; urgency=medium
+
+  * Release v0.3.62: Integrated hybrid NumPy and NanoGEMM AVX2 SIMD matrix acceleration engine,
+    fast_matmul, fast_score_batch, cosine_similarity_matrix, active engine reporting in CLI diagnostics,
+    dynamic download badges across PyPI and Conda-Forge, and expanded unit test suite (511 passed).
+
+ -- eminsk <M_N_N@tut.by>  Mon, 19 Oct 2026 10:48:00 +0000
+
 yfinance-ta-patterns (0.3.61-1) unstable; urgency=medium
 
   * Release v0.3.61: Deep audit resolution across Forex Friday close retention over weekends,

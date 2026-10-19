@@ -573,7 +573,7 @@ yfinance-ta-mcp
 Run the test suite and quality checks:
 
 ```bash
-# Run pytest across full test suite (480+ tests)
+# Run pytest across full test suite (510+ tests)
 uv run --extra dev pytest -v
 # or with standard pytest
 pytest -v
@@ -589,7 +589,7 @@ uv run --extra dev mypy yfinance_ta_patterns
 uv build
 ```
 
-All 480+ tests pass with 100% success rate across **Python 3.8 through 3.16 (including No-GIL free-threaded 3.13t–3.16t)** and **PyPy 3.8 through 3.12**.
+All 510+ tests pass with 100% success rate across **Python 3.8 through 3.16 (including No-GIL free-threaded 3.13t–3.16t)** and **PyPy 3.8 through 3.12**.
 
 ---
 
