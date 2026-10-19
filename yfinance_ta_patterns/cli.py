@@ -52,6 +52,7 @@ try:
 except ImportError:
     PatternAnalyzer = None  # type: ignore[assignment, misc]
 
+from .gemm import get_gemm_backend
 from .talib_compat import HAS_NATIVE_TALIB, get_talib_install_hint, get_talib_status
 
 TIMEFRAME_MAP: dict[str, str] = {
@@ -739,6 +740,7 @@ def run_cli(args: argparse.Namespace) -> int:
         status = get_talib_status()
         print("=== TA-Lib Environment & Binary Status ===")
         print(f"Native TA-Lib Available: {status['has_native_talib']}")
+        print(f"Matrix SIMD Engine:      {get_gemm_backend()}")
         print(f"Python Implementation:   {status['implementation']} ({status['python_version']})")
         print(f"Platform:                {sys.platform}")
         if status["is_free_threaded"]:

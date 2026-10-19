@@ -148,6 +148,7 @@ def test_cli_check_talib_option(capsys):
     captured = capsys.readouterr()
     assert "=== TA-Lib Environment & Binary Status ===" in captured.out
     assert "Native TA-Lib Available:" in captured.out
+    assert "Matrix SIMD Engine:" in captured.out
     assert "Python Implementation:" in captured.out
     assert "Platform:" in captured.out
     assert "Status Details:" in captured.out
