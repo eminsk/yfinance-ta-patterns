@@ -72,7 +72,7 @@ Universal runtime compatibility across **CPython 3.8 to 3.16, free-threaded No-G
 | **Conda + Native TA-Lib** | `conda install -c conda-forge yfinance-ta-patterns ta-lib` | Full C-accelerated TA-Lib with **zero compilation** |
 | **Pixi** | `pixi add yfinance-ta-patterns` | Modern high-speed reproducible Conda workflow |
 | **Ubuntu / Debian (APT PPA)** | `curl -sS https://eminsk.github.io/ppa/setup.sh \| sudo bash`<br>`sudo apt install python3-yfinance-ta-patterns` | Official PPA repository (pure apt, zero URLs) |
-| **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.49-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
+| **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.62-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
 | **Ubuntu / Debian (pipx)** | `sudo apt install pipx && pipx install yfinance-ta-patterns` | Isolated global CLI tool install (PEP 668 compliant) |
 | **uv (Python)** | `uv add yfinance-ta-patterns` | Sub-second pure Python installation |
 | **pip (Python)** | `pip install yfinance-ta-patterns` | Universal PyPI installation |
@@ -622,6 +622,18 @@ If you find this project valuable, encounter issues, or would like to support on
 [![GitHub Issues](https://img.shields.io/github/issues/eminsk/yfinance-ta-patterns?color=red&style=flat-square)](https://github.com/eminsk/yfinance-ta-patterns/issues)
 [![GitHub Discussions](https://img.shields.io/badge/Discussions-Join_Community-blue?logo=github&style=flat-square)](https://github.com/eminsk/yfinance-ta-patterns/discussions)
 [![Donate USDT](https://img.shields.io/badge/Donate-USDT_(TRC20)-26A17B?style=flat-square&logo=tether&logoColor=white)](https://tronscan.org/#/address/TDVbEdnpgNgoAhNcn1EwXxWHiR3RKLit5P)
+
+---
+
+## 📜 Version History & Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for full detailed release history, technical audit notes, and benchmark comparisons.
+
+* 🚀 **v0.3.62** — Integrated hybrid linear algebra & NanoGEMM AVX2+FMA SIMD matrix acceleration engine (`yfinance_ta_patterns.gemm`), `fast_matmul`, `fast_score_batch`, `cosine_similarity_matrix`, CLI diagnostic ISA display (`yftp --check-talib`), dynamic PyPI and Conda download badges, and expanded test suite (**512 tests passed**).
+* 🛡️ **v0.3.61** — Deep audit resolution across Forex Friday close retention over weekends, Yahoo Finance intraday history clamping (730d), CLI `--format json` purity, precious metals normalization (`XAU`/`XAG`), macroeconomic calendar equity ticker shielding, TA-Lib warmup parity, and MCP JSON-RPC 2.0 batch support.
+* 🤖 **v0.3.60** — Positional symbol CLI arguments (`yftp SPY NVDA`), native `--mcp` flag, and Smithery AI Agent Registry integration.
+* 📦 **v0.3.59** — Zero-binary autonomous packaging without mandatory external C TA-Lib or scikit-learn.
+* 🧪 **v0.3.45** — 100.000% mathematical parity with canonical C TA-Lib across all 61 candlestick patterns.
 
 ---
 
