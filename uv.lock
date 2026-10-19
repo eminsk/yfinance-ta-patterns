@@ -2582,10 +2582,11 @@ wheels = [
 
 [[package]]
 name = "yfinance-ta-patterns"
-version = "0.3.62"
+version = "0.3.63"
 source = { editable = "." }
 dependencies = [
     { name = "multitasking", marker = "python_full_version < '3.9'" },
+    { name = "nanogemm", marker = "python_full_version < '3.16' and implementation_name != 'pypy'" },
     { name = "numpy", version = "1.24.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9' and implementation_name != 'pypy'" },
     { name = "numpy", version = "1.26.4", source = { registry = "C:/proekts/talib-build" }, marker = "python_full_version == '3.9.*' and implementation_name != 'pypy'" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10' and python_full_version < '3.14' and implementation_name != 'pypy'" },
@@ -2630,6 +2631,7 @@ yfinance = [
 requires-dist = [
     { name = "multitasking", marker = "python_full_version < '3.9'", specifier = "<0.0.12" },
     { name = "mypy", marker = "python_full_version >= '3.9' and extra == 'dev'", specifier = ">=1.11.0" },
+    { name = "nanogemm", marker = "python_full_version < '3.16' and implementation_name != 'pypy'", specifier = ">=0.3.13" },
     { name = "nanogemm", marker = "extra == 'gemm'", specifier = ">=0.3.13" },
     { name = "numpy", marker = "python_full_version >= '3.12' and implementation_name == 'pypy' and extra == 'numpy'", specifier = ">=1.20" },
     { name = "numpy", marker = "python_full_version < '3.16' and implementation_name != 'pypy'", specifier = ">=1.20" },

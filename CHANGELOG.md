@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.63] - 2026-10-19
+
+### Changed
+- **Default Core Dependency**: Moved `nanogemm>=0.3.13` from optional extras (`[gemm]`) directly into primary `dependencies` in `pyproject.toml`.
+  - Standard installations (`pip install yfinance-ta-patterns`, `uv add yfinance-ta-patterns`) now automatically install `nanogemm` and activate hardware AVX2+FMA SIMD acceleration out of the box without requiring extra brackets.
+  - Environment markers (`implementation_name != 'pypy' and python_version < '3.16'`) preserve autonomous zero-binary fallback on PyPy and Python 3.16.
+- **Recipe & Packaging Updates**: Added `nanogemm >=0.3.13` to run requirements in Conda recipe (`recipe/recipe.yaml` and `conda-recipe/recipe.yaml`) and Debian changelog.
+
+---
+
 ## [0.3.62] - 2026-10-19
 
 ### Added

@@ -16,7 +16,7 @@ from yfinance_ta_patterns.talib_compat import (
 
 def test_python316_version_and_metadata():
     """Verify library version, zero-dependency autonomous imports, and Python 3.16 support."""
-    assert ytp.__version__ == "0.3.62"
+    assert ytp.__version__ == "0.3.63"
     assert len(ALL_CDL_PATTERNS) == 61
     assert callable(is_freethreaded)
     assert callable(is_gil_enabled)
