@@ -126,7 +126,6 @@ def test_fast_score_batch_array_bias_and_multi_weights():
     assert np.allclose(scores, expected)
 
 
-
 def test_fast_score_batch_pure_python_fallback():
     features = [[1.0, -1.0], [0.5, 0.5]]
     weights = [2.0, 1.0]
@@ -171,6 +170,7 @@ def test_ai_pattern_scorer_gemm_integration():
         "Volume": [1000, 1100, 1200, 1300, 1400, 1500],
     }
     import pandas as pd
+
     data = pd.DataFrame(df, index=pd.to_datetime(dates))
 
     scorer = AIPatternScorer(data)

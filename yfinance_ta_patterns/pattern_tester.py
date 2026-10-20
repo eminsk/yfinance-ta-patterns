@@ -6,7 +6,7 @@ import datetime
 import logging
 import warnings
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -927,6 +927,7 @@ class PatternRankingTester:
         split_directions: bool = False,
         exclude_indecision: bool = False,
         trade_indecision: bool = True,
+        patterns: Sequence[str] | None = None,
     ) -> list[PatternResult]:
         """Test all patterns and return ranked results.
 
@@ -946,13 +947,15 @@ class PatternRankingTester:
             If True, exclude neutral/indecision patterns (Doji, Spinning Top, High Wave) from directional ranking (default False)
         trade_indecision : bool
             If False, suppress directional trades on neutral/indecision patterns (default True for backwards compatibility)
+        patterns : sequence of str, optional
+            Subset of pattern names to test (defaults to all supported patterns).
 
         Returns:
         --------
         list[PatternResult] : Ranked pattern results
         """
         self._results = []
-        all_patterns = self.get_all_patterns()
+        all_patterns = list(patterns) if patterns is not None else self.get_all_patterns()
         thresh_signals = min_signals if min_signals is not None else self._min_signals
         thresh_trades = min_trades if min_trades is not None else self._min_trades
 
@@ -1493,7 +1496,7 @@ class PatternRankingTester:
         """Get top N patterns by performance."""
         return self._results[:n]
 
-    def get_comparison_report(self) -> pd.DataFrame:
+    def get_comparison_report(self, patterns: Sequence[str] | None = None) -> pd.DataFrame:
         """Get comparison report with/without news filter, correctly matched by pattern.
 
         Both rankings are recomputed internally, which resets the tester's own result and
@@ -1507,8 +1510,8 @@ class PatternRankingTester:
         saved_open_trade = self._last_open_trade
         saved_approx_fx = self._used_approx_fx
         try:
-            results_no_filter = list(self.test_all_patterns(filter_news=False))
-            results_with_filter = list(self.test_all_patterns(filter_news=True))
+            results_no_filter = list(self.test_all_patterns(filter_news=False, patterns=patterns))
+            results_with_filter = list(self.test_all_patterns(filter_news=True, patterns=patterns))
             # Captured from the internal runs: the warning must describe this report's data,
             # not the restored state of the caller's run.
             report_approx_fx = self._used_approx_fx

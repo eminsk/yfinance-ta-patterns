@@ -1,3 +1,19 @@
+yfinance-ta-patterns (0.3.66-1) unstable; urgency=medium
+
+  * Release v0.3.66: Comprehensive audit fixes and regressions resolution:
+    - Add multi-symbol and single-pattern quantitative backtesting in CLI (_run_backtest_cli).
+    - Eliminate 3x redundant backtesting passes in text/markdown mode.
+    - Implement strict MCP parameter schema validation (clamp=False by default) preventing masked agent errors.
+    - Enforce Yahoo Finance intraday history limits and clamp warmup lookback start date for --date.
+    - Support caller-supplied out= buffers in fast_matmul and fast_score_batch SIMD kernels.
+    - Handle (K, 1) weights and empty feature batches in pure-Python linear algebra fallback.
+    - Resolve precious metals (XAU, XAG, XPT, XPD) to quote fiat currency and handle country assets in calendar.
+    - Recognize auto-mode ISO currencies (MXN, NOK, SEK, ZAR) while defending against US stock ticker collisions.
+    - Document short series and lookback warmup behavior in talib_compat.py.
+    - Add -t alias for --timeframe in CLI parser.
+
+ -- eminsk <M_N_N@tut.by>  Tue, 20 Oct 2026 10:00:00 +0000
+
 yfinance-ta-patterns (0.3.65-1) unstable; urgency=medium
 
   * Release v0.3.65: Comprehensive audit fixes and regressions resolution:

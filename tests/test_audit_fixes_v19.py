@@ -115,9 +115,10 @@ def test_event_risk_future_event_filter() -> None:
     assert er["hours_until"] > 0
 
 
-def test_watchlist_argument_clamping() -> None:
+def test_watchlist_argument_validation() -> None:
     df = _sample_ohlcv()
     server = YFinanceTAMCPServer(data_fetcher=lambda s, p, i: df.copy())
+    # Strict validation rejects out-of-bounds arguments with isError=True
     resp = server.handle_request(
         {
             "jsonrpc": "2.0",
@@ -135,16 +136,38 @@ def test_watchlist_argument_clamping() -> None:
         }
     )
     assert resp is not None
-    assert resp["result"]["isError"] is False
+    assert resp["result"]["isError"] is True
+    assert "min_confidence" in resp["result"]["content"][0]["text"]
+
+    # Valid arguments succeed with isError=False
+    resp_valid = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 21,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_scan_watchlist",
+                "arguments": {
+                    "symbols": ["AAPL"],
+                    "min_confidence": 0.5,
+                    "lookback_bars": 5,
+                    "max_results": 10,
+                },
+            },
+        }
+    )
+    assert resp_valid is not None
+    assert resp_valid["result"]["isError"] is False
 
 
-def test_backtest_argument_clamping_and_filter_news() -> None:
+def test_backtest_argument_validation_and_filter_news() -> None:
     df = _sample_ohlcv()
     server = YFinanceTAMCPServer(
         data_fetcher=lambda s, p, i: df.copy(),
         calendar_fetcher=lambda _u: None,
     )
-    resp = server.handle_request(
+    # Strict validation rejects out-of-bounds arguments
+    resp_err = server.handle_request(
         {
             "jsonrpc": "2.0",
             "id": 30,
@@ -161,12 +184,33 @@ def test_backtest_argument_clamping_and_filter_news() -> None:
             },
         }
     )
+    assert resp_err is not None
+    assert resp_err["result"]["isError"] is True
+
+    # Valid in-bounds arguments succeed and apply news filter
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 31,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_backtest_patterns",
+                "arguments": {
+                    "symbol": "AAPL",
+                    "holding_period": 20,
+                    "min_signals": 5,
+                    "top_n": 10,
+                    "filter_news": True,
+                },
+            },
+        }
+    )
     assert resp is not None
     assert resp["result"]["isError"] is False
     data = resp["result"]["structuredContent"]
     assert data["filter_news"] is True
-    assert data["holding_period"] == 60
-    assert data["min_signals"] == 100
+    assert data["holding_period"] == 20
+    assert data["min_signals"] == 5
 
 
 def test_ta_get_news_tool() -> None:

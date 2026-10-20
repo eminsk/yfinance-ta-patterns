@@ -59,30 +59,54 @@ def fast_matmul(
         b = np.ascontiguousarray(right, dtype=np.float32)
 
         if a.ndim != 2 or b.ndim != 2:
-            raise ValueError(f"fast_matmul operands must be 2D matrices, got {a.shape} and {b.shape}")
+            raise ValueError(
+                f"fast_matmul operands must be 2D matrices, got {a.shape} and {b.shape}"
+            )
 
         if a.shape[1] != b.shape[0]:
             raise ValueError(f"Incompatible matrix dimensions: {a.shape} @ {b.shape}")
 
-        if out is None:
-            out = np.empty((a.shape[0], b.shape[1]), dtype=np.float32)
+        orig_out = out
+        if (
+            out is None
+            or not isinstance(out, np.ndarray)
+            or out.shape != (a.shape[0], b.shape[1])
+            or out.dtype != np.float32
+            or not out.flags.c_contiguous
+        ):
+            target_out = np.empty((a.shape[0], b.shape[1]), dtype=np.float32)
         else:
-            if not isinstance(out, np.ndarray) or out.shape != (a.shape[0], b.shape[1]) or out.dtype != np.float32:
-                out = np.empty((a.shape[0], b.shape[1]), dtype=np.float32)
+            target_out = out
 
-        _ng.matmul(a, b, out=out)
-        return out
+        _ng.matmul(a, b, out=target_out)
+
+        if (
+            orig_out is not None
+            and isinstance(orig_out, np.ndarray)
+            and orig_out is not target_out
+            and orig_out.shape == target_out.shape
+        ):
+            np.copyto(orig_out, target_out)
+            return orig_out
+
+        return target_out
 
     # Standard NumPy fallback
     if HAS_NUMPY:
         a = np.asarray(left, dtype=np.float32)
         b = np.asarray(right, dtype=np.float32)
         if a.ndim != 2 or b.ndim != 2:
-            raise ValueError(f"fast_matmul operands must be 2D matrices, got {a.shape} and {b.shape}")
+            raise ValueError(
+                f"fast_matmul operands must be 2D matrices, got {a.shape} and {b.shape}"
+            )
         if a.shape[1] != b.shape[0]:
             raise ValueError(f"Incompatible matrix dimensions: {a.shape} @ {b.shape}")
 
-        if out is not None and isinstance(out, np.ndarray) and out.shape == (a.shape[0], b.shape[1]):
+        if (
+            out is not None
+            and isinstance(out, np.ndarray)
+            and out.shape == (a.shape[0], b.shape[1])
+        ):
             np.matmul(a, b, out=out)
             return out
         return np.matmul(a, b)
@@ -147,9 +171,16 @@ def fast_score_batch(
             if w32.ndim == 2 and w32.shape[1] == 1:
                 w32 = w32.reshape(-1)
             if x32.ndim == 2 and w32.ndim == 1 and np.isscalar(bias):
-                return _ng.score_batch(
+                native_out = _ng.score_batch(
                     features=x32, weights=w32, bias=float(bias), activation=activation, out=None
                 )
+                if out is not None and hasattr(out, "__setitem__"):
+                    try:
+                        out[:] = native_out
+                        return out
+                    except Exception:
+                        pass
+                return native_out
         except Exception:
             pass  # Fall through to NumPy fallback on any shape/type mismatch
 
@@ -166,7 +197,9 @@ def fast_score_batch(
             w = w.T
 
         if x.shape[1] != w.shape[0]:
-            raise ValueError(f"Incompatible shapes for scoring: features {x.shape} vs weights {w.shape}")
+            raise ValueError(
+                f"Incompatible shapes for scoring: features {x.shape} vs weights {w.shape}"
+            )
 
         logits = np.matmul(x, w)
         if logits.ndim == 2 and logits.shape[1] == 1:
@@ -196,15 +229,35 @@ def fast_score_batch(
         return res
 
     # Pure Python Fallback
-    x_list = [list(r) for r in features] if hasattr(features[0], "__iter__") else [[float(v) for v in features]]
-    w_list = [float(v) for v in (weights[0] if hasattr(weights[0], "__iter__") else weights)]
+    if hasattr(features, "__len__") and len(features) == 0:
+        return []
+
+    if hasattr(features, "__iter__") and len(features) > 0 and hasattr(features[0], "__iter__"):
+        x_list = [[float(v) for v in r] for r in features]
+    else:
+        x_list = [[float(v) for v in features]]
+
+    if hasattr(weights, "__iter__") and len(weights) > 0 and hasattr(weights[0], "__iter__"):
+        if len(weights) == 1:
+            w_list = [float(v) for v in weights[0]]
+        else:
+            w_list = [float(r[0]) if hasattr(r, "__iter__") else float(r) for r in weights]
+    else:
+        w_list = [float(v) for v in weights]
+
     k = len(w_list)
 
     res_list: list[float] = []
+    bias_val = (
+        float(bias)
+        if bias is not None
+        and (isinstance(bias, (int, float)) or (np is not None and np.isscalar(bias)))
+        else 0.0
+    )
     for row in x_list:
         if len(row) != k:
             raise ValueError(f"Feature row length {len(row)} does not match weights length {k}")
-        dot = sum(r * w for r, w in zip(row, w_list)) + bias
+        dot = sum(r * w for r, w in zip(row, w_list)) + bias_val
         if activation == "sigmoid":
             clipped_dot = max(-30.0, min(30.0, dot))
             res_list.append(1.0 / (1.0 + math.exp(-clipped_dot)))
@@ -212,6 +265,14 @@ def fast_score_batch(
             res_list.append(max(0.0, dot))
         else:
             res_list.append(dot)
+
+    if out is not None and hasattr(out, "__setitem__"):
+        try:
+            out[:] = res_list
+            return out
+        except Exception:
+            pass
+
     return res_list
 
 

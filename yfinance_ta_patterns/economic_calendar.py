@@ -247,6 +247,18 @@ def resolve_symbol_currencies(symbol: str, asset_type: str = "auto") -> list[str
         raise ValueError("Parameter 'symbol' is required and cannot be empty.")
 
     clean = symbol.strip().upper()
+    _COMMODITY_METALS = {"XAU", "XAG", "XPT", "XPD"}
+
+    # Commodity metals (gold, silver, platinum, palladium) resolve to their quote fiat currency or USD
+    for metal in _COMMODITY_METALS:
+        if clean == metal:
+            return ["USD"]
+        if clean.startswith(metal) and len(clean) > len(metal):
+            tail = clean[len(metal) :].lstrip("/=").split("=")[0]
+            norm_tail = _CURRENCY_ALIASES.get(tail, tail)
+            if norm_tail in _CURRENCY_CODES and norm_tail not in _COMMODITY_METALS:
+                return [norm_tail]
+            return ["USD"]
 
     # Direct index lookup
     if clean in _INDEX_CURRENCY_MAP:
@@ -256,18 +268,32 @@ def resolve_symbol_currencies(symbol: str, asset_type: str = "auto") -> list[str
     if asset_type == "country":
         if clean in InvestingCalendar.ISO_TO_CURRENCY:
             return [InvestingCalendar.ISO_TO_CURRENCY[clean]]
+        if clean in InvestingCalendar.ISO_TO_CURRENCY.values():
+            return [clean]
         lower_clean = symbol.strip().lower()
         if lower_clean in InvestingCalendar.COUNTRY_MAP:
             return [InvestingCalendar.COUNTRY_MAP[lower_clean][1]]
+        aliased = _CURRENCY_ALIASES.get(clean, clean)
+        if aliased in _CURRENCY_CODES and aliased not in _COMMODITY_METALS:
+            return [aliased]
+        return ["USD"]
 
-    # Major global reserve currencies when passed directly
-    _MAJOR_FX_CURRENCIES = {"USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD"}
+    # Known stock ticker collisions on US exchanges (COP, DE, IT, ES, FR, AU, BR, SE)
+    _STOCK_COLLISIONS = {"COP", "DE", "IT", "ES", "FR", "AU", "BR", "SE"}
+
     if asset_type in ("currency", "forex"):
         aliased_direct = _CURRENCY_ALIASES.get(clean, clean)
+        if aliased_direct in _COMMODITY_METALS:
+            return ["USD"]
         if aliased_direct in _CURRENCY_CODES:
             return [aliased_direct]
-    elif asset_type == "auto" and clean in _MAJOR_FX_CURRENCIES:
-        return [clean]
+    elif asset_type == "auto" and clean not in _STOCK_COLLISIONS:
+        aliased_direct = _CURRENCY_ALIASES.get(clean, clean)
+        if (
+            aliased_direct in _CURRENCY_CODES
+            or aliased_direct in InvestingCalendar.ISO_TO_CURRENCY.values()
+        ) and aliased_direct not in _COMMODITY_METALS:
+            return [aliased_direct]
 
     # Full country name (e.g. 'germany', 'united states', 'france', not short uppercase ticker)
     lower_clean = symbol.strip().lower()

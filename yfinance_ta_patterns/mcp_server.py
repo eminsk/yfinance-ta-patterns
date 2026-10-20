@@ -562,9 +562,9 @@ def _parse_int_param(
     min_val: int | None = None,
     max_val: int | None = None,
     default: int | None = None,
-    clamp: bool = True,
+    clamp: bool = False,
 ) -> int:
-    """Parse, type-check, and clamp integer parameters with clean schema error messages."""
+    """Parse, type-check, and validate integer parameters with clean schema error messages."""
     if val is None:
         if default is not None:
             return default
@@ -594,7 +594,7 @@ def _parse_float_param(
     min_val: float | None = None,
     max_val: float | None = None,
     default: float | None = None,
-    clamp: bool = True,
+    clamp: bool = False,
 ) -> float:
     """Parse, type-check, and validate float parameters with clean schema error messages."""
     if val is None:

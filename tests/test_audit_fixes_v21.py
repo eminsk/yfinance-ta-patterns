@@ -197,7 +197,8 @@ def test_cli_backtest_flags_connected() -> None:
         assert kwargs["commission"] == 2.5
         assert kwargs["slippage"] == 0.0001
         assert kwargs["execution"] == "next_open"
-        mock_inst.test_all_patterns.assert_called_once_with(min_signals=8)
+        assert kwargs["min_signals"] == 8
+        mock_inst.get_comparison_report.assert_called_once_with(patterns=None)
 
 
 # =====================================================================

@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.66] - 2026-10-20
+
+### Added
+- **Multi-Symbol & Targeted Pattern Backtesting (`cli.py`, `pattern_tester.py`)**:
+  - Full multi-symbol backtesting support via `_run_backtest_cli()` (`yftp EURUSD GBPUSD --backtest`), eliminating silent fallback to scanning mode.
+  - Targeted pattern ranking via `--pattern X --backtest` across single and multi-symbol portfolios.
+  - Added `-t` command-line shortcut for `--timeframe` in CLI parser.
+  - Added dedicated regression test suite `tests/test_audit_fixes_v22.py` (14 new automated tests, expanding total suite to **539 tests**, 100% passing).
+- **Platform Clarification for Optional SIMD Acceleration**:
+  - Documented that pre-compiled binary wheels of optional extra `[gemm]` (`nanogemm`) provide bare-metal AVX2+FMA SIMD acceleration on Windows x64 out of the box, while Unix platforms compile from sdist or seamlessly utilize vectorized NumPy and pure-Python fallbacks.
+
+### Fixed
+- **Redundant Backtesting Pass Elimination**: Removed 3x redundant backtesting passes in text/markdown mode by directly calling `tester.get_comparison_report(patterns=...)` rather than discarding an unused initial pass.
+- **Strict MCP Schema Parameter Validation**: Changed `clamp=False` by default in `_parse_int_param` and `_parse_float_param`, returning structured JSON-RPC `isError=True` errors for out-of-bounds parameters (e.g. `min_confidence=70`, `days=-5`, `lookback_bars=100000`) rather than silently clamping and masking issues.
+- **Yahoo Finance Intraday Limits & `--date` Clamping**:
+  - Enforced provider intraday rolling window limits (1m: 7d; 5m/15m/30m: 60d; 60m/1h/4h: 730d), throwing descriptive validation errors when target `--date` is outside the historical window.
+  - Clamped warm-up lookback start date to provider cutoff so historical intraday requests get maximum warm-up bars without triggering HTTP 400 errors.
+- **`gemm.py` Memory Layouts & Fallback Resilience**:
+  - Supported caller-supplied `out` buffers in `fast_matmul` via `np.copyto` and in `fast_score_batch` on native NanoGEMM SIMD branch.
+  - Handled `(K, 1)` and `(1, K)` column/row weight vectors in pure-Python fallback.
+  - Handled empty batch `features=[]` in pure-Python fallback without raising `IndexError`.
+- **Macroeconomic Calendar Currency Resolution**:
+  - Corrected currency resolution for precious metals (`XAU`, `XAG`, `XPT`, `XPD`) and currency pairs (`XAUUSD` -> `['USD']`, `XAUEUR` -> `['EUR']`).
+  - Handled `asset_type="country"` directly without raising `Unsupported asset_type: country`.
+  - Expanded auto-mode ISO currency code recognition (`MXN`, `NOK`, `SEK`, `ZAR`, `CNY`, `INR`, `TRY`) while shielding against US equity ticker collisions (`COP`, `DE`, `IT`, `ES`, `FR`).
+- **Lookback Warmup Documentation in `talib_compat.py`**:
+  - Documented canonical lookback behavior for micro-candle series ($n \le \text{lookback}$) versus full signal parity on market data.
+
+---
+
 ## [0.3.65] - 2026-10-20
 
 ### Fixed

@@ -440,6 +440,7 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--period", default="60d", help="History period, e.g. 60d, 1y, max")
     parser.add_argument(
+        "-t",
         "--timeframe",
         default="15m",
         help=(
@@ -718,6 +719,105 @@ def _display_news_for_symbol(symbol: str, fmt: str = "text") -> None:
             print(f"\n⚠️ Market news unavailable for {symbol}: {exc}", file=sys.stderr)
 
 
+def _run_backtest_cli(
+    symbols: list[str],
+    args: argparse.Namespace,
+    interval: str,
+    period: str,
+    start_arg: str | None = None,
+    end_arg: str | None = None,
+) -> int:
+    """Execute quantitative backtesting across one or multiple symbols without redundant runs."""
+    from .pattern_tester import PatternRankingTester
+
+    target_patterns: list[str] | None = None
+    if getattr(args, "pattern", None):
+        pat_name = args.pattern if args.pattern.startswith("CDL") else f"CDL{args.pattern.upper()}"
+        target_patterns = [pat_name]
+
+    fmt = getattr(args, "format", "text")
+    all_json_results: dict[str, Any] = {}
+
+    for sym in symbols:
+        loader = MarketDataLoader(
+            sym,
+            period=period,
+            interval=interval,
+            start=start_arg,
+            end=end_arg,
+            auto_adjust=getattr(args, "auto_adjust", False),
+            repair=getattr(args, "repair", None),
+        )
+        data = loader.get_data()
+        if data is None or data.empty:
+            print(
+                f"Error: No data retrieved for symbol '{sym}' ({period}, {interval}).",
+                file=sys.stderr,
+            )
+            if len(symbols) == 1:
+                return 1
+            continue
+
+        tester = PatternRankingTester(
+            data,
+            symbol=sym,
+            timeframe=interval,
+            execution=args.execution,
+            commission=args.commission,
+            slippage=args.slippage,
+            min_signals=args.min_signals,
+            verbose=False,
+        )
+
+        if fmt == "json":
+            tester.test_all_patterns(min_signals=args.min_signals, patterns=target_patterns)
+            top = tester.get_top_patterns(n=20)
+            data_out = [
+                {
+                    "pattern": r.pattern_name,
+                    "total_signals": r.total_signals,
+                    "total_trades": r.total_trades,
+                    "winning_trades": r.winning_trades,
+                    "losing_trades": r.losing_trades,
+                    "win_rate": round(r.win_rate, 2),
+                    "total_pnl": round(r.total_pnl, 2),
+                    "avg_pnl": round(r.avg_pnl, 2),
+                    "sharpe_ratio": round(r.sharpe_ratio, 2),
+                    "max_drawdown": round(r.max_drawdown, 2),
+                }
+                for r in top
+            ]
+            if len(symbols) == 1:
+                import json
+
+                print(json.dumps(data_out, indent=2))
+                return 0
+            all_json_results[sym] = data_out
+        else:
+            report_df = tester.get_comparison_report(patterns=target_patterns)
+            if fmt == "markdown":
+                print(f"## 🏆 Quantitative Pattern Ranking: {sym} ({interval}, {period})\n")
+                print(format_markdown_table(report_df))
+                print()
+            else:
+                print("\n" + "=" * 100)
+                print(f"🏆 QUANTITATIVE PATTERN RANKING: {sym} ({interval}, {period})")
+                print(
+                    f"Execution: {args.execution} | Commission: ${args.commission:.2f} | "
+                    f"Slippage: {args.slippage} | Min Signals: {args.min_signals}"
+                )
+                print("=" * 100)
+                print(report_df.to_string(index=False))
+                print()
+
+    if fmt == "json" and len(symbols) > 1:
+        import json
+
+        print(json.dumps(all_json_results, indent=2))
+
+    return 0
+
+
 def run_cli(args: argparse.Namespace) -> int:
     """Run CLI logic with parsed arguments."""
     if sys.platform == "win32":
@@ -793,8 +893,31 @@ def run_cli(args: argparse.Namespace) -> int:
     end_arg = args.end_date
 
     if args.date:
-        # Scale lookback buffer based on timeframe so indicators (EMA200, RSI, ATR) have enough warm-up history
         target_dt = pd.to_datetime(args.date)
+        today_date = pd.Timestamp.now(tz=target_dt.tz if target_dt.tz is not None else None).date()
+        target_date = target_dt.date()
+        days_from_today = (today_date - target_date).days
+
+        # Yahoo Finance rolling intraday window limits:
+        # 1m, 2m: 7 days max rolling window from today
+        # 5m, 15m, 30m: 60 days max rolling window from today
+        # 60m, 1h, 4h: 730 days max rolling window from today
+        max_yahoo_days: int | None = None
+        if interval in ("1m", "2m"):
+            max_yahoo_days = 7
+        elif interval in ("5m", "15m", "30m"):
+            max_yahoo_days = 60
+        elif interval in ("60m", "1h", "4h"):
+            max_yahoo_days = 730
+
+        if max_yahoo_days is not None and days_from_today > max_yahoo_days:
+            raise ValueError(
+                f"Yahoo Finance intraday history for interval '{interval}' is strictly limited to the last "
+                f"{max_yahoo_days} days from today (requested target date '{args.date}' is {days_from_today} days in the past). "
+                f"Please select a daily or higher timeframe for historical dates."
+            )
+
+        # Scale lookback buffer based on timeframe so indicators (EMA200, RSI, ATR) have enough warm-up history
         if interval in ("3mo",):
             lookback_days = 365 * 10  # 10 years for quarterly bars (~40 bars)
         elif interval in ("1mo", "1wk", "5d"):
@@ -810,8 +933,23 @@ def run_cli(args: argparse.Namespace) -> int:
         else:  # 1m, 2m
             lookback_days = 7
 
-        start_arg = (target_dt - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+        start_date = (target_dt - pd.Timedelta(days=lookback_days)).date()
+        if max_yahoo_days is not None:
+            earliest_allowed = today_date - pd.Timedelta(days=max_yahoo_days - 1)
+            start_date = max(start_date, earliest_allowed)
+
+        start_arg = start_date.strftime("%Y-%m-%d")
         end_arg = (target_dt + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+
+    if getattr(args, "backtest", False):
+        return _run_backtest_cli(
+            symbols,
+            args,
+            interval=interval,
+            period=args.period,
+            start_arg=start_arg,
+            end_arg=end_arg,
+        )
 
     use_ai = args.ai or args.ai_analyst or args.prompt or (len(symbols) > 1 and not args.pattern)
 
@@ -1174,59 +1312,6 @@ def run_cli(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-
-    if getattr(args, "backtest", False):
-        from .pattern_tester import PatternRankingTester
-
-        tester = PatternRankingTester(
-            data,
-            symbol=symbol,
-            timeframe=interval,
-            execution=args.execution,
-            commission=args.commission,
-            slippage=args.slippage,
-            min_signals=args.min_signals,
-            verbose=False,
-        )
-        tester.test_all_patterns(min_signals=args.min_signals)
-        top = tester.get_top_patterns(n=20)
-
-        if getattr(args, "format", "text") == "json":
-            import json
-
-            data_out = [
-                {
-                    "pattern": r.pattern_name,
-                    "total_signals": r.total_signals,
-                    "total_trades": r.total_trades,
-                    "winning_trades": r.winning_trades,
-                    "losing_trades": r.losing_trades,
-                    "win_rate": round(r.win_rate, 2),
-                    "total_pnl": round(r.total_pnl, 2),
-                    "avg_pnl": round(r.avg_pnl, 2),
-                    "sharpe_ratio": round(r.sharpe_ratio, 2),
-                    "max_drawdown": round(r.max_drawdown, 2),
-                }
-                for r in top
-            ]
-            print(json.dumps(data_out, indent=2))
-            return _finish(0)
-
-        report_df = tester.get_comparison_report()
-        if getattr(args, "format", "text") == "markdown":
-            print(f"## 🏆 Quantitative Pattern Ranking: {symbol} ({interval}, {period})\n")
-            print(format_markdown_table(report_df))
-            return _finish(0)
-
-        print("\n" + "=" * 100)
-        print(f"🏆 QUANTITATIVE PATTERN RANKING: {symbol} ({interval}, {period})")
-        print(
-            f"Execution: {args.execution} | Commission: ${args.commission:.2f} | "
-            f"Slippage: {args.slippage} | Min Signals: {args.min_signals}"
-        )
-        print("=" * 100)
-        print(report_df.to_string(index=False))
-        return _finish(0)
 
     analyzer = PatternAnalyzer(data)
     range_info = ""

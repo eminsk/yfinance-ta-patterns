@@ -285,4 +285,3 @@ def test_resolve_symbol_currencies_precious_metals_excludes_commodity_codes() ->
     assert resolve_symbol_currencies("XAGUSD") == ["USD"]
     assert resolve_symbol_currencies("XPTUSD") == ["USD"]
     assert resolve_symbol_currencies("XPDUSD") == ["USD"]
-
