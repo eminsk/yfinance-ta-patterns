@@ -72,7 +72,7 @@ Universal runtime compatibility across **CPython 3.8 to 3.16, free-threaded No-G
 | **Conda + Native TA-Lib** | `conda install -c conda-forge yfinance-ta-patterns ta-lib` | Full C-accelerated TA-Lib with **zero compilation** |
 | **Pixi** | `pixi add yfinance-ta-patterns` | Modern high-speed reproducible Conda workflow |
 | **Ubuntu / Debian (APT PPA)** | `curl -sS https://eminsk.github.io/ppa/setup.sh \| sudo bash`<br>`sudo apt install python3-yfinance-ta-patterns` | Official PPA repository (pure apt, zero URLs) |
-| **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.64-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
+| **Ubuntu / Debian (.deb)** | `sudo apt install ./python3-yfinance-ta-patterns_0.3.65-1_all.deb` | Native `.deb` package from [Releases](https://github.com/eminsk/yfinance-ta-patterns/releases) |
 | **Ubuntu / Debian (pipx)** | `sudo apt install pipx && pipx install yfinance-ta-patterns` | Isolated global CLI tool install (PEP 668 compliant) |
 | **uv (Python)** | `uv add yfinance-ta-patterns` | Sub-second pure Python installation |
 | **pip (Python)** | `pip install yfinance-ta-patterns` | Universal PyPI installation |
@@ -629,6 +629,7 @@ If you find this project valuable, encounter issues, or would like to support on
 
 See [CHANGELOG.md](CHANGELOG.md) for full detailed release history, technical audit notes, and benchmark comparisons.
 
+* 🛡️ **v0.3.65** — Comprehensive audit resolution: fixed CLI positional symbol deduplication (`yftp SPY`), unpinned `nanogemm` into optional extra `[gemm]` to prevent numpy environment conflicts, sanitized `fast_score_batch` float32 layout, restored `cdl_hikkakemod` warmup parity, corrected FX 4h Friday weekly close release timing, and excluded precious metals from macroeconomic calendar currency queries.
 * ✨ **v0.3.64** — Modernized CLI output banners with clear built-in TA-Lib status and active hardware SIMD backend reporting; removed noisy manual C-binary compilation hints from regular scans, isolating them to `yftp --check-talib`.
 * ⚡ **v0.3.63** — Integrated `nanogemm` directly into core base dependencies, enabling automatic out-of-the-box AVX2+FMA SIMD matrix acceleration for standard `pip install` and `uv add` commands without requiring manual extra flags.
 * 🚀 **v0.3.62** — Integrated hybrid linear algebra & NanoGEMM AVX2+FMA SIMD matrix acceleration engine (`yfinance_ta_patterns.gemm`), `fast_matmul`, `fast_score_batch`, `cosine_similarity_matrix`, CLI diagnostic ISA display (`yftp --check-talib`), dynamic PyPI and Conda download badges, and expanded test suite (**512 tests passed**).

@@ -587,6 +587,8 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
                 combined.extend([s.strip() for s in p.split(",") if s.strip()])
         if combined:
             parsed.symbol = ",".join(combined)
+            # Already merged into `symbol`: run_cli must not merge the positionals a second time.
+            parsed.positional_symbols = []
     return parsed
 
 
@@ -764,7 +766,7 @@ def run_cli(args: argparse.Namespace) -> int:
     if not args.pattern and not args.all_patterns:
         args.all_patterns = True
 
-    symbol_input = args.symbol or getattr(args, "symbol_alias", None)
+    symbol_input = args.symbol if args.symbol is not None else getattr(args, "symbol_alias", None)
     positionals = getattr(args, "positional_symbols", None) or []
     if symbol_input is not None and positionals:
         combined = [s.strip() for s in symbol_input.split(",") if s.strip()]

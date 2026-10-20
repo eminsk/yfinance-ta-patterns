@@ -1,3 +1,17 @@
+yfinance-ta-patterns (0.3.65-1) unstable; urgency=medium
+
+  * Release v0.3.65: Comprehensive audit fixes and regressions resolution:
+    - Fix positional CLI symbol duplication in run_cli (parsed.positional_symbols).
+    - Return nanogemm to optional extra [gemm] to prevent numpy<2.3 dependency pins and broken downstream environments.
+    - Sanitize fast_score_batch input to float32 C-contiguous arrays before dispatching to native NanoGEMM kernels.
+    - Restore cdl_hikkakemod warmup scan across bars 7..9 for 100% TA-Lib confirmation parity.
+    - Fix FX 4h Friday weekly close candle release timing in closed-only mode.
+    - Disallow empty --symbol "" from falling back to all 56 forex pairs.
+    - Exclude commodity metal symbols (XAU, XAG, XPT, XPD) from macroeconomic calendar currencies.
+    - Cleaned local wheel paths from uv.lock and refreshed dependencies.
+
+ -- eminsk <M_N_N@tut.by>  Tue, 20 Oct 2026 05:15:00 +0000
+
 yfinance-ta-patterns (0.3.64-1) unstable; urgency=medium
 
   * Release v0.3.64: Streamline CLI output banners with built-in TA-Lib engine status and active

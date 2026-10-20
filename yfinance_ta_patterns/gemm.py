@@ -136,15 +136,20 @@ def fast_score_batch(
     np.ndarray or list[float] of length N
         Calibrated confluence confidence scores.
     """
-    if HAS_NANOGEMM and _ng is not None and hasattr(_ng, "score_batch"):
+    if HAS_NANOGEMM and _ng is not None and HAS_NUMPY and hasattr(_ng, "score_batch"):
         try:
-            return _ng.score_batch(
-                features=features,
-                weights=weights,
-                bias=bias,
-                activation=activation,
-                out=out,
-            )
+            # The native kernel reinterprets raw memory as float32: sanitize dtype/layout here,
+            # exactly like fast_matmul does, instead of forwarding float64 / strided arrays.
+            x32 = np.ascontiguousarray(features, dtype=np.float32)
+            w32 = np.ascontiguousarray(weights, dtype=np.float32)
+            if x32.ndim == 1:
+                x32 = x32.reshape(1, -1)
+            if w32.ndim == 2 and w32.shape[1] == 1:
+                w32 = w32.reshape(-1)
+            if x32.ndim == 2 and w32.ndim == 1 and np.isscalar(bias):
+                return _ng.score_batch(
+                    features=x32, weights=w32, bias=float(bias), activation=activation, out=None
+                )
         except Exception:
             pass  # Fall through to NumPy fallback on any shape/type mismatch
 

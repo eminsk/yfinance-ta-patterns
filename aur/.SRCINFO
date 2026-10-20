@@ -1,6 +1,6 @@
 pkgbase = python-yfinance-ta-patterns
 	pkgdesc = Institutional-grade market candlestick pattern scanner with multi-asset backtesting
-	pkgver = 0.3.64
+	pkgver = 0.3.65
 	pkgrel = 1
 	url = https://github.com/eminsk/yfinance-ta-patterns
 	arch = any
@@ -15,7 +15,7 @@ pkgbase = python-yfinance-ta-patterns
 	depends = python-pytz
 	depends = python-rich
 	optdepends = python-yfinance: for live market data downloads via Yahoo Finance
-	source = https://files.pythonhosted.org/packages/source/y/yfinance_ta_patterns/yfinance_ta_patterns-0.3.61.tar.gz
-	sha256sums = SKIP
+	source = https://files.pythonhosted.org/packages/source/y/yfinance_ta_patterns/yfinance_ta_patterns-0.3.65.tar.gz
+	sha256sums = 1c8a0427565ade3c94d9d8bfc41f63448de422619127a05503e5bed0ecb7016b
 
 pkgname = python-yfinance-ta-patterns

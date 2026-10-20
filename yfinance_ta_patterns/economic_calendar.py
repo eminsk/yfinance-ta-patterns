@@ -291,9 +291,12 @@ def resolve_symbol_currencies(symbol: str, asset_type: str = "auto") -> list[str
             return [norm_q]
         return ["USD"]
 
+    _COMMODITY_METALS = {"XAU", "XAG", "XPT", "XPD"}
     currencies: list[str] = []
     for candidate in (base, quote):
         norm_cand = _CURRENCY_ALIASES.get(candidate.strip().upper(), candidate.strip().upper())
+        if norm_cand in _COMMODITY_METALS:
+            continue
         if (
             norm_cand in _CURRENCY_CODES or norm_cand in InvestingCalendar.ISO_TO_CURRENCY.values()
         ) and norm_cand not in currencies:

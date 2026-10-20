@@ -1168,6 +1168,35 @@ def cdl_hikkakemod(open_: Any, high: Any, low: Any, close: Any) -> Any:
     res = [0] * d.n
     pattern_idx = 0
     pattern_result = 0
+    # TA-Lib warm-up pass over bars startIdx-3 .. startIdx-1 (lookback 10): remembers a setup
+    # formed just before the first output bar so its confirmation can still be reported.
+    for i in range(7, min(10, d.n)):
+        if (
+            d.h[i - 2] < d.h[i - 3]
+            and d.l[i - 2] > d.l[i - 3]
+            and d.h[i - 1] < d.h[i - 2]
+            and d.l[i - 1] > d.l[i - 2]
+            and (
+                (
+                    d.h[i] < d.h[i - 1]
+                    and d.l[i] < d.l[i - 1]
+                    and d.c[i - 2] <= d.l[i - 2] + d.avg_near[i - 2]
+                )
+                or (
+                    d.h[i] > d.h[i - 1]
+                    and d.l[i] > d.l[i - 1]
+                    and d.c[i - 2] >= d.h[i - 2] - d.avg_near[i - 2]
+                )
+            )
+        ):
+            pattern_result = 100 * (1 if d.h[i] < d.h[i - 1] else -1)
+            pattern_idx = i
+        elif i <= pattern_idx + 3 and (
+            (pattern_result > 0 and d.c[i] > d.h[pattern_idx - 1])
+            or (pattern_result < 0 and d.c[i] < d.l[pattern_idx - 1])
+        ):
+            pattern_idx = 0
+
     for i in range(10, d.n):
         if (
             d.h[i - 2] < d.h[i - 3]

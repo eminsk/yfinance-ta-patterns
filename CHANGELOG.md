@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.65] - 2026-10-20
+
+### Fixed
+- **CLI Positional Symbol Deduplication**: Fixed double-merging in `cli.run_cli` when positional tickers are supplied (`parsed.positional_symbols` is now cleared once merged into `parsed.symbol`), preventing single-symbol scans like `yftp SPY` from turning into multi-instrument scans with 0.55 confidence thresholds.
+- **Dependency Cleanliness (`nanogemm` & `numpy`)**: Returned `nanogemm` from base `dependencies` to optional extra `[gemm]` (`pip install yfinance-ta-patterns[gemm]`). This completely avoids pulling in `nanogemm`'s `numpy<2.3` constraint and prevents downstream resolver conflicts with `numpy>=2.3`.
+- **Fast Score Batch Float32 Sanitization**: Explicitly cast and ensure C-contiguous `float32` memory layout in `fast_score_batch` before invoking native NanoGEMM SIMD kernels, preventing garbage scores when passed standard `float64` pandas/numpy matrices.
+- **`cdl_hikkakemod` Warmup Parity**: Restored setup scanning across warmup bars 7..9 so confirmations at bar 10 match canonical native C TA-Lib 100%.
+- **Forex 4h Friday Weekly Close Timing**: Fixed secondary closed-only candle filtering in `MarketDataLoader.process` for resampled series, ensuring the completed 20:00 UTC Friday candle is immediately available upon the weekly close.
+- **Empty `--symbol ""` Validation**: Enforced strict `args.symbol is not None` checks in CLI runner to raise a clean validation error instead of silently falling back to scanning all 56 Forex pairs.
+- **Economic Calendar Commodity Metal Handling**: Excluded commodity metal codes (`XAU`, `XAG`, `XPT`, `XPD`) from macroeconomic calendar currency extraction so precious metals like `XAUUSD` properly resolve to their quote fiat currency (`USD`).
+- **Packaging & Lockfile Cleanup**: Removed all local machine paths (`C:/proekts/talib-build`) from `uv.lock` and refreshed to the latest upstream packages.
+
+---
+
 ## [0.3.64] - 2026-10-19
 
 ### Changed

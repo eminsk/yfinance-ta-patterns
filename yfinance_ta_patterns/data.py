@@ -1611,8 +1611,16 @@ class MarketDataLoader:
             # back to its own `ts`-derived date, which is correct for a UTC-anchored grid.
             orig_dates = None
 
-        # Universal closed-only filtering in UTC / market session time before user timezone conversion
-        if self.closed_only and not data.empty and isinstance(data.index, pd.DatetimeIndex):
+        # Universal closed-only filtering in UTC / market session time before user timezone conversion.
+        # Resampled frames were already filtered bucket-by-bucket (session / FX Friday-close aware)
+        # inside _resample_if_needed, so a second `ts + interval <= now` pass would re-hide the
+        # truncated Friday 20:00 UTC FX bucket until 00:00 UTC.
+        if (
+            self.closed_only
+            and not self._resample_rule
+            and not data.empty
+            and isinstance(data.index, pd.DatetimeIndex)
+        ):
             now = now_utc if now_utc is not None else pd.Timestamp.now(tz=pytz.UTC)
             if now.tz is None:
                 now = now.tz_localize(pytz.UTC)
