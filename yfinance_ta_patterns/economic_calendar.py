@@ -203,6 +203,53 @@ _IMPORTANCE_ALIASES: dict[str, str] = {
 }
 
 
+_COMMODITY_METALS: frozenset[str] = frozenset({"XAU", "XAG", "XPT", "XPD"})
+_G10_AUTO_CURRENCIES: frozenset[str] = frozenset(
+    {"USD", "EUR", "GBP", "JPY", "CHF", "AUD", "CAD", "NZD"}
+)
+
+_ISO3_TO_CURRENCY: dict[str, str] = {
+    "USA": "USD",
+    "DEU": "EUR",
+    "FRA": "EUR",
+    "ITA": "EUR",
+    "ESP": "EUR",
+    "GBR": "GBP",
+    "JPN": "JPY",
+    "CAN": "CAD",
+    "AUS": "AUD",
+    "NZL": "NZD",
+    "CHE": "CHF",
+    "CHN": "CNY",
+    "RUS": "RUB",
+    "BRA": "BRL",
+    "MEX": "MXN",
+    "IND": "INR",
+    "KOR": "KRW",
+    "ZAF": "ZAR",
+    "TUR": "TRY",
+    "SAU": "SAR",
+    "SGP": "SGD",
+    "IDN": "IDR",
+    "ARG": "ARS",
+    "SWE": "SEK",
+    "HKG": "HKD",
+    "NOR": "NOK",
+    "DNK": "DKK",
+    "POL": "PLN",
+    "CZE": "CZK",
+    "HUN": "HUF",
+    "ISR": "ILS",
+    "TWN": "TWD",
+    "THA": "THB",
+    "MYS": "MYR",
+    "PHL": "PHP",
+    "CHL": "CLP",
+    "COL": "COP",
+    "ARE": "AED",
+}
+
+
 def normalize_importance_filter(importances: Iterable[Any] | str | None) -> list[str] | None:
     """Normalize importance filter values ('1', '2', '3' or 'low', 'medium', 'high')."""
     if importances is None:
@@ -247,7 +294,6 @@ def resolve_symbol_currencies(symbol: str, asset_type: str = "auto") -> list[str
         raise ValueError("Parameter 'symbol' is required and cannot be empty.")
 
     clean = symbol.strip().upper()
-    _COMMODITY_METALS = {"XAU", "XAG", "XPT", "XPD"}
 
     # Commodity metals (gold, silver, platinum, palladium) resolve to their quote fiat currency or USD
     for metal in _COMMODITY_METALS:
@@ -263,43 +309,6 @@ def resolve_symbol_currencies(symbol: str, asset_type: str = "auto") -> list[str
     # Direct index lookup
     if clean in _INDEX_CURRENCY_MAP:
         return [_INDEX_CURRENCY_MAP[clean]]
-
-    # ISO-3 alpha-3 country code mappings
-    _ISO3_TO_CURRENCY: dict[str, str] = {
-        "USA": "USD",
-        "DEU": "EUR",
-        "FRA": "EUR",
-        "ITA": "EUR",
-        "ESP": "EUR",
-        "GBR": "GBP",
-        "JPN": "JPY",
-        "CAN": "CAD",
-        "AUS": "AUD",
-        "NZL": "NZD",
-        "CHE": "CHF",
-        "CHN": "CNY",
-        "RUS": "RUB",
-        "BRA": "BRL",
-        "MEX": "MXN",
-        "IND": "INR",
-        "KOR": "KRW",
-        "ZAF": "ZAR",
-        "TUR": "TRY",
-        "SAU": "SAR",
-        "SGP": "SGD",
-        "IDN": "IDR",
-        "ARG": "ARS",
-        "SWE": "SEK",
-        "HKG": "HKD",
-        "NOR": "NOK",
-        "DNK": "DKK",
-        "POL": "PLN",
-        "CZE": "CZK",
-        "HUN": "HUF",
-        "ISR": "ILS",
-        "TWN": "TWD",
-        "THA": "THB",
-    }
 
     # Explicit country mode
     if asset_type == "country":
@@ -320,30 +329,13 @@ def resolve_symbol_currencies(symbol: str, asset_type: str = "auto") -> list[str
             f"Please provide an ISO 3166-1 alpha-2/alpha-3 country code, currency code, or recognized country name."
         )
 
-    # Known stock ticker collisions on US exchanges (COP, DE, IT, ES, FR, AU, BR, SE, NOK, PEN, EGP, IDR)
-    _STOCK_COLLISIONS = {
-        "COP",
-        "DE",
-        "IT",
-        "ES",
-        "FR",
-        "AU",
-        "BR",
-        "SE",
-        "NOK",
-        "PEN",
-        "EGP",
-        "IDR",
-    }
-    _G10_AUTO_CURRENCIES = {"USD", "EUR", "GBP", "JPY", "CHF", "AUD", "CAD", "NZD"}
-
     if asset_type in ("currency", "forex"):
         aliased_direct = _CURRENCY_ALIASES.get(clean, clean)
         if aliased_direct in _COMMODITY_METALS:
             return ["USD"]
         if aliased_direct in _CURRENCY_CODES:
             return [aliased_direct]
-    elif asset_type == "auto" and clean not in _STOCK_COLLISIONS:
+    elif asset_type == "auto":
         aliased_direct = _CURRENCY_ALIASES.get(clean, clean)
         if (aliased_direct in _G10_AUTO_CURRENCIES) and aliased_direct not in _COMMODITY_METALS:
             return [aliased_direct]
@@ -370,7 +362,6 @@ def resolve_symbol_currencies(symbol: str, asset_type: str = "auto") -> list[str
             return [norm_q]
         return ["USD"]
 
-    _COMMODITY_METALS = {"XAU", "XAG", "XPT", "XPD"}
     currencies: list[str] = []
     for candidate in (base, quote):
         cand_clean = candidate.strip().upper().replace("=X", "").lstrip("/=-_ ")

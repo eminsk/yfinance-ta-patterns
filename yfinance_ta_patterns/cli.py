@@ -950,7 +950,7 @@ def run_cli(args: argparse.Namespace) -> int:
         elif interval in ("2m", "5m"):
             lookback_days = 30
         else:  # 1m
-            lookback_days = 7
+            lookback_days = 6
 
         start_date = (target_dt - pd.Timedelta(days=lookback_days)).date()
         if max_yahoo_days is not None:
@@ -981,6 +981,16 @@ def run_cli(args: argparse.Namespace) -> int:
                         f"{max_yahoo_days} days from today (requested end date '{args.end_date}' is {e_days} days in the past). "
                         f"Please select a daily or higher timeframe for historical dates."
                     )
+            if interval == "1m" and args.start_date and args.end_date:
+                s_date = pd.to_datetime(args.start_date).date()
+                e_date = pd.to_datetime(args.end_date).date()
+                span_days = (e_date - s_date).days
+                if span_days > 7:
+                    raise ValueError(
+                        f"Yahoo Finance limits 1m granularity requests to at most 7 days per query "
+                        f"(requested window '{args.start_date}' to '{args.end_date}' spans {span_days} days). "
+                        f"Please reduce the date range or select a higher timeframe."
+                    )
 
     if getattr(args, "backtest", False):
         ret_code = _run_backtest_cli(
@@ -991,7 +1001,7 @@ def run_cli(args: argparse.Namespace) -> int:
             start_arg=start_arg,
             end_arg=end_arg,
         )
-        if getattr(args, "format", "text") != "json":
+        if ret_code == 0 and getattr(args, "format", "text") != "json":
             for s in symbols:
                 if getattr(args, "calendar", False):
                     _display_calendar_for_symbol(s, getattr(args, "format", "text"))

@@ -186,11 +186,20 @@ def fast_score_batch(
                 )
                 if out is not None and hasattr(out, "__setitem__"):
                     try:
-                        if isinstance(out, list) and hasattr(native_out, "tolist"):
-                            out[:] = native_out.tolist()
-                        else:
+                        if (
+                            hasattr(out, "shape")
+                            and hasattr(native_out, "shape")
+                            and out.shape == native_out.shape
+                        ):
                             out[:] = native_out
-                        return out
+                            return out
+                        elif (
+                            isinstance(out, list)
+                            and hasattr(native_out, "tolist")
+                            and len(out) == len(native_out)
+                        ):
+                            out[:] = native_out.tolist()
+                            return out
                     except Exception:
                         pass
                 return native_out
@@ -238,13 +247,12 @@ def fast_score_batch(
 
         if out is not None and hasattr(out, "__setitem__"):
             try:
-                if isinstance(out, list):
+                if hasattr(out, "shape") and hasattr(res, "shape") and out.shape == res.shape:
+                    out[:] = res
+                    return out
+                elif isinstance(out, list) and hasattr(res, "tolist") and len(out) == len(res):
                     out[:] = res.tolist()
-                elif isinstance(out, np.ndarray) and len(out) == len(res):
-                    out[:] = res
-                else:
-                    out[:] = res
-                return out
+                    return out
             except Exception:
                 pass
         return res

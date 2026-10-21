@@ -18,7 +18,11 @@ import pandas as pd
 import pytest
 
 from yfinance_ta_patterns.cli import parse_args, run_cli
-from yfinance_ta_patterns.data import YAHOO_INTRADAY_MAX_DAYS
+from yfinance_ta_patterns.data import (
+    YAHOO_INTRADAY_MAX_DAYS,
+    YAHOO_INTRADAY_MAX_DEPTH_DAYS,
+    YAHOO_INTRADAY_MAX_WINDOW_DAYS,
+)
 from yfinance_ta_patterns.economic_calendar import resolve_symbol_currencies
 from yfinance_ta_patterns.gemm import fast_matmul, fast_score_batch
 
@@ -194,8 +198,10 @@ def test_backtest_header_displays_actual_date_range(capsys: pytest.CaptureFixtur
 # Point 3: Intraday rolling limits and date validation
 # =====================================================================
 def test_intraday_max_days_canonical_dict() -> None:
-    """YAHOO_INTRADAY_MAX_DAYS includes 1m, 2m, 5m, 15m, 30m, 90m, 60m, 1h, 4h."""
-    assert YAHOO_INTRADAY_MAX_DAYS["1m"] == 7
+    """YAHOO_INTRADAY_MAX_DAYS and MAX_DEPTH/WINDOW_DAYS include 1m, 2m, 5m, 15m, 30m, 90m, 60m, 1h, 4h."""
+    assert YAHOO_INTRADAY_MAX_DEPTH_DAYS["1m"] == 30
+    assert YAHOO_INTRADAY_MAX_WINDOW_DAYS["1m"] == 7
+    assert YAHOO_INTRADAY_MAX_DAYS["1m"] == 30
     assert YAHOO_INTRADAY_MAX_DAYS["2m"] == 60
     assert YAHOO_INTRADAY_MAX_DAYS["5m"] == 60
     assert YAHOO_INTRADAY_MAX_DAYS["15m"] == 60

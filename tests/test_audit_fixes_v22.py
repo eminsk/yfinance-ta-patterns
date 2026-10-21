@@ -189,7 +189,7 @@ def test_cli_date_intraday_limit_rejection() -> None:
     with pytest.raises(ValueError, match="Yahoo Finance intraday history for interval '15m'"):
         run_cli(parse_args(["SPY", "-t", "15m", "--date", old_date]))
 
-    old_date_1m = (dt.date.today() - dt.timedelta(days=10)).strftime("%Y-%m-%d")
+    old_date_1m = (dt.date.today() - dt.timedelta(days=35)).strftime("%Y-%m-%d")
     with pytest.raises(ValueError, match="Yahoo Finance intraday history for interval '1m'"):
         run_cli(parse_args(["SPY", "-t", "1m", "--date", old_date_1m]))
 

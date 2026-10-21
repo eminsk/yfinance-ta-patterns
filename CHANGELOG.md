@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.68] - 2026-10-21
+
+### Added
+- **Yahoo Finance 1m Limits Refactor: Depth vs. Window (`data.py`, `cli.py`)**:
+  - Live API validation confirmed Yahoo Finance allows 1m granularity up to **30 days** of historical depth from today, but restricts individual query spans to at most **7 days**.
+  - Refactored `YAHOO_INTRADAY_MAX_DEPTH_DAYS` (1m: 30d, 2m–90m: 60d, 1h–4h: 730d) and `YAHOO_INTRADAY_MAX_WINDOW_DAYS` (1m: 7d, 2m–90m: 60d, 1h–4h: 730d), keeping `YAHOO_INTRADAY_MAX_DAYS` as the canonical depth alias.
+  - Clarified loader vs CLI roles: `MarketDataLoader._clamp_period_for_interval` automatically clamps period windows to provider limits (e.g. 1m clamped to 7d), while CLI validates rolling historical depths from today and single-request query spans.
+  - Added CLI span validation: `--start-date` and `--end-date` for 1m requests spanning $> 7$ days are proactively caught with an informative `ValueError` before sending invalid requests to Yahoo.
+- **Economic Calendar Country Mode & Zero-Allocation Hoisting (`economic_calendar.py`)**:
+  - Added missing ISO 3166-1 alpha-3 country mappings: `ARE` -> `['AED']`, `CHL` -> `['CLP']`, `COL` -> `['COP']`, `MYS` -> `['MYR']`, and `PHL` -> `['PHP']`.
+  - Hoisted `_ISO3_TO_CURRENCY`, `_COMMODITY_METALS`, and `_G10_AUTO_CURRENCIES` to module-level frozensets/dicts, eliminating redundant dictionary re-creation on every symbol resolution call.
+  - Cleaned up obsolete dead code `_STOCK_COLLISIONS` in auto mode since G10 bare currency filtering naturally shields all US equity tickers (`COP`, `DE`, `IT`, `NOK`, etc.).
+- **Platform Clarification for Hardware SIMD Acceleration (`[gemm]`)**:
+  - Documented that `[gemm]` (`nanogemm`) ships pre-compiled bare-metal AVX2+FMA binary wheels on Windows x64. On Linux, macOS, and ARM64 without binary wheels, installation can compile from sdist if build tools are present, or `yfinance-ta-patterns` transparently executes with vectorized NumPy (backed by OpenBLAS/MKL/Accelerate) and pure-Python fallbacks with 100% mathematical precision and zero crash risk.
+- **Expanded Test Suite**:
+  - Added dedicated regression test suite `tests/test_audit_fixes_v24.py` (9 new tests, expanding total suite to **562 tests**, 100% passing across all Python versions).
+
+### Fixed
+- **Oversized Buffer Scalar Broadcasting (`gemm.py`)**:
+  - Fixed an issue in `fast_score_batch` where passing an oversized `out` buffer (e.g. `(5,)`) with a single sample `(1,)` broadcast the scalar score into all elements. Now strictly enforces `out.shape == res.shape` (and `len(out) == len(res)` for list buffers) before writing in-place on both native NanoGEMM SIMD and NumPy fallback branches.
+- **CLI Backtest Hook Error Safety (`cli.py`)**:
+  - Guarded `--calendar` and `--news` hooks in `--backtest` mode to only execute when `ret_code == 0`, preventing displaying irrelevant macroeconomic or news tables when backtesting fails (e.g. due to an unknown pattern or data retrieval error).
+
 ## [0.3.67] - 2026-10-21
 
 ### Added

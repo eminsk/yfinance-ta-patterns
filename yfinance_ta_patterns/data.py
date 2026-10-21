@@ -233,8 +233,21 @@ ALLOWED_ASSET_TYPES: frozenset[str] = frozenset(
     {"auto", "crypto", "forex", "stock", "index", "commodity"}
 )
 
-# Standard Yahoo Finance intraday history limits (in rolling days from today)
-YAHOO_INTRADAY_MAX_DAYS: dict[str, int] = {
+# Standard Yahoo Finance intraday history depth limits (in rolling days from today)
+YAHOO_INTRADAY_MAX_DEPTH_DAYS: dict[str, int] = {
+    "1m": 30,
+    "2m": 60,
+    "5m": 60,
+    "15m": 60,
+    "30m": 60,
+    "90m": 60,
+    "60m": 730,
+    "1h": 730,
+    "4h": 730,
+}
+
+# Maximum window duration per request for intraday intervals
+YAHOO_INTRADAY_MAX_WINDOW_DAYS: dict[str, int] = {
     "1m": 7,
     "2m": 60,
     "5m": 60,
@@ -245,6 +258,9 @@ YAHOO_INTRADAY_MAX_DAYS: dict[str, int] = {
     "1h": 730,
     "4h": 730,
 }
+
+# Canonical alias for rolling history depth
+YAHOO_INTRADAY_MAX_DAYS: dict[str, int] = YAHOO_INTRADAY_MAX_DEPTH_DAYS
 
 
 def validate_asset_type(asset_type: str | None) -> str:
@@ -1116,8 +1132,8 @@ class MarketDataLoader:
         self.repair: bool | None = repair
         self.clean_forex_daily: bool = clean_forex_daily
 
-    @staticmethod
-    def _clamp_period_for_interval(period: str, norm_interval: str) -> str:
+    @classmethod
+    def _clamp_period_for_interval(cls, period: str, norm_interval: str) -> str:
         """Clamp lookback period to Yahoo Finance's maximum supported window for intraday intervals."""
         p_clean = (period or "60d").strip()
         p_lower = p_clean.lower()
@@ -1138,12 +1154,12 @@ class MarketDataLoader:
                 "ytd",
                 "max",
             ):
-                return "7d"
+                return f"{YAHOO_INTRADAY_MAX_WINDOW_DAYS['1m']}d"
         elif norm_interval in ("2m", "5m", "15m", "30m", "90m"):
             if p_lower in ("90d", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"):
-                return "60d"
+                return f"{YAHOO_INTRADAY_MAX_WINDOW_DAYS['5m']}d"
         elif norm_interval in ("60m", "1h", "4h") and p_lower in ("5y", "10y", "max"):
-            return "730d"
+            return f"{YAHOO_INTRADAY_MAX_WINDOW_DAYS['1h']}d"
         return p_clean
 
     @staticmethod

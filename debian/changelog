@@ -1,3 +1,16 @@
+yfinance-ta-patterns (0.3.68-1) unstable; urgency=medium
+
+  * Release v0.3.68: Comprehensive audit fixes and regressions resolution:
+    - Live Yahoo Finance verification: separated intraday historical depth (1m: 30d) from query window span (1m: 7d).
+    - Refactored YAHOO_INTRADAY_MAX_DEPTH_DAYS and YAHOO_INTRADAY_MAX_WINDOW_DAYS, validating 1m query spans <= 7d.
+    - Fixed gemm fast_score_batch shape broadcasting for oversized out buffers across native and NumPy branches.
+    - Guarded CLI --calendar and --news hooks in --backtest mode on ret_code == 0 to prevent displaying output on errors.
+    - Added missing ISO-3 country mappings (ARE, CHL, COL, MYS, PHL) and hoisted constants in economic_calendar.py.
+    - Cleaned up redundant dead code _STOCK_COLLISIONS in auto-mode calendar resolution.
+    - Expanded test suite to 562 tests, 100% passing across all supported platforms.
+
+ -- eminsk <M_N_N@tut.by>  Wed, 21 Oct 2026 05:00:00 +0000
+
 yfinance-ta-patterns (0.3.67-1) unstable; urgency=medium
 
   * Release v0.3.67: Comprehensive audit fixes and regressions resolution:
