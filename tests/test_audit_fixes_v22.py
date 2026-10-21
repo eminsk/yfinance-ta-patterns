@@ -283,22 +283,34 @@ def test_calendar_precious_metals_currency_resolution() -> None:
 
 
 def test_calendar_auto_mode_iso_currencies_and_stock_collision_defense() -> None:
-    """Auto-mode recognizes valid ISO currencies but protects US equity tickers."""
-    # Valid ISO currencies
-    assert resolve_symbol_currencies("MXN", "auto") == ["MXN"]
-    assert resolve_symbol_currencies("NOK", "auto") == ["NOK"]
-    assert resolve_symbol_currencies("SEK", "auto") == ["SEK"]
-    assert resolve_symbol_currencies("ZAR", "auto") == ["ZAR"]
-    assert resolve_symbol_currencies("CNY", "auto") == ["CNY"]
-    assert resolve_symbol_currencies("INR", "auto") == ["INR"]
-    assert resolve_symbol_currencies("TRY", "auto") == ["TRY"]
+    """Auto-mode recognizes valid G10 currencies but protects US equity tickers."""
+    # Valid G10 currencies in auto mode
+    assert resolve_symbol_currencies("EUR", "auto") == ["EUR"]
+    assert resolve_symbol_currencies("GBP", "auto") == ["GBP"]
+    assert resolve_symbol_currencies("JPY", "auto") == ["JPY"]
+    assert resolve_symbol_currencies("CHF", "auto") == ["CHF"]
+    assert resolve_symbol_currencies("AUD", "auto") == ["AUD"]
+    assert resolve_symbol_currencies("CAD", "auto") == ["CAD"]
+    assert resolve_symbol_currencies("NZD", "auto") == ["NZD"]
 
-    # Equity collisions protected
+    # Equity collisions protected in auto mode (US equities -> USD)
+    assert resolve_symbol_currencies("NOK", "auto") == ["USD"]  # Nokia
+    assert resolve_symbol_currencies("PEN", "auto") == ["USD"]  # Penumbra
+    assert resolve_symbol_currencies("EGP", "auto") == ["USD"]  # EastGroup
+    assert resolve_symbol_currencies("IDR", "auto") == ["USD"]  # Idaho Strategic
     assert resolve_symbol_currencies("COP", "auto") == ["USD"]  # ConocoPhillips
     assert resolve_symbol_currencies("DE", "auto") == ["USD"]  # Deere & Co
     assert resolve_symbol_currencies("IT", "auto") == ["USD"]  # Gartner
     assert resolve_symbol_currencies("ES", "auto") == ["USD"]  # Eversource
     assert resolve_symbol_currencies("FR", "auto") == ["USD"]  # First Republic
+
+    # Explicit forex mode or =X suffix resolves to currency codes
+    assert resolve_symbol_currencies("NOK", "forex") == ["NOK"]
+    assert resolve_symbol_currencies("PEN", "forex") == ["PEN"]
+    assert resolve_symbol_currencies("EGP", "forex") == ["EGP"]
+    assert resolve_symbol_currencies("IDR", "forex") == ["IDR"]
+    assert resolve_symbol_currencies("MXN", "forex") == ["MXN"]
+    assert resolve_symbol_currencies("NOK=X", "auto") == ["NOK", "USD"]
 
 
 # =====================================================================

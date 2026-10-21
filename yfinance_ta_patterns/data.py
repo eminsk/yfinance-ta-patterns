@@ -233,6 +233,19 @@ ALLOWED_ASSET_TYPES: frozenset[str] = frozenset(
     {"auto", "crypto", "forex", "stock", "index", "commodity"}
 )
 
+# Standard Yahoo Finance intraday history limits (in rolling days from today)
+YAHOO_INTRADAY_MAX_DAYS: dict[str, int] = {
+    "1m": 7,
+    "2m": 60,
+    "5m": 60,
+    "15m": 60,
+    "30m": 60,
+    "90m": 60,
+    "60m": 730,
+    "1h": 730,
+    "4h": 730,
+}
+
 
 def validate_asset_type(asset_type: str | None) -> str:
     """Validate and normalize asset_type against allowed types."""

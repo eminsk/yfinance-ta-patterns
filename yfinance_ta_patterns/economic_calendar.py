@@ -254,7 +254,7 @@ def resolve_symbol_currencies(symbol: str, asset_type: str = "auto") -> list[str
         if clean == metal:
             return ["USD"]
         if clean.startswith(metal) and len(clean) > len(metal):
-            tail = clean[len(metal) :].lstrip("/=").split("=")[0]
+            tail = clean[len(metal) :].lstrip("/=-_ ").split("=")[0]
             norm_tail = _CURRENCY_ALIASES.get(tail, tail)
             if norm_tail in _CURRENCY_CODES and norm_tail not in _COMMODITY_METALS:
                 return [norm_tail]
@@ -264,10 +264,49 @@ def resolve_symbol_currencies(symbol: str, asset_type: str = "auto") -> list[str
     if clean in _INDEX_CURRENCY_MAP:
         return [_INDEX_CURRENCY_MAP[clean]]
 
+    # ISO-3 alpha-3 country code mappings
+    _ISO3_TO_CURRENCY: dict[str, str] = {
+        "USA": "USD",
+        "DEU": "EUR",
+        "FRA": "EUR",
+        "ITA": "EUR",
+        "ESP": "EUR",
+        "GBR": "GBP",
+        "JPN": "JPY",
+        "CAN": "CAD",
+        "AUS": "AUD",
+        "NZL": "NZD",
+        "CHE": "CHF",
+        "CHN": "CNY",
+        "RUS": "RUB",
+        "BRA": "BRL",
+        "MEX": "MXN",
+        "IND": "INR",
+        "KOR": "KRW",
+        "ZAF": "ZAR",
+        "TUR": "TRY",
+        "SAU": "SAR",
+        "SGP": "SGD",
+        "IDN": "IDR",
+        "ARG": "ARS",
+        "SWE": "SEK",
+        "HKG": "HKD",
+        "NOR": "NOK",
+        "DNK": "DKK",
+        "POL": "PLN",
+        "CZE": "CZK",
+        "HUN": "HUF",
+        "ISR": "ILS",
+        "TWN": "TWD",
+        "THA": "THB",
+    }
+
     # Explicit country mode
     if asset_type == "country":
         if clean in InvestingCalendar.ISO_TO_CURRENCY:
             return [InvestingCalendar.ISO_TO_CURRENCY[clean]]
+        if clean in _ISO3_TO_CURRENCY:
+            return [_ISO3_TO_CURRENCY[clean]]
         if clean in InvestingCalendar.ISO_TO_CURRENCY.values():
             return [clean]
         lower_clean = symbol.strip().lower()
@@ -276,10 +315,27 @@ def resolve_symbol_currencies(symbol: str, asset_type: str = "auto") -> list[str
         aliased = _CURRENCY_ALIASES.get(clean, clean)
         if aliased in _CURRENCY_CODES and aliased not in _COMMODITY_METALS:
             return [aliased]
-        return ["USD"]
+        raise ValueError(
+            f"Invalid country identifier '{symbol}' for asset_type='country'. "
+            f"Please provide an ISO 3166-1 alpha-2/alpha-3 country code, currency code, or recognized country name."
+        )
 
-    # Known stock ticker collisions on US exchanges (COP, DE, IT, ES, FR, AU, BR, SE)
-    _STOCK_COLLISIONS = {"COP", "DE", "IT", "ES", "FR", "AU", "BR", "SE"}
+    # Known stock ticker collisions on US exchanges (COP, DE, IT, ES, FR, AU, BR, SE, NOK, PEN, EGP, IDR)
+    _STOCK_COLLISIONS = {
+        "COP",
+        "DE",
+        "IT",
+        "ES",
+        "FR",
+        "AU",
+        "BR",
+        "SE",
+        "NOK",
+        "PEN",
+        "EGP",
+        "IDR",
+    }
+    _G10_AUTO_CURRENCIES = {"USD", "EUR", "GBP", "JPY", "CHF", "AUD", "CAD", "NZD"}
 
     if asset_type in ("currency", "forex"):
         aliased_direct = _CURRENCY_ALIASES.get(clean, clean)
@@ -289,10 +345,7 @@ def resolve_symbol_currencies(symbol: str, asset_type: str = "auto") -> list[str
             return [aliased_direct]
     elif asset_type == "auto" and clean not in _STOCK_COLLISIONS:
         aliased_direct = _CURRENCY_ALIASES.get(clean, clean)
-        if (
-            aliased_direct in _CURRENCY_CODES
-            or aliased_direct in InvestingCalendar.ISO_TO_CURRENCY.values()
-        ) and aliased_direct not in _COMMODITY_METALS:
+        if (aliased_direct in _G10_AUTO_CURRENCIES) and aliased_direct not in _COMMODITY_METALS:
             return [aliased_direct]
 
     # Full country name (e.g. 'germany', 'united states', 'france', not short uppercase ticker)
@@ -320,7 +373,8 @@ def resolve_symbol_currencies(symbol: str, asset_type: str = "auto") -> list[str
     _COMMODITY_METALS = {"XAU", "XAG", "XPT", "XPD"}
     currencies: list[str] = []
     for candidate in (base, quote):
-        norm_cand = _CURRENCY_ALIASES.get(candidate.strip().upper(), candidate.strip().upper())
+        cand_clean = candidate.strip().upper().replace("=X", "").lstrip("/=-_ ")
+        norm_cand = _CURRENCY_ALIASES.get(cand_clean, cand_clean)
         if norm_cand in _COMMODITY_METALS:
             continue
         if (

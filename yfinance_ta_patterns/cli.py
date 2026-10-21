@@ -29,6 +29,7 @@ except ImportError:
 
 try:
     from .data import (
+        YAHOO_INTRADAY_MAX_DAYS,
         MarketDataLoader,
         classify_asset,
         format_price,
@@ -36,6 +37,7 @@ try:
         normalize_interval,
     )
 except ImportError:
+    YAHOO_INTRADAY_MAX_DAYS = {}  # type: ignore[assignment]
     MarketDataLoader = None  # type: ignore[assignment, misc]
     classify_asset = None  # type: ignore[assignment]
     format_price = None  # type: ignore[assignment]
@@ -53,7 +55,7 @@ except ImportError:
     PatternAnalyzer = None  # type: ignore[assignment, misc]
 
 from .gemm import get_gemm_backend
-from .talib_compat import HAS_NATIVE_TALIB, get_talib_install_hint, get_talib_status
+from .talib_compat import HAS_NATIVE_TALIB, get_talib_install_hint, get_talib_status, talib
 
 TIMEFRAME_MAP: dict[str, str] = {
     "M1": "1m",
@@ -732,90 +734,118 @@ def _run_backtest_cli(
 
     target_patterns: list[str] | None = None
     if getattr(args, "pattern", None):
-        pat_name = args.pattern if args.pattern.startswith("CDL") else f"CDL{args.pattern.upper()}"
+        pat_upper = str(args.pattern).strip().upper()
+        pat_name = pat_upper if pat_upper.startswith("CDL") else f"CDL{pat_upper}"
+        all_patterns = [f for f in dir(talib) if f.startswith("CDL")]
+        if not all_patterns and hasattr(PatternRankingTester, "get_all_patterns"):
+            all_patterns = PatternRankingTester.get_all_patterns()
+        if pat_name not in all_patterns:
+            avail = ", ".join(sorted(p.replace("CDL", "") for p in all_patterns))
+            print(f"Error: Unknown pattern '{args.pattern}'. Available: {avail}", file=sys.stderr)
+            return 1
         target_patterns = [pat_name]
 
     fmt = getattr(args, "format", "text")
     all_json_results: dict[str, Any] = {}
+    success_count = 0
+    failure_count = 0
+
+    if getattr(args, "date", None):
+        date_desc = f"{start_arg} to {end_arg}" if (start_arg and end_arg) else f"on {args.date}"
+    elif getattr(args, "start_date", None) or getattr(args, "end_date", None):
+        date_desc = f"{start_arg or 'beginning'} to {end_arg or 'end'}"
+    else:
+        date_desc = period
 
     for sym in symbols:
-        loader = MarketDataLoader(
-            sym,
-            period=period,
-            interval=interval,
-            start=start_arg,
-            end=end_arg,
-            auto_adjust=getattr(args, "auto_adjust", False),
-            repair=getattr(args, "repair", None),
-        )
-        data = loader.get_data()
-        if data is None or data.empty:
-            print(
-                f"Error: No data retrieved for symbol '{sym}' ({period}, {interval}).",
-                file=sys.stderr,
+        try:
+            loader = MarketDataLoader(
+                sym,
+                period=period,
+                interval=interval,
+                start=start_arg,
+                end=end_arg,
+                auto_adjust=getattr(args, "auto_adjust", False),
+                repair=getattr(args, "repair", None),
             )
-            if len(symbols) == 1:
-                return 1
-            continue
+            data = loader.get_data()
+            if data is None or data.empty:
+                err_msg = f"No data retrieved for symbol '{sym}' ({period}, {interval})."
+                print(f"Error: {err_msg}", file=sys.stderr)
+                failure_count += 1
+                if fmt == "json":
+                    all_json_results[sym] = {"error": err_msg}
+                continue
 
-        tester = PatternRankingTester(
-            data,
-            symbol=sym,
-            timeframe=interval,
-            execution=args.execution,
-            commission=args.commission,
-            slippage=args.slippage,
-            min_signals=args.min_signals,
-            verbose=False,
-        )
+            tester = PatternRankingTester(
+                data,
+                symbol=sym,
+                timeframe=interval,
+                execution=args.execution,
+                commission=args.commission,
+                slippage=args.slippage,
+                min_signals=args.min_signals,
+                verbose=False,
+            )
 
-        if fmt == "json":
-            tester.test_all_patterns(min_signals=args.min_signals, patterns=target_patterns)
-            top = tester.get_top_patterns(n=20)
-            data_out = [
-                {
-                    "pattern": r.pattern_name,
-                    "total_signals": r.total_signals,
-                    "total_trades": r.total_trades,
-                    "winning_trades": r.winning_trades,
-                    "losing_trades": r.losing_trades,
-                    "win_rate": round(r.win_rate, 2),
-                    "total_pnl": round(r.total_pnl, 2),
-                    "avg_pnl": round(r.avg_pnl, 2),
-                    "sharpe_ratio": round(r.sharpe_ratio, 2),
-                    "max_drawdown": round(r.max_drawdown, 2),
-                }
-                for r in top
-            ]
-            if len(symbols) == 1:
-                import json
-
-                print(json.dumps(data_out, indent=2))
-                return 0
-            all_json_results[sym] = data_out
-        else:
-            report_df = tester.get_comparison_report(patterns=target_patterns)
-            if fmt == "markdown":
-                print(f"## 🏆 Quantitative Pattern Ranking: {sym} ({interval}, {period})\n")
-                print(format_markdown_table(report_df))
-                print()
+            if fmt == "json":
+                tester.test_all_patterns(min_signals=args.min_signals, patterns=target_patterns)
+                top = tester.get_top_patterns(n=20)
+                data_out = [
+                    {
+                        "pattern": r.pattern_name,
+                        "total_signals": r.total_signals,
+                        "total_trades": r.total_trades,
+                        "winning_trades": r.winning_trades,
+                        "losing_trades": r.losing_trades,
+                        "win_rate": round(r.win_rate, 2),
+                        "total_pnl": round(r.total_pnl, 2),
+                        "avg_pnl": round(r.avg_pnl, 2),
+                        "sharpe_ratio": round(r.sharpe_ratio, 2),
+                        "max_drawdown": round(r.max_drawdown, 2),
+                    }
+                    for r in top
+                ]
+                all_json_results[sym] = data_out
+                success_count += 1
             else:
-                print("\n" + "=" * 100)
-                print(f"🏆 QUANTITATIVE PATTERN RANKING: {sym} ({interval}, {period})")
-                print(
-                    f"Execution: {args.execution} | Commission: ${args.commission:.2f} | "
-                    f"Slippage: {args.slippage} | Min Signals: {args.min_signals}"
-                )
-                print("=" * 100)
-                print(report_df.to_string(index=False))
-                print()
+                report_df = tester.get_comparison_report(patterns=target_patterns)
+                if fmt == "markdown":
+                    print(f"## 🏆 Quantitative Pattern Ranking: {sym} ({interval}, {date_desc})\n")
+                    print(format_markdown_table(report_df))
+                    print()
+                else:
+                    print("\n" + "=" * 100)
+                    print(f"🏆 QUANTITATIVE PATTERN RANKING: {sym} ({interval}, {date_desc})")
+                    print(
+                        f"Execution: {args.execution} | Commission: ${args.commission:.2f} | "
+                        f"Slippage: {args.slippage} | Min Signals: {args.min_signals}"
+                    )
+                    print("=" * 100)
+                    print(report_df.to_string(index=False))
+                    print()
+                success_count += 1
+        except Exception as exc:
+            err_msg = str(exc)
+            print(f"Error: Failed backtest for '{sym}': {err_msg}", file=sys.stderr)
+            failure_count += 1
+            if fmt == "json":
+                all_json_results[sym] = {"error": err_msg}
 
-    if fmt == "json" and len(symbols) > 1:
+    if fmt == "json":
         import json
 
-        print(json.dumps(all_json_results, indent=2))
+        if len(symbols) == 1:
+            if success_count > 0:
+                print(json.dumps(all_json_results.get(symbols[0], []), indent=2))
+                return 0
+            else:
+                return 1
+        else:
+            print(json.dumps(all_json_results, indent=2))
+            return 1 if failure_count > 0 else 0
 
-    return 0
+    return 1 if (failure_count > 0 or success_count == 0) else 0
 
 
 def run_cli(args: argparse.Namespace) -> int:
@@ -891,6 +921,7 @@ def run_cli(args: argparse.Namespace) -> int:
 
     start_arg = args.start_date
     end_arg = args.end_date
+    max_yahoo_days: int | None = YAHOO_INTRADAY_MAX_DAYS.get(interval)
 
     if args.date:
         target_dt = pd.to_datetime(args.date)
@@ -898,19 +929,7 @@ def run_cli(args: argparse.Namespace) -> int:
         target_date = target_dt.date()
         days_from_today = (today_date - target_date).days
 
-        # Yahoo Finance rolling intraday window limits:
-        # 1m, 2m: 7 days max rolling window from today
-        # 5m, 15m, 30m: 60 days max rolling window from today
-        # 60m, 1h, 4h: 730 days max rolling window from today
-        max_yahoo_days: int | None = None
-        if interval in ("1m", "2m"):
-            max_yahoo_days = 7
-        elif interval in ("5m", "15m", "30m"):
-            max_yahoo_days = 60
-        elif interval in ("60m", "1h", "4h"):
-            max_yahoo_days = 730
-
-        if max_yahoo_days is not None and days_from_today > max_yahoo_days:
+        if max_yahoo_days is not None and days_from_today >= max_yahoo_days:
             raise ValueError(
                 f"Yahoo Finance intraday history for interval '{interval}' is strictly limited to the last "
                 f"{max_yahoo_days} days from today (requested target date '{args.date}' is {days_from_today} days in the past). "
@@ -926,11 +945,11 @@ def run_cli(args: argparse.Namespace) -> int:
             lookback_days = 365  # 1 full year (~252 trading days) to ensure full EMA200 warm-up
         elif interval in ("4h", "1h", "60m"):
             lookback_days = 90
-        elif interval in ("15m", "30m"):
+        elif interval in ("15m", "30m", "90m"):
             lookback_days = 60
-        elif interval == "5m":
+        elif interval in ("2m", "5m"):
             lookback_days = 30
-        else:  # 1m, 2m
+        else:  # 1m
             lookback_days = 7
 
         start_date = (target_dt - pd.Timedelta(days=lookback_days)).date()
@@ -941,8 +960,30 @@ def run_cli(args: argparse.Namespace) -> int:
         start_arg = start_date.strftime("%Y-%m-%d")
         end_arg = (target_dt + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
+    elif args.start_date or args.end_date:
+        if max_yahoo_days is not None:
+            today_date = pd.Timestamp.now().date()
+            if args.start_date:
+                s_dt = pd.to_datetime(args.start_date).date()
+                s_days = (today_date - s_dt).days
+                if s_days >= max_yahoo_days:
+                    raise ValueError(
+                        f"Yahoo Finance intraday history for interval '{interval}' is strictly limited to the last "
+                        f"{max_yahoo_days} days from today (requested start date '{args.start_date}' is {s_days} days in the past). "
+                        f"Please select a daily or higher timeframe for historical dates."
+                    )
+            if args.end_date:
+                e_dt = pd.to_datetime(args.end_date).date()
+                e_days = (today_date - e_dt).days
+                if e_days >= max_yahoo_days:
+                    raise ValueError(
+                        f"Yahoo Finance intraday history for interval '{interval}' is strictly limited to the last "
+                        f"{max_yahoo_days} days from today (requested end date '{args.end_date}' is {e_days} days in the past). "
+                        f"Please select a daily or higher timeframe for historical dates."
+                    )
+
     if getattr(args, "backtest", False):
-        return _run_backtest_cli(
+        ret_code = _run_backtest_cli(
             symbols,
             args,
             interval=interval,
@@ -950,6 +991,13 @@ def run_cli(args: argparse.Namespace) -> int:
             start_arg=start_arg,
             end_arg=end_arg,
         )
+        if getattr(args, "format", "text") != "json":
+            for s in symbols:
+                if getattr(args, "calendar", False):
+                    _display_calendar_for_symbol(s, getattr(args, "format", "text"))
+                if getattr(args, "news", False):
+                    _display_news_for_symbol(s, getattr(args, "format", "text"))
+        return ret_code
 
     use_ai = args.ai or args.ai_analyst or args.prompt or (len(symbols) > 1 and not args.pattern)
 

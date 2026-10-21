@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.67] - 2026-10-21
+
+### Added
+- **Backtest CLI Hooks & Failure Isolation (`cli.py`)**:
+  - Connected `--calendar` and `--news` display hooks following backtest execution (`yftp EURUSD -t 1h --backtest --calendar --news`) in text and markdown modes while preserving pristine output in `--format json`.
+  - Added case-insensitive pattern normalization (`--pattern cdlengulfing` -> `CDLENGULFING`) and strict validation against `get_all_patterns()`, exiting with code 1 and listing available patterns on unknown inputs.
+  - Multi-symbol failure isolation in backtest loop: wrapped data retrieval and backtest execution in `try...except`, capturing errors per-symbol in JSON mode (`{"SYM": {"error": "..."}}`) and exiting with code 1 if any failure occurs.
+  - Actual date range display in backtest report headers (`🏆 QUANTITATIVE PATTERN RANKING: SPY (1d, 2026-08-01 to 2026-09-01)`).
+- **Intraday Rolling Limits Unification (`data.py`, `cli.py`)**:
+  - Exported canonical `YAHOO_INTRADAY_MAX_DAYS` dictionary (`{"1m": 7, "2m": 60, "5m": 60, "15m": 60, "30m": 60, "90m": 60, "60m": 730, "1h": 730, "4h": 730}`).
+  - Fixed boundary check to `>=` (preventing `start == end` edge cases), aligned `2m` to 60 days, added `90m` support, and validated `--start-date` and `--end-date` against intraday rolling windows.
+- **Economic Calendar & Currency Resolution (`economic_calendar.py`)**:
+  - Fixed delimiter stripping for precious metals (`XAU-EUR` -> `['EUR']`), supporting `-`, `/`, `=`, `_` separators.
+  - Restricted auto-mode bare currency codes to G10 (`USD`, `EUR`, `GBP`, `JPY`, `CHF`, `AUD`, `CAD`, `NZD`) and added US equity ticker collisions (`NOK`, `PEN`, `EGP`, `IDR`), correctly resolving them to `['USD']` in auto mode while preserving currency codes in `forex` mode or with `=X`.
+  - Raised descriptive `ValueError` for unrecognized country identifiers in `asset_type="country"`, and added ISO 3166-1 alpha-3 mappings (`DEU` -> `['EUR']`, etc.).
+- **Memory Aliasing & Buffer Resilience (`gemm.py`)**:
+  - Added memory aliasing protection in `fast_matmul` via `np.shares_memory(out, a) or np.shares_memory(out, b)`, allocating an intermediate buffer when output overlaps with operands to prevent corrupting in-flight matrix data.
+  - Supported `out=list` in `fast_score_batch` across both native NanoGEMM and NumPy fallback branches via `res.tolist()`.
+- **Expanded Test Suite**:
+  - Added dedicated regression test suite `tests/test_audit_fixes_v23.py` (14 new automated tests, expanding total suite to **553 tests**, 100% passing across all Python versions).
+
 ## [0.3.66] - 2026-10-20
 
 ### Added

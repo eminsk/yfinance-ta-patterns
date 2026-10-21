@@ -1,3 +1,16 @@
+yfinance-ta-patterns (0.3.67-1) unstable; urgency=medium
+
+  * Release v0.3.67: Comprehensive audit fixes and regressions resolution:
+    - Invoke --calendar and --news display hooks in CLI after quantitative backtesting for each symbol.
+    - Validate CLI backtest patterns case-insensitively, check against get_all_patterns(), return exit code 1 on unknown patterns, and isolate per-symbol failures in JSON mode.
+    - Display actual date range in backtest ranking header when --date or --start-date/--end-date is passed.
+    - Unify YAHOO_INTRADAY_MAX_DAYS dictionary across CLI and loader, fix off-by-one >= boundary check, support 2m (60d) and 90m (60d), and validate --start-date/--end-date.
+    - Fix precious metal XAU-EUR delimiter stripping to correctly resolve quote fiat EUR.
+    - Restrict auto-mode bare currency tickers to G10 currencies to protect US equities (NOK, PEN, EGP, IDR), and raise ValueError for invalid country identifiers in asset_type="country".
+    - Prevent memory aliasing in fast_matmul using np.shares_memory and support out=list across NumPy and pure Python branches in fast_score_batch.
+
+ -- eminsk <M_N_N@tut.by>  Wed, 21 Oct 2026 01:00:00 +0000
+
 yfinance-ta-patterns (0.3.66-1) unstable; urgency=medium
 
   * Release v0.3.66: Comprehensive audit fixes and regressions resolution:

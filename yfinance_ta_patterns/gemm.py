@@ -67,12 +67,18 @@ def fast_matmul(
             raise ValueError(f"Incompatible matrix dimensions: {a.shape} @ {b.shape}")
 
         orig_out = out
+        has_overlap = (
+            out is not None
+            and isinstance(out, np.ndarray)
+            and (np.shares_memory(out, a) or np.shares_memory(out, b))
+        )
         if (
             out is None
             or not isinstance(out, np.ndarray)
             or out.shape != (a.shape[0], b.shape[1])
             or out.dtype != np.float32
             or not out.flags.c_contiguous
+            or has_overlap
         ):
             target_out = np.empty((a.shape[0], b.shape[1]), dtype=np.float32)
         else:
@@ -107,6 +113,10 @@ def fast_matmul(
             and isinstance(out, np.ndarray)
             and out.shape == (a.shape[0], b.shape[1])
         ):
+            if np.shares_memory(out, a) or np.shares_memory(out, b):
+                tmp = np.matmul(a, b)
+                np.copyto(out, tmp)
+                return out
             np.matmul(a, b, out=out)
             return out
         return np.matmul(a, b)
@@ -176,7 +186,10 @@ def fast_score_batch(
                 )
                 if out is not None and hasattr(out, "__setitem__"):
                     try:
-                        out[:] = native_out
+                        if isinstance(out, list) and hasattr(native_out, "tolist"):
+                            out[:] = native_out.tolist()
+                        else:
+                            out[:] = native_out
                         return out
                     except Exception:
                         pass
@@ -223,9 +236,17 @@ def fast_score_batch(
         else:  # linear
             res = logits
 
-        if out is not None and isinstance(out, np.ndarray) and len(out) == len(res):
-            out[:] = res
-            return out
+        if out is not None and hasattr(out, "__setitem__"):
+            try:
+                if isinstance(out, list):
+                    out[:] = res.tolist()
+                elif isinstance(out, np.ndarray) and len(out) == len(res):
+                    out[:] = res
+                else:
+                    out[:] = res
+                return out
+            except Exception:
+                pass
         return res
 
     # Pure Python Fallback
