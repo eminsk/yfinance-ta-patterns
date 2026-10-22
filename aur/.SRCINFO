@@ -16,6 +16,6 @@ pkgbase = python-yfinance-ta-patterns
 	depends = python-rich
 	optdepends = python-yfinance: for live market data downloads via Yahoo Finance
 	source = https://files.pythonhosted.org/packages/source/y/yfinance_ta_patterns/yfinance_ta_patterns-0.3.70.tar.gz
-	sha256sums = 51438db130ab919821f140e8b840a49ba64ec32853ae1593b4ea3fe1b3482951
+	sha256sums = 1b9f3eafe32ce0aab8376190c9e043a07b54eeb285f70a18c5d3f11abeac2012
 
 pkgname = python-yfinance-ta-patterns
