@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.70] - 2026-10-22
+
+### Added
+- **MCP Event Risk Test Clock Pinning & Window Hardening (`tests/test_audit_fixes_v19.py`, `tests/test_mcp.py`)**:
+  - Pinned the MCP server's clock in tests by monkeypatching `mcp_server.dt.datetime.now()` to a deterministic UTC midday instant (`2026-10-21 12:00:00 UTC`), completely eliminating the time-dependent test failure window that occurred between 00:00 and 00:16 UTC where same-day 00:01 events fell within the 15-minute recency window.
+  - Added parametrized test coverage (`test_mcp_event_risk_grace_window_is_fifteen_minutes`) explicitly testing the 15-minute event risk grace window boundary (14 minutes ago kept, 16 minutes ago dropped).
+- **Expanded Test Suite**:
+  - Test suite expanded to **599 tests**, 100% passing across all Python versions and platforms.
+
 ## [0.3.69] - 2026-10-21
 
 ### Added

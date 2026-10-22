@@ -5,13 +5,36 @@ from __future__ import annotations
 import datetime as dt
 import io
 import json
+import types
 from typing import Any
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from yfinance_ta_patterns import mcp_server
 from yfinance_ta_patterns.mcp_server import MAX_WATCHLIST_SYMBOLS, YFinanceTAMCPServer
+
+# Mid-day instant used to pin the MCP server's clock: the "past" feed event (00:01 the same day) is
+# then always ~12 hours old, whatever the real time of day is.
+_FROZEN_NOW = dt.datetime(2026, 10, 21, 12, 0, tzinfo=dt.timezone.utc)
+
+
+def _freeze_mcp_clock(monkeypatch: pytest.MonkeyPatch, frozen: dt.datetime) -> None:
+    """Make ``mcp_server`` see ``frozen`` as "now".
+
+    ``datetime.datetime`` is an immutable C type, so the module-level ``dt`` alias is swapped for a
+    namespace whose ``datetime.now()`` returns ``frozen``; every other attribute stays the real one.
+    """
+
+    class _FrozenDateTime(dt.datetime):
+        @classmethod
+        def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:
+            return frozen.astimezone(tz) if tz else frozen.replace(tzinfo=None)
+
+    namespace = types.SimpleNamespace(**{k: v for k, v in vars(dt).items() if k[:2] != "__"})
+    namespace.datetime = _FrozenDateTime
+    monkeypatch.setattr(mcp_server, "dt", namespace)
 
 
 def _make_sample_ohlcv(seed: int = 42, bullish_spike: float = 2.5) -> pd.DataFrame:
@@ -984,12 +1007,13 @@ def test_mcp_unknown_tool_error_code_32602() -> None:
     assert "Unknown tool" in resp["error"]["message"]
 
 
-def test_mcp_event_risk_future_filtering_and_source_resiliency() -> None:
+def test_mcp_event_risk_future_filtering_and_source_resiliency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Verify event_risk excludes past events earlier today and reports source: unavailable when down."""
-    import datetime as dt
-
     df = _make_sample_ohlcv()
-    now_utc = dt.datetime.now(dt.timezone.utc)
+    now_utc = _FROZEN_NOW
+    _freeze_mcp_clock(monkeypatch, now_utc)
     today_str = now_utc.strftime("%Y-%m-%d")
 
     # 1. Feed unavailable -> event_risk returns source: unavailable
@@ -1044,6 +1068,48 @@ def test_mcp_event_risk_future_filtering_and_source_resiliency() -> None:
     # The past 00:01 event was excluded, the future CPI release was selected!
     assert er_live["nearest_event"] == "Future CPI Release"
     assert er_live["hours_until"] > 0
+
+
+@pytest.mark.parametrize(
+    ("minutes_ago", "kept"),
+    [(14, True), (16, False)],
+    ids=["14min-old-kept", "16min-old-dropped"],
+)
+def test_mcp_event_risk_grace_window_is_fifteen_minutes(
+    monkeypatch: pytest.MonkeyPatch, minutes_ago: int, kept: bool
+) -> None:
+    """A release up to 15 minutes old is still reported (hours_until clamps to 0.0); older is dropped."""
+    _freeze_mcp_clock(monkeypatch, _FROZEN_NOW)
+    df = _make_sample_ohlcv()
+    event_dt = _FROZEN_NOW - dt.timedelta(minutes=minutes_ago)
+    html_feed = f"""
+    <table>
+      <tr data-id="1" data-country="united states" data-event="fed speech" class="calendar-date-3">
+        <td class=" {event_dt:%Y-%m-%d}">{event_dt:%I:%M %p}</td>
+        <td>US</td><td>Fed Speech</td><td>-</td><td>-</td>
+      </tr>
+    </table>
+    """
+    server = YFinanceTAMCPServer(
+        data_fetcher=lambda s, p, i: df.copy(),
+        calendar_fetcher=lambda _u: html_feed,
+    )
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "ta_scan_symbol", "arguments": {"symbol": "BTC-USD"}},
+        }
+    )
+    assert resp is not None
+    er = resp["result"]["structuredContent"]["event_risk"]
+    assert er["source"] == "live"
+    assert er["has_high_impact_event"] is kept
+    assert er["event_count"] == int(kept)
+    if kept:
+        assert er["nearest_event"] == "Fed Speech"
+        assert er["hours_until"] == 0.0
 
 
 def test_mcp_watchlist_timeout_hardening_and_error_capture() -> None:

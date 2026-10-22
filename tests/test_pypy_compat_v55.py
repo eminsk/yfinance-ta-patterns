@@ -7,7 +7,7 @@ from yfinance_ta_patterns.talib_compat import ALL_CDL_PATTERNS, talib
 
 
 def test_version_matches():
-    assert ytp.__version__ == "0.3.69"
+    assert ytp.__version__ == "0.3.70"
 
 
 def test_all_61_patterns_present():

@@ -1,3 +1,12 @@
+yfinance-ta-patterns (0.3.70-1) unstable; urgency=medium
+
+  * Release v0.3.70: Fix time-dependent MCP test failures across UTC midnight boundary:
+    - Pin MCP clock in tests via monkeypatching mcp_server.dt.datetime, preventing false test failures between 00:00 and 00:16 UTC.
+    - Add parametrized test covering the 15-minute event risk grace window boundary (14 min kept, 16 min dropped).
+    - Expanded test suite to 599 tests, 100% passing across all supported platforms.
+
+ -- eminsk <M_N_N@tut.by>  Thu, 22 Oct 2026 20:34:00 +0000
+
 yfinance-ta-patterns (0.3.69-1) unstable; urgency=medium
 
   * Release v0.3.69: Comprehensive audit fixes and regressions resolution:
@@ -8,7 +17,7 @@ yfinance-ta-patterns (0.3.69-1) unstable; urgency=medium
     - Match pure-Python fast_score_batch(out=...) semantics with NumPy/NanoGEMM branches (no list resizing on mismatch).
     - Expanded test suite to 597 tests, 100% passing across all supported platforms.
 
- -- eminsk <M_N_N@tut.by>  Wed, 21 Oct 2026 20:00:00 +0000
+ -- eminsk <M_N_N@tut.by>  Thu, 22 Oct 2026 00:04:00 +0000
 
 yfinance-ta-patterns (0.3.68-1) unstable; urgency=medium
 

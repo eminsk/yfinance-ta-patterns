@@ -14,13 +14,35 @@ Covers:
 from __future__ import annotations
 
 import datetime as dt
+import types
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from yfinance_ta_patterns import cli
+from yfinance_ta_patterns import cli, mcp_server
 from yfinance_ta_patterns.mcp_server import YFinanceTAMCPServer
+
+# Mid-day instant used to pin the MCP server's clock: the "past" feed event (00:01 the same day) is
+# then always ~12 hours old, whatever the real time of day is.
+_FROZEN_NOW = dt.datetime(2026, 10, 21, 12, 0, tzinfo=dt.timezone.utc)
+
+
+def _freeze_mcp_clock(monkeypatch: pytest.MonkeyPatch, frozen: dt.datetime) -> None:
+    """Make ``mcp_server`` see ``frozen`` as "now".
+
+    ``datetime.datetime`` is an immutable C type, so the module-level ``dt`` alias is swapped for a
+    namespace whose ``datetime.now()`` returns ``frozen``; every other attribute stays the real one.
+    """
+
+    class _FrozenDateTime(dt.datetime):
+        @classmethod
+        def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:
+            return frozen.astimezone(tz) if tz else frozen.replace(tzinfo=None)
+
+    namespace = types.SimpleNamespace(**{k: v for k, v in vars(dt).items() if k[:2] != "__"})
+    namespace.datetime = _FrozenDateTime
+    monkeypatch.setattr(mcp_server, "dt", namespace)
 
 
 def _sample_ohlcv(periods: int = 50) -> pd.DataFrame:
@@ -75,9 +97,10 @@ def test_event_risk_feed_unavailable_returns_source_unavailable() -> None:
     assert er["event_count"] == 0
 
 
-def test_event_risk_future_event_filter() -> None:
+def test_event_risk_future_event_filter(monkeypatch: pytest.MonkeyPatch) -> None:
     df = _sample_ohlcv()
-    now_utc = dt.datetime.now(dt.timezone.utc)
+    now_utc = _FROZEN_NOW
+    _freeze_mcp_clock(monkeypatch, now_utc)
     today_str = now_utc.strftime("%Y-%m-%d")
     tomorrow_str = (now_utc + dt.timedelta(days=1)).strftime("%Y-%m-%d")
 
