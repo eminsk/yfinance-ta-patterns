@@ -162,8 +162,10 @@ def fast_score_batch(
         Model bias term.
     activation : str, default "sigmoid"
         Activation function: "sigmoid", "linear", or "relu".
-    out : optional array
-        Pre-allocated output buffer.
+    out : optional ndarray or list
+        Pre-allocated output buffer. It is filled in place (and returned) only when its shape
+        (ndarray) or length (list) matches the result; otherwise it is left untouched and a new
+        array/list is returned.
 
     Returns
     -------
@@ -295,12 +297,9 @@ def fast_score_batch(
         else:
             res_list.append(dot)
 
-    if out is not None and hasattr(out, "__setitem__"):
-        try:
-            out[:] = res_list
-            return out
-        except Exception:
-            pass
+    if isinstance(out, list) and len(out) == len(res_list):
+        out[:] = res_list
+        return out
 
     return res_list
 

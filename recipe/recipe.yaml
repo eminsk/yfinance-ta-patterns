@@ -1,6 +1,6 @@
 context:
   name: yfinance-ta-patterns
-  version: "0.3.68"
+  version: "0.3.69"
 
 package:
   name: ${{ name }}

@@ -30,6 +30,7 @@ except ImportError:
 try:
     from .data import (
         YAHOO_INTRADAY_MAX_DAYS,
+        YAHOO_INTRADAY_MAX_WINDOW_DAYS,
         MarketDataLoader,
         classify_asset,
         format_price,
@@ -38,6 +39,7 @@ try:
     )
 except ImportError:
     YAHOO_INTRADAY_MAX_DAYS = {}  # type: ignore[assignment]
+    YAHOO_INTRADAY_MAX_WINDOW_DAYS = {}  # type: ignore[assignment]
     MarketDataLoader = None  # type: ignore[assignment, misc]
     classify_asset = None  # type: ignore[assignment]
     format_price = None  # type: ignore[assignment]
@@ -753,7 +755,7 @@ def _run_backtest_cli(
     if getattr(args, "date", None):
         date_desc = f"{start_arg} to {end_arg}" if (start_arg and end_arg) else f"on {args.date}"
     elif getattr(args, "start_date", None) or getattr(args, "end_date", None):
-        date_desc = f"{start_arg or 'beginning'} to {end_arg or 'end'}"
+        date_desc = f"{args.start_date or 'beginning'} to {args.end_date or 'end'}"
     else:
         date_desc = period
 
@@ -846,6 +848,21 @@ def _run_backtest_cli(
             return 1 if failure_count > 0 else 0
 
     return 1 if (failure_count > 0 or success_count == 0) else 0
+
+
+def _to_exclusive_end(end: str | None) -> str | None:
+    """Turn an inclusive date-only ``--end-date`` into yfinance's exclusive ``end`` (the next midnight).
+
+    ``yf.download(end=...)`` excludes the end timestamp, so passing ``--end-date`` through unchanged
+    would drop the last requested day (and make ``--start-date D --end-date D`` an empty window).
+    Values with a time of day or a timezone are exact instants and are passed through untouched.
+    """
+    if end is None:
+        return None
+    ts = pd.to_datetime(end)
+    if ts.tzinfo is not None or ts != ts.normalize():
+        return end
+    return str((ts + pd.Timedelta(days=1)).date())
 
 
 def run_cli(args: argparse.Namespace) -> int:
@@ -961,6 +978,15 @@ def run_cli(args: argparse.Namespace) -> int:
         end_arg = (target_dt + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
     elif args.start_date or args.end_date:
+        if (
+            args.start_date
+            and args.end_date
+            and pd.to_datetime(args.start_date).date() > pd.to_datetime(args.end_date).date()
+        ):
+            raise ValueError(
+                f"--start-date '{args.start_date}' must not be later than --end-date '{args.end_date}'."
+            )
+        end_arg = _to_exclusive_end(args.end_date)
         if max_yahoo_days is not None:
             today_date = pd.Timestamp.now().date()
             if args.start_date:
@@ -981,15 +1007,24 @@ def run_cli(args: argparse.Namespace) -> int:
                         f"{max_yahoo_days} days from today (requested end date '{args.end_date}' is {e_days} days in the past). "
                         f"Please select a daily or higher timeframe for historical dates."
                     )
-            if interval == "1m" and args.start_date and args.end_date:
-                s_date = pd.to_datetime(args.start_date).date()
-                e_date = pd.to_datetime(args.end_date).date()
-                span_days = (e_date - s_date).days
-                if span_days > 7:
+            window_days = YAHOO_INTRADAY_MAX_WINDOW_DAYS.get(interval)
+            if window_days is not None and window_days < max_yahoo_days:
+                # Per-request window shorter than the history depth (1m). The end day is inclusive, and
+                # yfinance fills a missing start with `end - 1 month`, which can never fit such a window.
+                first = pd.to_datetime(args.start_date).date() if args.start_date else None
+                last = pd.to_datetime(args.end_date).date() if args.end_date else today_date
+                covered = (last - first).days + 1 if first else None
+                if covered is None or covered > window_days:
+                    detail = (
+                        f"covers {covered} days, end date inclusive"
+                        if covered is not None
+                        else "has no --start-date, which yfinance would default to one month before the end"
+                    )
                     raise ValueError(
-                        f"Yahoo Finance limits 1m granularity requests to at most 7 days per query "
-                        f"(requested window '{args.start_date}' to '{args.end_date}' spans {span_days} days). "
-                        f"Please reduce the date range or select a higher timeframe."
+                        f"Yahoo Finance limits {interval} granularity requests to at most {window_days} days "
+                        f"per query (requested window '{args.start_date or '?'}' to "
+                        f"'{args.end_date or 'today'}' {detail}). Please pass --start-date together "
+                        f"with --end-date, reduce the range or select a higher timeframe."
                     )
 
     if getattr(args, "backtest", False):

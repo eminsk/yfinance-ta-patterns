@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.69] - 2026-10-21
+
+### Added
+- **Inclusive `--end-date` CLI Semantics (`cli.py`)**:
+  - Aligned `--end-date` with user documentation: date-only inputs without timestamp are now automatically forwarded as the next midnight (`pd.to_datetime(end) + pd.Timedelta(days=1)`), compensating for `yf.download(end=...)`'s exclusive parameter and ensuring the requested final date is actually fetched.
+  - Fixed single-day range execution: previously, `yftp AAPL -t 1d --start-date 2026-10-07 --end-date 2026-10-07` collapsed into an empty window `[2026-10-07, 2026-10-07)` resulting in "No market data found". It now correctly queries `[2026-10-07, 2026-10-08)`.
+  - Added strict date-order validation: passing `--start-date` later than `--end-date` proactively raises an informative `ValueError` before querying upstream data.
+  - Maintained inclusive date reporting in CLI backtest ranking headers (`🏆 QUANTITATIVE PATTERN RANKING: SPY (1d, 2026-08-03 to 2026-08-07)`).
+- **Comprehensive 1m Request Window Validation (`cli.py`)**:
+  - Extended 1m 7-day request window validation to single-sided ranges:
+    - Single `--start-date` older than 7 days is proactively caught before dispatching requests spanning up to today (> 7 days).
+    - Single `--end-date` without `--start-date` is rejected up-front because yfinance defaults missing start parameters to `end - 1 month`, which invariably violates the 7-day maximum query window.
+  - Corrected window span calculation: counts inclusive calendar days (`(last - first).days + 1 <= 7`), properly rejecting 8-day spans that previously passed validation.
+- **Table-Driven Period Clamping (`data.py`)**:
+  - Replaced hardcoded string matching in `MarketDataLoader._clamp_period_for_interval` with dynamic period parsing (`_period_days()`) and table-driven lookups against `YAHOO_INTRADAY_MAX_WINDOW_DAYS`.
+  - Correctly clamps previously unhandled periods: `20d` or `2mo` for `1m` clamps to `7d`; `61d`–`89d` for `5m`–`90m` clamps to `60d`; `731d` and `3y` for `1h`/`4h` clamp to `730d`.
+- **Pure-Python `fast_score_batch` Buffer Parity (`gemm.py`)**:
+  - Unified `out` parameter handling across all three execution branches (native NanoGEMM SIMD, NumPy, and pure-Python): in the pure-Python branch, `out` is now only written to inplace if `isinstance(out, list) and len(out) == len(res_list)`. Mismatched lists are left untouched and a new list is returned, eliminating silent list mutation/resizing.
+  - Updated `fast_score_batch` docstring to explicitly describe `out` matching requirements.
+- **Expanded Test Suite**:
+  - Added dedicated regression test suite `tests/test_audit_fixes_v25.py` (34 new tests, expanding total suite to **597 tests**, 100% passing across all Python versions).
+
 ## [0.3.68] - 2026-10-21
 
 ### Added
@@ -20,9 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Hoisted `_ISO3_TO_CURRENCY`, `_COMMODITY_METALS`, and `_G10_AUTO_CURRENCIES` to module-level frozensets/dicts, eliminating redundant dictionary re-creation on every symbol resolution call.
   - Cleaned up obsolete dead code `_STOCK_COLLISIONS` in auto mode since G10 bare currency filtering naturally shields all US equity tickers (`COP`, `DE`, `IT`, `NOK`, etc.).
 - **Platform Clarification for Hardware SIMD Acceleration (`[gemm]`)**:
-  - Documented that `[gemm]` (`nanogemm`) ships pre-compiled bare-metal AVX2+FMA binary wheels on Windows x64. On Linux, macOS, and ARM64 without binary wheels, installation can compile from sdist if build tools are present, or `yfinance-ta-patterns` transparently executes with vectorized NumPy (backed by OpenBLAS/MKL/Accelerate) and pure-Python fallbacks with 100% mathematical precision and zero crash risk.
+  - Documented that `[gemm]` (`nanogemm`) ships pre-compiled bare-metal AVX2+FMA binary wheels on Windows x64. On Linux, macOS, and other platforms, a standard `pip install` fetches the universal wheel containing the Windows binary and transparently runs via vectorized NumPy (backed by OpenBLAS/MKL/Accelerate) and pure-Python fallbacks; native compilation on Unix occurs only when explicitly passing `pip install --no-binary nanogemm nanogemm`.
 - **Expanded Test Suite**:
-  - Added dedicated regression test suite `tests/test_audit_fixes_v24.py` (9 new tests, expanding total suite to **562 tests**, 100% passing across all Python versions).
+  - Added dedicated regression test suite `tests/test_audit_fixes_v24.py` (10 new tests, expanding total suite to **563 tests**, 100% passing across all Python versions).
 
 ### Fixed
 - **Oversized Buffer Scalar Broadcasting (`gemm.py`)**:
@@ -60,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `-t` command-line shortcut for `--timeframe` in CLI parser.
   - Added dedicated regression test suite `tests/test_audit_fixes_v22.py` (14 new automated tests, expanding total suite to **539 tests**, 100% passing).
 - **Platform Clarification for Optional SIMD Acceleration**:
-  - Documented that pre-compiled binary wheels of optional extra `[gemm]` (`nanogemm`) provide bare-metal AVX2+FMA SIMD acceleration on Windows x64 out of the box, while Unix platforms compile from sdist or seamlessly utilize vectorized NumPy and pure-Python fallbacks.
+  - Documented that pre-compiled binary wheels of optional extra `[gemm]` (`nanogemm`) provide bare-metal AVX2+FMA SIMD acceleration on Windows x64 out of the box, while on Unix platforms a standard installation utilizes vectorized NumPy and pure-Python fallbacks (or compiles natively from sdist via `pip install --no-binary nanogemm nanogemm`).
 
 ### Fixed
 - **Redundant Backtesting Pass Elimination**: Removed 3x redundant backtesting passes in text/markdown mode by directly calling `tester.get_comparison_report(patterns=...)` rather than discarding an unused initial pass.

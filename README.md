@@ -83,7 +83,7 @@ Universal runtime compatibility across **CPython 3.8 to 3.16, free-threaded No-G
 # 1. Standard install (100% Autonomous AI + Pattern Engine, zero C compiler or Scikit-Learn required):
 uv add yfinance-ta-patterns
 
-# 2. Optional: bare-metal AVX2+FMA SIMD matrix acceleration (pre-compiled binary wheels on Windows x64; source build or NumPy fallback on Linux/macOS):
+# 2. Optional: bare-metal AVX2+FMA SIMD matrix acceleration (pre-compiled binary wheels on Windows x64; source build via --no-binary or NumPy fallback on Linux/macOS):
 uv add "yfinance-ta-patterns[gemm]"
 
 # 3. Optional: with C TA-Lib extension if you already have local C headers:
@@ -592,7 +592,7 @@ uv run --extra dev mypy yfinance_ta_patterns
 uv build
 ```
 
-All 560+ tests pass with 100% success rate across **Python 3.8 through 3.16 (including No-GIL free-threaded 3.13t–3.16t)** and **PyPy 3.8 through 3.12**.
+All 595+ tests pass with 100% success rate across **Python 3.8 through 3.16 (including No-GIL free-threaded 3.13t–3.16t)** and **PyPy 3.8 through 3.12**.
 
 ---
 
@@ -632,7 +632,8 @@ If you find this project valuable, encounter issues, or would like to support on
 
 See [CHANGELOG.md](CHANGELOG.md) for full detailed release history, technical audit notes, and benchmark comparisons.
 
-* 🚀 **v0.3.68** — Live Yahoo Finance 1m intraday limit separation (depth: 30d, query span: 7d), CLI span validation, `gemm.py` `fast_score_batch` oversized buffer scalar broadcasting fix across native and fallback branches, CLI `--backtest` error safety guarding `--calendar`/`--news` hooks, expanded ISO-3 country support (`ARE`, `CHL`, `COL`, `MYS`, `PHL`), module-level constant hoisting, removal of obsolete `_STOCK_COLLISIONS`, platform documentation for `[gemm]`, and expanded test suite (**562 tests passed**).
+* 🚀 **v0.3.69** — Inclusive `--end-date` semantics forwarding next midnight to yfinance, strict inverted range rejection (`--start-date` > `--end-date`), 1m 7-day window enforcement across single-sided ranges and inclusive calendar spans, table-driven `MarketDataLoader._clamp_period_for_interval` covering arbitrary periods, pure-Python `fast_score_batch` exact length matching without list mutation, and expanded test suite (**597 tests passed**).
+* 🚀 **v0.3.68** — Live Yahoo Finance 1m intraday limit separation (depth: 30d, query span: 7d), CLI span validation, `gemm.py` `fast_score_batch` oversized buffer scalar broadcasting fix across native and fallback branches, CLI `--backtest` error safety guarding `--calendar`/`--news` hooks, expanded ISO-3 country support (`ARE`, `CHL`, `COL`, `MYS`, `PHL`), module-level constant hoisting, removal of obsolete `_STOCK_COLLISIONS`, platform documentation for `[gemm]`, and expanded test suite (**563 tests passed**).
 * 🚀 **v0.3.67** — Connected CLI `--calendar` and `--news` hooks to `--backtest`, added case-insensitive backtest pattern normalization and `get_all_patterns()` validation, multi-symbol failure isolation in JSON mode, actual date range display in ranking header, unified `YAHOO_INTRADAY_MAX_DAYS` with `>=` boundary and `--start-date` validation, precious metal `XAU-EUR` delimiter stripping (`['EUR']`), G10 auto-mode bare currency restrictions protecting US equities (`NOK`, `PEN`, `EGP`, `IDR`), `gemm.py` `np.shares_memory` aliasing protection, `fast_score_batch` `out=list` support, and expanded test suite (**553 tests passed**).
 * 🛡️ **v0.3.66** — Quantitative multi-symbol and targeted single-pattern backtesting (`yftp EURUSD GBPUSD --backtest`), elimination of 3x redundant runs, strict MCP schema parameter validation (`clamp=False`), Yahoo Finance intraday history limits and `--date` clamping, `gemm.py` `out=` buffer support, pure-Python linear algebra resilience (`(K, 1)` weights and empty batch `[]`), macroeconomic calendar currency resolution for precious metals (`XAU`/`XAG`), and expanded test suite (**539 tests passed**).
 * 🛡️ **v0.3.65** — Comprehensive audit resolution: fixed CLI positional symbol deduplication (`yftp SPY`), unpinned `nanogemm` into optional extra `[gemm]` to prevent numpy environment conflicts, sanitized `fast_score_batch` float32 layout, restored `cdl_hikkakemod` warmup parity, corrected FX 4h Friday weekly close release timing, and excluded precious metals from macroeconomic calendar currency queries.

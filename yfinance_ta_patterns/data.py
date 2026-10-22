@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import importlib.util
+import re
 import warnings
 from typing import Any, cast
 
@@ -261,6 +262,20 @@ YAHOO_INTRADAY_MAX_WINDOW_DAYS: dict[str, int] = {
 
 # Canonical alias for rolling history depth
 YAHOO_INTRADAY_MAX_DAYS: dict[str, int] = YAHOO_INTRADAY_MAX_DEPTH_DAYS
+
+_PERIOD_RE = re.compile(r"^(\d+)(d|wk|mo|y)$")
+_PERIOD_UNIT_DAYS: dict[str, int] = {"d": 1, "wk": 7, "mo": 30, "y": 365}
+
+
+def _period_days(period: str) -> float:
+    """Approximate length in days of a yfinance period ('5d', '2mo', 'ytd', 'max'); 0 if unparseable."""
+    p = period.strip().lower()
+    if p == "max":
+        return float("inf")
+    if p == "ytd":
+        return 366.0
+    m = _PERIOD_RE.match(p)
+    return int(m.group(1)) * _PERIOD_UNIT_DAYS[m.group(2)] if m else 0.0
 
 
 def validate_asset_type(asset_type: str | None) -> str:
@@ -1117,8 +1132,8 @@ class MarketDataLoader:
             self._download_interval = self._resolve_download_interval(norm_interval)
             self._resample_rule = "4h" if norm_interval == "4h" else None
 
-        # Yahoo Finance restricts intraday lookback windows:
-        # - 1m: max 7-8 days
+        # Yahoo Finance restricts intraday requests (see YAHOO_INTRADAY_MAX_WINDOW_DAYS):
+        # - 1m: max 7 days per request (history reaches back 30 days)
         # - 2m, 5m, 15m, 30m, 90m: max 60 days
         # - 60m, 1h, 4h (resampled from 1h): max 730 days (2y)
         self.period: str = self._clamp_period_for_interval(period, self._download_interval)
@@ -1134,33 +1149,10 @@ class MarketDataLoader:
 
     @classmethod
     def _clamp_period_for_interval(cls, period: str, norm_interval: str) -> str:
-        """Clamp lookback period to Yahoo Finance's maximum supported window for intraday intervals."""
+        """Clamp the lookback period to Yahoo Finance's per-request window for intraday intervals."""
         p_clean = (period or "60d").strip()
-        p_lower = p_clean.lower()
-        if norm_interval == "1m":
-            if p_lower in (
-                "14d",
-                "15d",
-                "30d",
-                "60d",
-                "90d",
-                "1mo",
-                "3mo",
-                "6mo",
-                "1y",
-                "2y",
-                "5y",
-                "10y",
-                "ytd",
-                "max",
-            ):
-                return f"{YAHOO_INTRADAY_MAX_WINDOW_DAYS['1m']}d"
-        elif norm_interval in ("2m", "5m", "15m", "30m", "90m"):
-            if p_lower in ("90d", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"):
-                return f"{YAHOO_INTRADAY_MAX_WINDOW_DAYS['5m']}d"
-        elif norm_interval in ("60m", "1h", "4h") and p_lower in ("5y", "10y", "max"):
-            return f"{YAHOO_INTRADAY_MAX_WINDOW_DAYS['1h']}d"
-        return p_clean
+        window = YAHOO_INTRADAY_MAX_WINDOW_DAYS.get(norm_interval)
+        return f"{window}d" if window is not None and _period_days(p_clean) > window else p_clean
 
     @staticmethod
     def _resolve_download_interval(interval: str) -> str:

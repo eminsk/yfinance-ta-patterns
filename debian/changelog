@@ -1,3 +1,15 @@
+yfinance-ta-patterns (0.3.69-1) unstable; urgency=medium
+
+  * Release v0.3.69: Comprehensive audit fixes and regressions resolution:
+    - Enforce inclusive --end-date semantics by forwarding next midnight to yfinance's exclusive end parameter.
+    - Proactively validate date order, raising ValueError if --start-date is later than --end-date.
+    - Extend 1m 7-day per-request window enforcement to single-sided ranges and count inclusive end date.
+    - Table-driven MarketDataLoader._clamp_period_for_interval clamping all periods exceeding intraday window limits.
+    - Match pure-Python fast_score_batch(out=...) semantics with NumPy/NanoGEMM branches (no list resizing on mismatch).
+    - Expanded test suite to 597 tests, 100% passing across all supported platforms.
+
+ -- eminsk <M_N_N@tut.by>  Wed, 21 Oct 2026 20:00:00 +0000
+
 yfinance-ta-patterns (0.3.68-1) unstable; urgency=medium
 
   * Release v0.3.68: Comprehensive audit fixes and regressions resolution:
@@ -7,7 +19,7 @@ yfinance-ta-patterns (0.3.68-1) unstable; urgency=medium
     - Guarded CLI --calendar and --news hooks in --backtest mode on ret_code == 0 to prevent displaying output on errors.
     - Added missing ISO-3 country mappings (ARE, CHL, COL, MYS, PHL) and hoisted constants in economic_calendar.py.
     - Cleaned up redundant dead code _STOCK_COLLISIONS in auto-mode calendar resolution.
-    - Expanded test suite to 562 tests, 100% passing across all supported platforms.
+    - Expanded test suite to 563 tests, 100% passing across all supported platforms.
 
  -- eminsk <M_N_N@tut.by>  Wed, 21 Oct 2026 05:00:00 +0000
 
