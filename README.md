@@ -21,7 +21,7 @@
 
 High-performance Python library, CLI, and Native MCP Server (`yfinance-ta-mcp`) that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate multi-factor confluence scores (deterministic quantitative confluence heuristic, not uncalibrated win-rate probability), trade setups, and LLM-ready market briefs.
 
-Universal runtime compatibility across **CPython 3.8 to 3.16, free-threaded No-GIL 3.13t to 3.16t, PyPy 3.8 to 3.12 with high-speed JIT tracing, and legacy Windows 7+ support**, installed directly from PyPI with zero compilation required.
+Verified runtime compatibility across **CPython 3.8 through 3.15, free-threaded No-GIL CPython 3.14t, PyPy 3.8 through 3.12 with high-speed JIT tracing, and cross-platform support (Linux x86_64/ARM64, Windows, macOS)**, installed directly from PyPI with zero compilation required.
 
 > ### 🤝 Community, Issues & Support
 > - 🎬 **Featured on Video:** In-depth walkthrough by **Context Unfiltered (Tech & Science)**: *"New Python Library Combines Candlestick Patterns With AI"* — [Watch on Instagram Reels](https://www.instagram.com/reels/Ddz3Qs5IwKH/)
@@ -47,14 +47,15 @@ Universal runtime compatibility across **CPython 3.8 to 3.16, free-threaded No-G
 
 ---
 
-## 🧩 Universal Compatibility Matrix
+## 🧩 Compatibility & Runtime Verification Matrix
 
-| Runtime / Implementation | Supported Versions | Execution Mode | Status | Installation Source |
-|:---|:---|:---|:---:|:---:|
-| **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 3.15, 3.16 | Standard bytecode + GIL | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
-| **CPython (Free-Threaded)** | 3.13t, 3.14t, 3.15t, 3.16t | Multi-core No-GIL (PEP 703) | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
-| **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11, 3.12 | High-speed JIT tracing | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
-| **Operating Systems** | Windows (7, 8, 10, 11), Linux, macOS (Intel & Apple Silicon) | x86_64, ARM64 | ✅ 100% Supported | Direct PyPI (`pip` / `uv`) |
+| Runtime / Implementation | Versions | Execution Mode | Status | Notes & Verification Scope |
+|:---|:---|:---|:---:|:---|
+| **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | Standard bytecode + GIL | ✅ Verified | Direct PyPI install (`pip` / `uv`), zero C build required. (Preview 3.16 tested in CI). |
+| **CPython (Free-Threaded)** | 3.14t | Multi-core No-GIL (PEP 703) | ✅ Verified | Direct No-GIL execution; `yfinance-ta-patterns`, NumPy, and pandas run without GIL. |
+| **CPython (Free-Threaded)** | 3.13t | Multi-core No-GIL (PEP 703) | ⚠️ Core Verified | Core pattern engine passes test suites with GIL disabled; live `yfinance` download requires upstream wheel support (`curl-cffi`/`cffi`). |
+| **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11, 3.12 | High-speed JIT tracing | ✅ Verified | Pure-Python vectorized fallback (all 61 TA-Lib patterns, zero C-API compilation required). |
+| **Operating Systems** | Linux (x86_64, ARM64), Windows (10, 11), macOS (Intel & Apple Silicon) | Native wheels & source | ✅ Verified | Primary tier-1 testing on Linux x86_64; automated cross-platform CI matrix on Windows & macOS. |
 
 ---
 
@@ -102,7 +103,8 @@ uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h
 > Python 3.13+ introduces experimental free-threaded (No-GIL) builds. `yfinance-ta-patterns` is verified on Windows, Linux, and macOS under free-threaded CPython. Here is what you need to know for a smooth No-GIL setup on Windows:
 >
 > #### 1. Python Version Selection & Wheel Availability
-> - **Python 3.13t, 3.14t, 3.15t & 3.16t (Recommended)**: Fully supported out-of-the-box directly from PyPI. Our built-in vectorized engine runs with zero C compilation and full multi-core parallel scaling with the GIL disabled.
+> - **Python 3.14t (Recommended)**: Verified in No-GIL execution. `yfinance-ta-patterns`, NumPy, and pandas run with the GIL disabled. Note: importing `yfinance` loads upstream C extensions that may cause CPython to dynamically re-enable the GIL unless running with pure-Python or custom fetchers.
+> - **Python 3.13t**: Core library and offline pattern recognition pass all test suites (584+ tests) with the GIL disabled. Note: full `pip install yfinance` requires pre-built wheels for upstream dependencies (`curl-cffi` / `cffi`), which may require manual compilation or custom data fetchers on some platforms.
 >
 > #### 2. Understanding Automatic GIL Re-Enablement
 > In free-threaded interpreters, `sys._is_gil_enabled()` may return `True` for two common reasons:
@@ -110,7 +112,7 @@ uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h
 >    ```powershell
 >    [System.Environment]::GetEnvironmentVariable('PYTHON_GIL', 'User')
 >    ```
-> 2. **PEP 703 C-Extension Protection**: When loading C extensions (such as `talib._ta_lib`) that have not yet declared `Py_MOD_GIL_NOT_USED`, CPython automatically re-enables the GIL to protect thread safety and emits a `RuntimeWarning`.
+> 2. **PEP 703 C-Extension Protection**: When loading C extensions (such as `talib._ta_lib` or third-party network libraries) that have not yet declared `Py_MOD_GIL_NOT_USED`, CPython automatically re-enables the GIL to protect thread safety and emits a `RuntimeWarning`.
 >
 > #### 3. Running in True No-GIL Mode
 > To run at full multi-core performance with the GIL disabled:
@@ -188,16 +190,15 @@ pip install "yfinance-ta-patterns[talib]"
 
 #### 🐍 Python Version Compatibility Matrix
 
-| Python Version | Execution Mode | Installation Status | Recommendation |
+| Python Version | Execution Mode | Verification Status | Scope & Recommendation |
 |:---:|:---:|:---:|---|
-| **Python 3.15t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | Start with `PYTHON_GIL=0` or `-X gil=0`; instant sub-second install from PyPI. |
-| **Python 3.15** | **Standard (GIL)** | ✅ **100% Supported** | Direct universal PyPI installation with zero C compilation required. |
-| **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | Start with `PYTHON_GIL=0` or `-X gil=0`; instant sub-second install from PyPI. |
-| **Python 3.14** | **Standard (GIL)** | ✅ **100% Supported** | Direct universal PyPI installation with zero C compilation required. |
-| **Python 3.13t** | **Free-Threaded (No-GIL)** | ✅ **100% Supported** | Start with `PYTHON_GIL=0` or `-X gil=0`; instant sub-second install from PyPI. |
-| **Python 3.13** | **Standard (GIL)** | ✅ **100% Supported** | Current stable Python release. Full instant PyPI installation. |
-| **Python 3.12** | **Standard (GIL)** | ✅ **100% Supported** | Long-Term Support release with instant sub-second installation. |
-| **PyPy 3.8–3.12** | **JIT Accelerated** | ✅ **100% Supported** | High-speed JIT tracing with pure-Python fallback (all 61 TA-Lib patterns supported, zero C-API compilation required). |
+| **Python 3.15** | **Standard (GIL)** | ✅ **Verified** | Verified on Linux/Windows/macOS; instant universal PyPI install with zero C compilation. |
+| **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **Verified** | Core library, NumPy, and pandas run with GIL disabled (`PYTHON_GIL=0` or `-X gil=0`). |
+| **Python 3.14** | **Standard (GIL)** | ✅ **Verified** | Full verified installation; instant universal PyPI install. |
+| **Python 3.13t** | **Free-Threaded (No-GIL)** | ⚠️ **Core Verified** | 584+ core tests pass with No-GIL; upstream `yfinance` network fetching depends on `curl-cffi`/`cffi` wheel availability. |
+| **Python 3.13** | **Standard (GIL)** | ✅ **Verified** | Current stable release; full verified installation. |
+| **Python 3.8–3.12** | **Standard (GIL)** | ✅ **Verified** | Fully verified LTS releases across Linux, Windows, and macOS. Includes dedicated pandas 2.3.x index concurrency tests. |
+| **PyPy 3.8–3.12** | **JIT Accelerated** | ✅ **Verified** | High-speed JIT tracing with pure-Python fallback (all 61 patterns supported, zero C-API compilation). |
 
 ---
 
@@ -592,7 +593,7 @@ uv run --extra dev mypy yfinance_ta_patterns
 uv build
 ```
 
-All 602+ tests pass with 100% success rate across **Python 3.8 through 3.16 (including No-GIL free-threaded 3.13t–3.16t)** and **PyPy 3.8 through 3.12**.
+All 602+ tests pass with 100% success rate on Linux x86_64 across **CPython 3.8 through 3.15** and **free-threaded CPython 3.14t (No-GIL)**, with cross-platform automated matrix verification on Windows and macOS.
 
 ---
 

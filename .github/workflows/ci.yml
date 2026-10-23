@@ -46,6 +46,36 @@ jobs:
         run: python scripts/verify_release.py
 
 
+  verify-pandas-legacy:
+    name: Verify pandas 2.3.x on ubuntu-latest (py${{ matrix.python-version }}, pandas-${{ matrix.pandas-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10"]
+        pandas-version: ["2.3.0", "2.3.3"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+
+      - name: Test MCP concurrency and full test suite with pandas ${{ matrix.pandas-version }}
+        shell: bash
+        run: |
+          uv init --no-workspace test_pandas_proj --python ${{ matrix.python-version }}
+          cd test_pandas_proj
+          uv add "pandas==${{ matrix.pandas-version }}"
+          uv add "$GITHUB_WORKSPACE"
+          uv add pytest
+          uv run python -c "import pandas as pd; print('=== Testing with pandas version:', pd.__version__); assert pd.__version__ == '${{ matrix.pandas-version }}'"
+          uv run pytest "$GITHUB_WORKSPACE/tests/test_mcp.py" -v
+          uv run pytest "$GITHUB_WORKSPACE/tests" -q -W "ignore:.*urllib3 v2 only supports OpenSSL.*:Warning"
+          uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
+
+
   verify-platforms:
     name: Verify on ${{ matrix.os }} (py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
