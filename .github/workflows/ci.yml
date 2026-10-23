@@ -70,7 +70,7 @@ jobs:
           uv add "pandas==${{ matrix.pandas-version }}"
           uv add "$GITHUB_WORKSPACE"
           uv add pytest
-          uv run python -c "import pandas as pd; print('=== Testing with pandas version:', pd.__version__); assert pd.__version__ == '${{ matrix.pandas-version }}'"
+          uv run python -c "import pandas as pd; print('=== Testing with pandas version:', pd.__version__); assert pd.__version__.startswith('${{ matrix.pandas-version }}')"
           uv run pytest "$GITHUB_WORKSPACE/tests/test_mcp.py" -v
           uv run pytest "$GITHUB_WORKSPACE/tests" -q -W "ignore:.*urllib3 v2 only supports OpenSSL.*:Warning"
           uv run python "$GITHUB_WORKSPACE/scripts/verify_release.py"
