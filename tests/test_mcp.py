@@ -1142,6 +1142,52 @@ def test_mcp_watchlist_timeout_hardening_and_error_capture() -> None:
     assert len(data["opportunities"]) > 0
 
 
+def test_injected_fetcher_frames_do_not_share_an_index_cache() -> None:
+    """Copies of one cached frame must not share pandas' lazily built index engine.
+
+    Watchlist workers validate their frames concurrently; on pandas 2.x a shared engine is filled
+    without a lock and can make one symbol fail with a spurious "duplicate timestamps" error.
+    """
+    df = _make_sample_ohlcv()
+    server = YFinanceTAMCPServer(data_fetcher=lambda s, p, i: df.copy())
+
+    first = server._fetch_ohlcv("AAPL", "6mo", "1d")
+    second = server._fetch_ohlcv("NVDA", "6mo", "1d")
+
+    pd.testing.assert_frame_equal(first, df)
+    pd.testing.assert_frame_equal(second, df)
+    if not hasattr(first.index, "_cache"):
+        pytest.skip("this pandas keeps no Index._cache to compare")
+    assert first.index._cache is not second.index._cache
+    assert first.index._cache is not df.index._cache
+
+
+def test_injected_fetcher_non_frame_results_pass_through_untouched() -> None:
+    server = YFinanceTAMCPServer(data_fetcher=lambda s, p, i: None)
+    assert server._fetch_ohlcv("AAPL", "6mo", "1d") is None
+
+
+def test_watchlist_over_one_cached_frame_never_drops_a_symbol() -> None:
+    """Regression: on pandas 2.3 this scenario lost NVDA in roughly one run out of ten."""
+    for _ in range(40):
+        df = _make_sample_ohlcv()
+        server = YFinanceTAMCPServer(data_fetcher=lambda s, p, i, frame=df: frame.copy())
+        resp = server.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 11,
+                "method": "tools/call",
+                "params": {
+                    "name": "ta_scan_watchlist",
+                    "arguments": {"symbols": ["AAPL", "NVDA"]},
+                },
+            }
+        )
+        assert resp is not None
+        data = resp["result"]["structuredContent"]
+        assert data["symbols_scanned"] == 2, data.get("errors")
+
+
 def test_mcp_get_news_tool_and_fetcher_injection() -> None:
     """Verify ta_get_news tool schema and data formatting with news_fetcher injection."""
     mock_news = [

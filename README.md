@@ -592,7 +592,7 @@ uv run --extra dev mypy yfinance_ta_patterns
 uv build
 ```
 
-All 599+ tests pass with 100% success rate across **Python 3.8 through 3.16 (including No-GIL free-threaded 3.13t–3.16t)** and **PyPy 3.8 through 3.12**.
+All 602+ tests pass with 100% success rate across **Python 3.8 through 3.16 (including No-GIL free-threaded 3.13t–3.16t)** and **PyPy 3.8 through 3.12**.
 
 ---
 
@@ -632,6 +632,7 @@ If you find this project valuable, encounter issues, or would like to support on
 
 See [CHANGELOG.md](CHANGELOG.md) for full detailed release history, technical audit notes, and benchmark comparisons.
 
+* 🚀 **v0.3.71** — Fixed MCP watchlist concurrent scan race condition on pandas 2.x shared `Index._cache` via `_isolated_frame()`, preventing spurious duplicate timestamp errors, and expanded test suite (**602 tests passed**).
 * 🚀 **v0.3.70** — Pinned MCP server clock in event risk tests to UTC midday, eliminating the 00:00–00:16 UTC test failure window, added 15-minute event risk grace window boundary tests, and expanded test suite (**599 tests passed**).
 * 🚀 **v0.3.69** — Inclusive `--end-date` semantics forwarding next midnight to yfinance, strict inverted range rejection (`--start-date` > `--end-date`), 1m 7-day window enforcement across single-sided ranges and inclusive calendar spans, table-driven `MarketDataLoader._clamp_period_for_interval` covering arbitrary periods, pure-Python `fast_score_batch` exact length matching without list mutation, and expanded test suite (**597 tests passed**).
 * 🚀 **v0.3.68** — Live Yahoo Finance 1m intraday limit separation (depth: 30d, query span: 7d), CLI span validation, `gemm.py` `fast_score_batch` oversized buffer scalar broadcasting fix across native and fallback branches, CLI `--backtest` error safety guarding `--calendar`/`--news` hooks, expanded ISO-3 country support (`ARE`, `CHL`, `COL`, `MYS`, `PHL`), module-level constant hoisting, removal of obsolete `_STOCK_COLLISIONS`, platform documentation for `[gemm]`, and expanded test suite (**563 tests passed**).

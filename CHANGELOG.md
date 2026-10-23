@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.71] - 2026-10-22
+
+### Fixed
+- **MCP Watchlist Thread Concurrency & pandas 2.x Index Cache Isolation (`mcp_server.py`)**:
+  - Fixed an elusive thread race condition where custom `data_fetcher` implementations returning `.copy()` of a cached DataFrame caused worker threads in `ta_scan_watchlist` to share pandas 2.x's lazily populated internal `Index._cache` without synchronization. Under concurrent validation, this occasionally triggered false "DataFrame index contains duplicate timestamps" errors (dropping symbols like `NVDA` in ~10% of runs on Python 3.9/3.10).
+  - Introduced `_isolated_frame(df)` to ensure deeply copied indices (`out.index = out.index.copy(deep=True)`) whenever data frames are injected via custom fetchers.
+- **Expanded Test Suite**:
+  - Test suite expanded to **602 tests** (added index isolation, passthrough of non-frame results, and 40-iteration concurrent watchlist stress test), 100% passing across all Python versions and platforms.
+
 ## [0.3.70] - 2026-10-22
 
 ### Added

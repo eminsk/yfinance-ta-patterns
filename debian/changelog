@@ -1,3 +1,12 @@
+yfinance-ta-patterns (0.3.71-1) unstable; urgency=medium
+
+  * Release v0.3.71: Eliminate pandas 2.x Index cache race condition in MCP watchlist scans:
+    - Isolate index cache in _isolated_frame() for data frames returned by custom data_fetcher.
+    - Prevent spurious "DataFrame index contains duplicate timestamps" in multi-threaded scans.
+    - Expanded test suite to 602 tests, 100% passing across all supported platforms.
+
+ -- eminsk <M_N_N@tut.by>  Fri, 23 Oct 2026 02:42:00 +0000
+
 yfinance-ta-patterns (0.3.70-1) unstable; urgency=medium
 
   * Release v0.3.70: Fix time-dependent MCP test failures across UTC midnight boundary:

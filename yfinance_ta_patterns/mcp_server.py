@@ -770,6 +770,21 @@ def _run_with_timeout(fn: Callable[[], Any], timeout: float) -> Any:
     return box.get("ok")
 
 
+def _isolated_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Copy a fetched frame so its index no longer shares pandas' lazily built lookup cache.
+
+    ``DataFrame.copy()`` gives every copy the *same* Index cache, including the hash-table engine
+    behind ``is_unique``/``get_loc``. pandas 2.x fills that engine without a lock, so two scan
+    workers validating copies of one cached frame (``data_fetcher=lambda s, p, i: cached.copy()``)
+    can race and report a spurious "DataFrame index contains duplicate timestamps".
+    """
+    if not isinstance(df, pd.DataFrame):
+        return df
+    out = df.copy()
+    out.index = out.index.copy(deep=True)
+    return out
+
+
 class YFinanceTAMCPServer:
     """Zero-dependency Model Context Protocol (MCP) JSON-RPC 2.0 server for yfinance-ta-patterns."""
 
@@ -787,7 +802,7 @@ class YFinanceTAMCPServer:
 
     def _fetch_ohlcv(self, symbol: str, period: str, interval: str) -> pd.DataFrame:
         if self._data_fetcher is not None:
-            return self._data_fetcher(symbol, period, interval)
+            return _isolated_frame(self._data_fetcher(symbol, period, interval))
         loader = MarketDataLoader(symbol, period=period, interval=interval, timezone="UTC")
         return loader.get_data()
 
