@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15", "3.14t"]
 
     steps:
       - uses: actions/checkout@v4
@@ -40,10 +40,20 @@ jobs:
         run: mypy yfinance_ta_patterns
 
       - name: Run tests (pytest)
+        env:
+          PYTHON_GIL: "0"
         run: pytest -v
 
       - name: Run release verification script
+        env:
+          PYTHON_GIL: "0"
         run: python scripts/verify_release.py
+
+      - name: Verify Free-Threaded GIL state
+        if: matrix.python-version == '3.14t'
+        env:
+          PYTHON_GIL: "0"
+        run: python scripts/verify_free_threaded.py
 
 
   verify-pandas-legacy:
@@ -457,10 +467,17 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install yfinance-ta-patterns directly from git source
+        shell: bash
         run: |
           python -m pip install --upgrade pip
           python -m pip install --no-deps .
-          python -m pip install pytest rich pytz
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            python -m pip install pytest rich pytz numpy pandas "yfinance<=0.2.57" || python -m pip install pytest rich pytz numpy pandas
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            python -m pip install pytest rich pytz numpy pandas "yfinance<=0.2.57" || python -m pip install pytest rich pytz
+          else
+            python -m pip install pytest rich pytz numpy || python -m pip install pytest rich pytz
+          fi
 
       - name: Run test suite from git source (No-GIL)
         env:
