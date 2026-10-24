@@ -169,7 +169,7 @@ def test_ai_pattern_scorer_gemm_integration():
         "Close": [10.5, 11.0, 11.5, 12.0, 12.5, 13.0],
         "Volume": [1000, 1100, 1200, 1300, 1400, 1500],
     }
-    import pandas as pd
+    pd = pytest.importorskip("pandas")
 
     data = pd.DataFrame(df, index=pd.to_datetime(dates))
 
