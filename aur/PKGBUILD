@@ -25,7 +25,7 @@ makedepends=(
   'python-setuptools'
 )
 source=("https://files.pythonhosted.org/packages/source/${_name::1}/${_name}/${_name}-${pkgver}.tar.gz")
-sha256sums=('c938033c540c924178a8e050d950dc6f5faed5c3d9a2b33b913388d3b45e812d')
+sha256sums=('f578f76d787fb948d32b8fc29d9b5d128ddaac31e44f0fefeb33bf6f09ad6eeb')
 
 prepare() {
   cd "${srcdir}/${_name}-${pkgver}"
