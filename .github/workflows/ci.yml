@@ -40,14 +40,22 @@ jobs:
         run: mypy yfinance_ta_patterns
 
       - name: Run tests (pytest)
-        env:
-          PYTHON_GIL: "0"
-        run: pytest -v
+        shell: bash
+        run: |
+          if [ "${{ matrix.python-version }}" = "3.14t" ]; then
+            PYTHON_GIL=0 pytest -v
+          else
+            pytest -v
+          fi
 
       - name: Run release verification script
-        env:
-          PYTHON_GIL: "0"
-        run: python scripts/verify_release.py
+        shell: bash
+        run: |
+          if [ "${{ matrix.python-version }}" = "3.14t" ]; then
+            PYTHON_GIL=0 python scripts/verify_release.py
+          else
+            python scripts/verify_release.py
+          fi
 
       - name: Verify Free-Threaded GIL state
         if: matrix.python-version == '3.14t'
@@ -472,9 +480,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --no-deps .
           if [ "${{ runner.os }}" = "Linux" ]; then
-            python -m pip install pytest rich pytz numpy pandas "yfinance<=0.2.57" || python -m pip install pytest rich pytz numpy pandas
+            python -m pip install pytest rich pytz numpy pandas
           elif [ "${{ runner.os }}" = "macOS" ]; then
-            python -m pip install pytest rich pytz numpy pandas "yfinance<=0.2.57" || python -m pip install pytest rich pytz
+            python -m pip install pytest rich pytz numpy pandas || python -m pip install pytest rich pytz
           else
             python -m pip install pytest rich pytz numpy || python -m pip install pytest rich pytz
           fi
