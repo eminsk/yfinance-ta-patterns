@@ -480,11 +480,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --no-deps .
           if [ "${{ runner.os }}" = "Linux" ]; then
-            python -m pip install pytest rich pytz numpy pandas
+            python -m pip install --only-binary :all: pytest rich pytz numpy "pandas<=3.0.3" || python -m pip install pytest rich pytz
           elif [ "${{ runner.os }}" = "macOS" ]; then
-            python -m pip install pytest rich pytz numpy pandas || python -m pip install pytest rich pytz
+            python -m pip install --only-binary :all: pytest rich pytz numpy "pandas<=3.0.3" || python -m pip install pytest rich pytz
           else
-            python -m pip install pytest rich pytz numpy || python -m pip install pytest rich pytz
+            python -m pip install --only-binary :all: pytest rich pytz numpy || python -m pip install pytest rich pytz
           fi
 
       - name: Run test suite from git source (No-GIL)
