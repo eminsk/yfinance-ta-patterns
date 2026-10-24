@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.72] - 2026-10-24
+
+### Documentation
+- **Runtime Compatibility & Platform Verification Accuracy (`README.md`)**:
+  - Clarified tier-1 verified targets (Linux x86_64 across CPython 3.8–3.15, free-threaded CPython 3.14t) with automated CI matrix coverage on Windows and macOS.
+  - Documented free-threaded CPython 3.13t installation characteristics: plain `pip`/`uv` installs fail due to upstream `curl-cffi` -> `cffi` free-threaded build limitations, while wheels-only resolution (`uv ... --no-build`) resolves to `yfinance` 0.2.57 passing the full 602-test suite with the GIL disabled.
+  - Documented PyPy 3.8–3.12 and CPython 3.16 dependency behavior: PyPI distributes the dependency-free pure-Python subset (excluding `yfinance`, `pandas`, `numpy` via environment markers); pre-built wheels or source compilation are required for full runtime environments.
+  - Clarified CPython 3.14t lazy import behavior for `yfinance` (`lxml` dynamic GIL re-enablement unless executed with `PYTHON_GIL=0` / `-X gil=0`).
+
 ## [0.3.71] - 2026-10-22
 
 ### Fixed

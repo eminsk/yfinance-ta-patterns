@@ -9,7 +9,7 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/eminsk/yfinance-ta-patterns/blob/main/notebooks/yfinance_ta_patterns_quickstart.ipynb)
 [![Python](https://img.shields.io/pypi/pyversions/yfinance-ta-patterns)](https://pypi.org/project/yfinance-ta-patterns/)
 [![PyPy](https://img.shields.io/badge/PyPy-3.8%20--%203.12-orange.svg)](https://www.pypy.org/)
-[![No-GIL](https://img.shields.io/badge/No--GIL-3.13t%20--%203.16t-purple.svg)](https://peps.python.org/pep-0703/)
+[![No-GIL](https://img.shields.io/badge/No--GIL-3.14t-purple.svg)](https://peps.python.org/pep-0703/)
 [![MCP Server](https://img.shields.io/badge/MCP-Native_Stdio_Server-00a67e.svg)](#native-mcp-model-context-protocol-server-for-ai-agents)
 [![CI](https://github.com/eminsk/yfinance-ta-patterns/actions/workflows/ci.yml/badge.svg)](https://github.com/eminsk/yfinance-ta-patterns/actions)
 [![GitHub Stars](https://img.shields.io/github/stars/eminsk/yfinance-ta-patterns?style=flat&logo=github)](https://github.com/eminsk/yfinance-ta-patterns/stargazers)
@@ -21,7 +21,7 @@
 
 High-performance Python library, CLI, and Native MCP Server (`yfinance-ta-mcp`) that downloads multi-asset market data via `yfinance`, detects TA-Lib candlestick patterns, and enriches raw signals using an **AI/Quant Confluence Engine** to generate multi-factor confluence scores (deterministic quantitative confluence heuristic, not uncalibrated win-rate probability), trade setups, and LLM-ready market briefs.
 
-Verified runtime compatibility across **CPython 3.8 through 3.15, free-threaded No-GIL CPython 3.14t, PyPy 3.8 through 3.12 with high-speed JIT tracing, and cross-platform support (Linux x86_64/ARM64, Windows, macOS)**, installed directly from PyPI with zero compilation required.
+Verified on **CPython 3.8 through 3.15 and free-threaded No-GIL CPython 3.14t**. Linux x86_64 is the primary target (full test suite); the CI matrix also runs Windows and macOS. On these CPython versions the package installs from PyPI with zero compilation. PyPy 3.8-3.12 and CPython 3.16 (development) get only the dependency-free subset from PyPI (`yfinance`, `pandas` and `numpy` are excluded there by environment markers); see the compatibility matrix below for the exact scope.
 
 > ### 🤝 Community, Issues & Support
 > - 🎬 **Featured on Video:** In-depth walkthrough by **Context Unfiltered (Tech & Science)**: *"New Python Library Combines Candlestick Patterns With AI"* — [Watch on Instagram Reels](https://www.instagram.com/reels/Ddz3Qs5IwKH/)
@@ -51,11 +51,11 @@ Verified runtime compatibility across **CPython 3.8 through 3.15, free-threaded 
 
 | Runtime / Implementation | Versions | Execution Mode | Status | Notes & Verification Scope |
 |:---|:---|:---|:---:|:---|
-| **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | Standard bytecode + GIL | ✅ Verified | Direct PyPI install (`pip` / `uv`), zero C build required. (Preview 3.16 tested in CI). |
-| **CPython (Free-Threaded)** | 3.14t | Multi-core No-GIL (PEP 703) | ✅ Verified | Direct No-GIL execution; `yfinance-ta-patterns`, NumPy, and pandas run without GIL. |
-| **CPython (Free-Threaded)** | 3.13t | Multi-core No-GIL (PEP 703) | ⚠️ Core Verified | Core pattern engine passes test suites with GIL disabled; live `yfinance` download requires upstream wheel support (`curl-cffi`/`cffi`). |
-| **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11, 3.12 | High-speed JIT tracing | ✅ Verified | Pure-Python vectorized fallback (all 61 TA-Lib patterns, zero C-API compilation required). |
-| **Operating Systems** | Linux (x86_64, ARM64), Windows (10, 11), macOS (Intel & Apple Silicon) | Native wheels & source | ✅ Verified | Primary tier-1 testing on Linux x86_64; automated cross-platform CI matrix on Windows & macOS. |
+| **CPython (Standard)** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | Standard bytecode + GIL | ✅ Verified | Direct PyPI install (`pip` / `uv`), zero C build required. Full suite in the Linux CI matrix for 3.8-3.14; 3.15 is verified on Linux x86_64 (3.15.1) and smoke-tested on Windows in CI. CPython 3.16 (development build in CI) runs only the dependency-free subset of the suite. |
+| **CPython (Free-Threaded)** | 3.14t | Multi-core No-GIL (PEP 703) | ✅ Verified | `yfinance-ta-patterns`, NumPy and pandas run without the GIL (full suite on Linux x86_64, smoke test on Windows in CI). `import yfinance` (via `lxml`) turns the GIL back on unless Python is started with `PYTHON_GIL=0` / `-X gil=0`. |
+| **CPython (Free-Threaded)** | 3.13t | Multi-core No-GIL (PEP 703) | ⚠️ Wheels-only install | Plain `pip` / `uv` installs fail: the latest `yfinance` pulls in `curl-cffi` -> `cffi`, which refuses to build on free-threaded 3.13 (`CFFI does not support the free-threaded build of CPython 3.13`). A wheels-only resolution (`uv ... --no-build`) falls back to `yfinance` 0.2.57 and works: the full suite passes (602 tests) with the GIL disabled. Live downloads with that old `yfinance` are not verified; use 3.14t for current `yfinance`. |
+| **PyPy (JIT Accelerated)** | 3.8, 3.9, 3.10, 3.11, 3.12 | High-speed JIT tracing | ⚠️ Manual setup | On PyPy, PyPI installs only the pure-Python dependencies; `yfinance`, `pandas` and `numpy` must be provided separately. PyPI has no PyPy wheels for `pandas` (in any release) or for current `curl-cffi`, so they must be compiled or taken from prebuilt wheels (the project CI uses wheels it builds itself; PyPy 3.12 runs the dependency-free subset only). Once they are present, the pure-Python engine supports all 61 TA-Lib patterns. |
+| **Operating Systems** | Linux x86_64, Windows, macOS | Native wheels & source | ✅ Verified | Primary target: Linux x86_64 (full suite). CI also runs GitHub's `windows-latest` and `macos-latest` runners. Linux ARM64 and Intel Macs are not covered by CI. |
 
 ---
 
@@ -98,13 +98,13 @@ uvx --from yfinance-ta-patterns yftp --all-patterns --symbol AAPL --timeframe 1h
 > **Why `--no-config`?** Passing `--no-config` tells `uv` to ignore any local or parent `uv.toml` settings (such as local wheel registries or find-links overrides), ensuring a clean, isolated, and reproducible installation directly from PyPI in any project directory.
 
 > [!IMPORTANT]
-> ### ⚡ Free-Threaded Python / No-GIL Guide (PEP 703: 3.13t, 3.14t, 3.15t, 3.16t)
+> ### ⚡ Free-Threaded Python / No-GIL Guide (PEP 703: 3.14t verified, 3.13t wheels-only)
 >
-> Python 3.13+ introduces experimental free-threaded (No-GIL) builds. `yfinance-ta-patterns` is verified on Windows, Linux, and macOS under free-threaded CPython. Here is what you need to know for a smooth No-GIL setup on Windows:
+> Python 3.13+ introduces experimental free-threaded (No-GIL) builds. `yfinance-ta-patterns` is verified under free-threaded CPython 3.14t (full suite on Linux x86_64, smoke test on Windows in CI). Here is what you need to know for a smooth No-GIL setup on Windows:
 >
 > #### 1. Python Version Selection & Wheel Availability
-> - **Python 3.14t (Recommended)**: Verified in No-GIL execution. `yfinance-ta-patterns`, NumPy, and pandas run with the GIL disabled. Note: importing `yfinance` loads upstream C extensions that may cause CPython to dynamically re-enable the GIL unless running with pure-Python or custom fetchers.
-> - **Python 3.13t**: Core library and offline pattern recognition pass all test suites (584+ tests) with the GIL disabled. Note: full `pip install yfinance` requires pre-built wheels for upstream dependencies (`curl-cffi` / `cffi`), which may require manual compilation or custom data fetchers on some platforms.
+> - **Python 3.14t (Recommended)**: Verified in No-GIL execution. `yfinance-ta-patterns`, NumPy, and pandas run with the GIL disabled. Note: `yfinance` is imported lazily when market data is first loaded, and it pulls in `lxml`, which has not declared free-threading support, so CPython re-enables the GIL (with a `RuntimeWarning`) at that point. Start Python with `PYTHON_GIL=0` / `-X gil=0` to keep it disabled at your own risk, or skip `yfinance` and pass your own OHLCV DataFrames.
+> - **Python 3.13t (wheels-only install)**: plain `pip` / `uv` installs fail, because the latest `yfinance` pulls in `curl-cffi` -> `cffi`, which refuses to build on free-threaded 3.13 (`CFFI does not support the free-threaded build of CPython 3.13`). A wheels-only install (`uv ... --no-build`) resolves to `yfinance` 0.2.57, which predates `curl-cffi`, and works: the full suite (602 tests) passes with the GIL disabled. Live downloads with that old `yfinance` are not verified, so prefer 3.14t for current `yfinance`.
 >
 > #### 2. Understanding Automatic GIL Re-Enablement
 > In free-threaded interpreters, `sys._is_gil_enabled()` may return `True` for two common reasons:
@@ -192,13 +192,13 @@ pip install "yfinance-ta-patterns[talib]"
 
 | Python Version | Execution Mode | Verification Status | Scope & Recommendation |
 |:---:|:---:|:---:|---|
-| **Python 3.15** | **Standard (GIL)** | ✅ **Verified** | Verified on Linux/Windows/macOS; instant universal PyPI install with zero C compilation. |
-| **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **Verified** | Core library, NumPy, and pandas run with GIL disabled (`PYTHON_GIL=0` or `-X gil=0`). |
+| **Python 3.15** | **Standard (GIL)** | ✅ **Verified** | Full suite verified on Linux x86_64 (3.15.1); Windows smoke test in CI; not yet covered on macOS. |
+| **Python 3.14t** | **Free-Threaded (No-GIL)** | ✅ **Verified** | Core library, NumPy, and pandas run with the GIL disabled; `import yfinance` re-enables it unless `PYTHON_GIL=0` or `-X gil=0` is set. |
 | **Python 3.14** | **Standard (GIL)** | ✅ **Verified** | Full verified installation; instant universal PyPI install. |
-| **Python 3.13t** | **Free-Threaded (No-GIL)** | ⚠️ **Core Verified** | 584+ core tests pass with No-GIL; upstream `yfinance` network fetching depends on `curl-cffi`/`cffi` wheel availability. |
-| **Python 3.13** | **Standard (GIL)** | ✅ **Verified** | Current stable release; full verified installation. |
-| **Python 3.8–3.12** | **Standard (GIL)** | ✅ **Verified** | Fully verified LTS releases across Linux, Windows, and macOS. Includes dedicated pandas 2.3.x index concurrency tests. |
-| **PyPy 3.8–3.12** | **JIT Accelerated** | ✅ **Verified** | High-speed JIT tracing with pure-Python fallback (all 61 patterns supported, zero C-API compilation). |
+| **Python 3.13t** | **Free-Threaded (No-GIL)** | ⚠️ **Wheels-only** | Plain `pip` / `uv` installs fail (`cffi` does not support free-threaded 3.13); `uv ... --no-build` falls back to `yfinance` 0.2.57 and the full suite passes with the GIL disabled. Live downloads with that version are not verified. |
+| **Python 3.13** | **Standard (GIL)** | ✅ **Verified** | Full verified installation. |
+| **Python 3.8–3.12** | **Standard (GIL)** | ✅ **Verified** | Verified on Linux, Windows and macOS in CI (3.8, 3.9 and 3.10 are at or past upstream end-of-life as of October 2026). Includes dedicated pandas 2.3.x index concurrency tests. |
+| **PyPy 3.8–3.12** | **JIT Accelerated** | ⚠️ **Manual setup** | PyPI installs only the pure-Python dependencies on PyPy and has no PyPy wheels for `pandas` (in any release) or current `curl-cffi`: `yfinance`, `pandas` and `numpy` must be compiled or taken from prebuilt wheels. Once they are present, the pure-Python engine supports all 61 patterns. |
 
 ---
 
@@ -633,6 +633,7 @@ If you find this project valuable, encounter issues, or would like to support on
 
 See [CHANGELOG.md](CHANGELOG.md) for full detailed release history, technical audit notes, and benchmark comparisons.
 
+* 🚀 **v0.3.72** — Clarified exact verified runtime scopes in documentation: Tier-1 Linux x86_64, Windows & macOS CI matrices, wheels-only resolution for free-threaded Python 3.13t, and explicit PyPI dependency boundaries for PyPy and CPython 3.16.
 * 🚀 **v0.3.71** — Fixed MCP watchlist concurrent scan race condition on pandas 2.x shared `Index._cache` via `_isolated_frame()`, preventing spurious duplicate timestamp errors, and expanded test suite (**602 tests passed**).
 * 🚀 **v0.3.70** — Pinned MCP server clock in event risk tests to UTC midday, eliminating the 00:00–00:16 UTC test failure window, added 15-minute event risk grace window boundary tests, and expanded test suite (**599 tests passed**).
 * 🚀 **v0.3.69** — Inclusive `--end-date` semantics forwarding next midnight to yfinance, strict inverted range rejection (`--start-date` > `--end-date`), 1m 7-day window enforcement across single-sided ranges and inclusive calendar spans, table-driven `MarketDataLoader._clamp_period_for_interval` covering arbitrary periods, pure-Python `fast_score_batch` exact length matching without list mutation, and expanded test suite (**597 tests passed**).

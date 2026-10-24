@@ -1,3 +1,12 @@
+yfinance-ta-patterns (0.3.72-1) unstable; urgency=medium
+
+  * Release v0.3.72: Update verified runtime scopes and platform documentation:
+    - Clarify primary tier-1 target (Linux x86_64 CPython 3.8-3.15 & 3.14t) and automated CI matrix.
+    - Document free-threaded Python 3.13t wheels-only install behavior and 602-test pass suite.
+    - Explicitly detail PyPI dependency subset and wheel boundaries for PyPy 3.8-3.12 and CPython 3.16.
+
+ -- eminsk <M_N_N@tut.by>  Sat, 24 Oct 2026 11:45:00 +0000
+
 yfinance-ta-patterns (0.3.71-1) unstable; urgency=medium
 
   * Release v0.3.71: Eliminate pandas 2.x Index cache race condition in MCP watchlist scans:

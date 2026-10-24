@@ -1,6 +1,6 @@
 context:
   name: yfinance-ta-patterns
-  version: "0.3.71"
+  version: "0.3.72"
   python_min: "3.8"
 
 package:
