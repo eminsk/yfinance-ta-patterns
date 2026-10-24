@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
-"""Verify native extras keep the GIL disabled on free-threaded CPython."""
+"""Verify native extras keep the GIL disabled on free-threaded CPython.
+
+Run it with ``--no-yfinance`` and *without* ``PYTHON_GIL`` to check that the library, NumPy and
+pandas keep the GIL disabled on their own. Importing ``yfinance`` pulls in ``lxml``, which
+re-enables the GIL on CPython 3.14t, so a run that imports it needs ``PYTHON_GIL=0`` (or
+``-X gil=0``); that override also makes the GIL assertions below true by construction.
+"""
 
 from __future__ import annotations
 
+import argparse
 import sys
 import sysconfig
 
@@ -14,7 +21,17 @@ def _gil_enabled() -> bool:
     return bool(probe())
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Verify native extras keep the GIL disabled on free-threaded CPython."
+    )
+    parser.add_argument(
+        "--no-yfinance",
+        action="store_true",
+        help="do not import yfinance (its lxml dependency re-enables the GIL on 3.14t)",
+    )
+    args = parser.parse_args(argv)
+
     if not sysconfig.get_config_var("Py_GIL_DISABLED"):
         raise RuntimeError("This verifier requires a free-threaded CPython build.")
     if _gil_enabled():
@@ -65,12 +82,15 @@ def main() -> int:
     except ImportError:
         talib_ver = "fallback (pure-python)"
 
-    try:
-        import yfinance
+    if args.no_yfinance:
+        yf_ver = "skipped (--no-yfinance)"
+    else:
+        try:
+            import yfinance
 
-        yf_ver = getattr(yfinance, "__version__", "installed")
-    except ImportError:
-        yf_ver = "optional (not installed)"
+            yf_ver = getattr(yfinance, "__version__", "installed")
+        except ImportError:
+            yf_ver = "optional (not installed)"
 
     from yfinance_ta_patterns.pattern_analyzer import PatternAnalyzer
     from yfinance_ta_patterns.talib_compat import ALL_CDL_PATTERNS, HAS_NATIVE_TALIB

@@ -57,7 +57,11 @@ jobs:
             python scripts/verify_release.py
           fi
 
-      - name: Verify Free-Threaded GIL state
+      - name: Verify the GIL stays disabled without PYTHON_GIL (library, NumPy, pandas)
+        if: matrix.python-version == '3.14t'
+        run: python scripts/verify_free_threaded.py --no-yfinance
+
+      - name: Verify free-threaded run with yfinance (PYTHON_GIL=0)
         if: matrix.python-version == '3.14t'
         env:
           PYTHON_GIL: "0"
@@ -479,13 +483,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install --no-deps .
-          if [ "${{ runner.os }}" = "Linux" ]; then
-            python -m pip install --only-binary :all: pytest rich pytz numpy "pandas<=3.0.3" || python -m pip install pytest rich pytz
-          elif [ "${{ runner.os }}" = "macOS" ]; then
-            python -m pip install --only-binary :all: pytest rich pytz numpy "pandas<=3.0.3" || python -m pip install pytest rich pytz
-          else
-            python -m pip install --only-binary :all: pytest rich pytz numpy || python -m pip install pytest rich pytz
-          fi
+          # Wheels only and no `|| fallback`: a missing wheel must fail the job instead of silently
+          # running only the pure-Python subset of the tests. On free-threaded 3.13 this resolves to
+          # pandas 3.0.3 (the last pandas with cp313t wheels) and yfinance 0.2.57 (newer releases
+          # need curl-cffi/cffi, which publish no cp313t wheels).
+          deps=(pytest rich pytz numpy)
+          case "$RUNNER_OS" in
+            Linux) deps+=("pandas<=3.0.3" yfinance) ;;  # the whole test suite runs here
+            macOS) deps+=("pandas<=3.0.3") ;;
+          esac  # Windows: NumPy only, the pandas-dependent tests are not collected
+          python -m pip install --only-binary :all: "${deps[@]}"
 
       - name: Run test suite from git source (No-GIL)
         env:
