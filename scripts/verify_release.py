@@ -16,10 +16,12 @@ from __future__ import annotations
 
 import concurrent.futures
 import datetime
+import os
 import re
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Callable
 
 
@@ -30,6 +32,84 @@ def print_banner() -> None:
     print("=" * 72)
 
 
+_YAML_VERSION = r'(?m)^\s*version:\s*["\']?([^"\'\s]+)["\']?'
+_TEST_VERSION_ASSERT = r'assert\s+ytp\.__version__\s*==\s*["\']([^"\']+)["\']'
+
+# Every file that carries the project version: (label, path relative to the repository root, regex
+# whose first group captures the version). `check_version_sync` compares each of them with the
+# version the installed package reports.
+VERSION_SOURCES = (
+    ("pyproject.toml", "pyproject.toml", r'(?m)^version\s*=\s*["\']([^"\']+)["\']'),
+    (
+        "yfinance_ta_patterns/__init__.py",
+        "yfinance_ta_patterns/__init__.py",
+        r'(?m)__version__\s*=\s*["\']([^"\']+)["\']',
+    ),
+    ("CHANGELOG.md", "CHANGELOG.md", r"(?m)^##\s*\[(\d[^\]]*)\]"),  # skips `## [Unreleased]`
+    ("recipe/recipe.yaml", "recipe/recipe.yaml", _YAML_VERSION),
+    ("conda-recipe/recipe.yaml", "conda-recipe/recipe.yaml", _YAML_VERSION),
+    ("aur/PKGBUILD", "aur/PKGBUILD", r"(?m)^pkgver\s*=\s*(\S+)"),
+    ("aur/.SRCINFO", "aur/.SRCINFO", r"(?m)^\s*pkgver\s*=\s*(\S+)"),
+    (
+        "aur/.SRCINFO (source URL)",
+        "aur/.SRCINFO",
+        r"(?m)^\s*source\s*=\s*\S*/yfinance_ta_patterns-(\d[^/\s]*?)\.tar\.gz\s*$",
+    ),
+    ("debian/changelog", "debian/changelog", r"(?m)^yfinance-ta-patterns\s*\(([^)-]+)"),
+    (
+        "uv.lock",
+        "uv.lock",
+        r'(?s)\[\[package\]\]\s+name = "yfinance-ta-patterns"\s+version = "([^"]+)"',
+    ),
+    ("tests/test_pypy_compat_v55.py", "tests/test_pypy_compat_v55.py", _TEST_VERSION_ASSERT),
+    ("tests/test_python316_compat.py", "tests/test_python316_compat.py", _TEST_VERSION_ASSERT),
+)
+
+
+def check_version_sync(repo_root: Path, expected: str) -> list[str]:
+    """Verify that every packaging file carries the version reported by the installed package.
+
+    Returns the labels of the verified sources and raises AssertionError listing every problem.
+    In a source checkout (a ``.git`` entry exists, or ``GITHUB_ACTIONS=true``) all sources must be
+    present, so a renamed or deleted file cannot silently drop out of the check; elsewhere
+    (an sdist ships only some of them) missing files are skipped.
+    """
+    strict = (repo_root / ".git").exists() or os.environ.get("GITHUB_ACTIONS") == "true"
+    if not strict and not (repo_root / "pyproject.toml").is_file():
+        return []  # not a source tree of this project (e.g. the script was copied elsewhere)
+
+    verified: list[str] = []
+    problems: list[str] = []
+    found_versions: set[str] = set()
+    for label, rel_path, pattern in VERSION_SOURCES:
+        path = repo_root / rel_path
+        if not path.is_file():
+            if strict:
+                problems.append(f"Version source missing: {label} (expected at {rel_path})")
+            continue
+        match = re.search(pattern, path.read_text(encoding="utf-8-sig"))
+        if match is None:
+            problems.append(f"Version pattern not found in {label}")
+            continue
+        found = match.group(1)
+        found_versions.add(found)
+        if found == expected:
+            verified.append(label)
+        else:
+            problems.append(f"Version mismatch in {label}: found '{found}', expected '{expected}'")
+
+    if problems:
+        only_mismatches = all(p.startswith("Version mismatch") for p in problems)
+        if only_mismatches and not verified and len(found_versions) == 1:
+            raise AssertionError(
+                f"All {len(problems)} version files agree on '{next(iter(found_versions))}' but "
+                f"the installed package reports '{expected}': reinstall it (pip install -e .) "
+                "and re-run."
+            )
+        raise AssertionError("\n       ".join(problems))  # aligned under the runner's `ERROR:`
+    return verified
+
+
 def check_1_metadata() -> None:
     """Check 1: Package metadata, version, and public API exports."""
     import yfinance_ta_patterns
@@ -38,65 +118,10 @@ def check_1_metadata() -> None:
     assert isinstance(__version__, str), "Version is not a string"
     assert re.match(r"^\d+\.\d+\.\d+(\.post\d+)?$", __version__), f"Invalid version: {__version__}"
 
-    # Verify semantic version consistency across all packaging and configuration files
-    from pathlib import Path
-
-    repo_root = Path(__file__).resolve().parent.parent
-    if (repo_root / "pyproject.toml").is_file():
-        version_checks = [
-            (
-                "pyproject.toml",
-                repo_root / "pyproject.toml",
-                r'(?m)^version\s*=\s*["\']([^"\']+)["\']',
-            ),
-            (
-                "yfinance_ta_patterns/__init__.py",
-                repo_root / "yfinance_ta_patterns/__init__.py",
-                r'(?m)__version__\s*=\s*["\']([^"\']+)["\']',
-            ),
-            ("CHANGELOG.md", repo_root / "CHANGELOG.md", r"(?m)^##\s*\[([^\]]+)\]"),
-            (
-                "recipe/recipe.yaml",
-                repo_root / "recipe/recipe.yaml",
-                r'(?m)^\s*version:\s*["\']?([^"\'\s]+)["\']?',
-            ),
-            (
-                "conda-recipe/recipe.yaml",
-                repo_root / "conda-recipe/recipe.yaml",
-                r'(?m)^\s*version:\s*["\']?([^"\'\s]+)["\']?',
-            ),
-            ("aur/PKGBUILD", repo_root / "aur/PKGBUILD", r"(?m)^pkgver\s*=\s*([^\s]+)"),
-            ("aur/.SRCINFO", repo_root / "aur/.SRCINFO", r"(?m)^\s*pkgver\s*=\s*([^\s]+)"),
-            (
-                "debian/changelog",
-                repo_root / "debian/changelog",
-                r"^yfinance-ta-patterns\s*\(([^)-]+)",
-            ),
-            (
-                "uv.lock",
-                repo_root / "uv.lock",
-                r'(?ms)\[\[package\]\]\s+name = "yfinance-ta-patterns"\s+version = "([^"]+)"',
-            ),
-            (
-                "tests/test_pypy_compat_v55.py",
-                repo_root / "tests/test_pypy_compat_v55.py",
-                r'assert\s+ytp\.__version__\s*==\s*["\']([^"\']+)["\']',
-            ),
-            (
-                "tests/test_python316_compat.py",
-                repo_root / "tests/test_python316_compat.py",
-                r'assert\s+ytp\.__version__\s*==\s*["\']([^"\']+)["\']',
-            ),
-        ]
-        for name, file_path, pat in version_checks:
-            if file_path.is_file():
-                content = file_path.read_text(encoding="utf-8")
-                m = re.search(pat, content)
-                assert m is not None, f"Version pattern not found in {name}"
-                matched_ver = m.group(1)
-                assert matched_ver == __version__, (
-                    f"Version mismatch in {name}: found '{matched_ver}', expected '{__version__}'"
-                )
+    # Verify the version is consistent across all packaging and configuration files
+    verified = check_version_sync(Path(__file__).resolve().parent.parent, __version__)
+    if verified:
+        print(f"\n       [Version sync: {len(verified)} sources == {__version__}]", end="")
 
     required_exports = [
         "ALLOWED_ASSET_TYPES",

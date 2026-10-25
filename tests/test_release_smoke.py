@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import concurrent.futures
 import datetime
+import importlib.util
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -85,6 +87,17 @@ def synthetic_market_candles() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 
+def _load_verify_release():
+    """Return scripts/verify_release.py module (None when scripts/ is not shipped, e.g. sdist)."""
+    script = Path(__file__).resolve().parent.parent / "scripts" / "verify_release.py"
+    if not script.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("_verify_release_script", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_package_version_format():
     """Version string must follow standard semantic versioning (X.Y.Z) and match across packaging files."""
     assert isinstance(__version__, str)
@@ -92,64 +105,75 @@ def test_package_version_format():
         f"Invalid version format: {__version__}"
     )
 
-    from pathlib import Path
+    verify_mod = _load_verify_release()
+    if verify_mod is not None:
+        verify_mod.check_version_sync(Path(__file__).resolve().parent.parent, __version__)
+
+
+def test_version_sync_mismatch_and_missing_sources_detected(tmp_path: Path):
+    """check_version_sync must raise AssertionError on missing sources, mismatches, or stale installs."""
+    verify_mod = _load_verify_release()
+    if verify_mod is None:
+        pytest.skip("scripts/verify_release.py not present in sdist")
 
     repo_root = Path(__file__).resolve().parent.parent
-    if (repo_root / "pyproject.toml").is_file():
-        version_checks = [
-            (
-                "pyproject.toml",
-                repo_root / "pyproject.toml",
-                r'(?m)^version\s*=\s*["\']([^"\']+)["\']',
-            ),
-            (
-                "yfinance_ta_patterns/__init__.py",
-                repo_root / "yfinance_ta_patterns/__init__.py",
-                r'(?m)__version__\s*=\s*["\']([^"\']+)["\']',
-            ),
-            ("CHANGELOG.md", repo_root / "CHANGELOG.md", r"(?m)^##\s*\[([^\]]+)\]"),
-            (
-                "recipe/recipe.yaml",
-                repo_root / "recipe/recipe.yaml",
-                r'(?m)^\s*version:\s*["\']?([^"\'\s]+)["\']?',
-            ),
-            (
-                "conda-recipe/recipe.yaml",
-                repo_root / "conda-recipe/recipe.yaml",
-                r'(?m)^\s*version:\s*["\']?([^"\'\s]+)["\']?',
-            ),
-            ("aur/PKGBUILD", repo_root / "aur/PKGBUILD", r"(?m)^pkgver\s*=\s*([^\s]+)"),
-            ("aur/.SRCINFO", repo_root / "aur/.SRCINFO", r"(?m)^\s*pkgver\s*=\s*([^\s]+)"),
-            (
-                "debian/changelog",
-                repo_root / "debian/changelog",
-                r"^yfinance-ta-patterns\s*\(([^)-]+)",
-            ),
-            (
-                "uv.lock",
-                repo_root / "uv.lock",
-                r'(?ms)\[\[package\]\]\s+name = "yfinance-ta-patterns"\s+version = "([^"]+)"',
-            ),
-            (
-                "tests/test_pypy_compat_v55.py",
-                repo_root / "tests/test_pypy_compat_v55.py",
-                r'assert\s+ytp\.__version__\s*==\s*["\']([^"\']+)["\']',
-            ),
-            (
-                "tests/test_python316_compat.py",
-                repo_root / "tests/test_python316_compat.py",
-                r'assert\s+ytp\.__version__\s*==\s*["\']([^"\']+)["\']',
-            ),
-        ]
-        for name, file_path, pat in version_checks:
-            if file_path.is_file():
-                content = file_path.read_text(encoding="utf-8")
-                m = re.search(pat, content)
-                assert m is not None, f"Version pattern not found in {name}"
-                matched_ver = m.group(1)
-                assert matched_ver == __version__, (
-                    f"Version mismatch in {name}: found '{matched_ver}', expected '{__version__}'"
-                )
+    (tmp_path / ".git").mkdir()
+
+    # 1. Missing sources in strict mode
+    with pytest.raises(AssertionError) as exc_info:
+        verify_mod.check_version_sync(tmp_path, __version__)
+    assert "Version source missing: pyproject.toml" in str(exc_info.value)
+
+    # 2. Populate all files from repo_root
+    for _label, rel_path, _pattern in verify_mod.VERSION_SOURCES:
+        src_file = repo_root / rel_path
+        if src_file.is_file():
+            dest = tmp_path / rel_path
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(src_file.read_text(encoding="utf-8-sig"), encoding="utf-8")
+
+    # In clean state, all 12 sources must verify cleanly
+    verified = verify_mod.check_version_sync(tmp_path, __version__)
+    assert len(verified) == 12
+
+    # 3. Single file mismatch -> caught with specific error
+    pyproject_file = tmp_path / "pyproject.toml"
+    orig_pyproject = pyproject_file.read_text(encoding="utf-8")
+    pyproject_file.write_text(
+        orig_pyproject.replace(f'version = "{__version__}"', 'version = "0.0.1"'),
+        encoding="utf-8",
+    )
+    with pytest.raises(AssertionError) as exc_info:
+        verify_mod.check_version_sync(tmp_path, __version__)
+    assert "Version mismatch in pyproject.toml: found '0.0.1'" in str(exc_info.value)
+    pyproject_file.write_text(orig_pyproject, encoding="utf-8")
+
+    # 4. Multiple simultaneous mismatches -> all listed
+    aur_file = tmp_path / "aur" / "PKGBUILD"
+    orig_aur = aur_file.read_text(encoding="utf-8")
+    aur_file.write_text(orig_aur.replace(f"pkgver={__version__}", "pkgver=0.0.2"), encoding="utf-8")
+
+    recipe_file = tmp_path / "recipe" / "recipe.yaml"
+    orig_recipe = recipe_file.read_text(encoding="utf-8")
+    recipe_file.write_text(
+        orig_recipe.replace(f'version: "{__version__}"', 'version: "0.0.3"'),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError) as exc_info:
+        verify_mod.check_version_sync(tmp_path, __version__)
+    err_msg = str(exc_info.value)
+    assert "Version mismatch in aur/PKGBUILD: found '0.0.2'" in err_msg
+    assert "Version mismatch in recipe/recipe.yaml: found '0.0.3'" in err_msg
+
+    # Restore clean state
+    aur_file.write_text(orig_aur, encoding="utf-8")
+    recipe_file.write_text(orig_recipe, encoding="utf-8")
+
+    # 5. Stale installed version scenario: all files agree on current version but expected differs
+    with pytest.raises(AssertionError) as exc_info:
+        verify_mod.check_version_sync(tmp_path, "0.9.9")
+    assert "reinstall it (pip install -e .) and re-run" in str(exc_info.value)
 
 
 def test_all_public_symbols_exported():
