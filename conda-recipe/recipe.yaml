@@ -27,7 +27,8 @@ requirements:
     - numpy >=1.20
     - pytz >=2022.5
     - rich >=10.0.0
-    - yfinance >=0.2.50
+    - yfinance >=0.2.54
+
 
 tests:
   - python:

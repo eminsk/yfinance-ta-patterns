@@ -56,7 +56,8 @@ jobs:
             --assume-yes-for-downloads `
             --output-dir=dist `
             --output-filename=$output `
-            --windows-console-mode=disable
+            --windows-console-mode=attach
+
 
       - name: Build executable (Unix onefile)
         if: matrix.os != 'windows-latest'
