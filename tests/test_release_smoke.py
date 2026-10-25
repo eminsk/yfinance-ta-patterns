@@ -86,11 +86,70 @@ def synthetic_market_candles() -> pd.DataFrame:
 
 
 def test_package_version_format():
-    """Version string must follow standard semantic versioning (X.Y.Z)."""
+    """Version string must follow standard semantic versioning (X.Y.Z) and match across packaging files."""
     assert isinstance(__version__, str)
     assert re.match(r"^\d+\.\d+\.\d+(\.post\d+)?$", __version__), (
         f"Invalid version format: {__version__}"
     )
+
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parent.parent
+    if (repo_root / "pyproject.toml").is_file():
+        version_checks = [
+            (
+                "pyproject.toml",
+                repo_root / "pyproject.toml",
+                r'(?m)^version\s*=\s*["\']([^"\']+)["\']',
+            ),
+            (
+                "yfinance_ta_patterns/__init__.py",
+                repo_root / "yfinance_ta_patterns/__init__.py",
+                r'(?m)__version__\s*=\s*["\']([^"\']+)["\']',
+            ),
+            ("CHANGELOG.md", repo_root / "CHANGELOG.md", r"(?m)^##\s*\[([^\]]+)\]"),
+            (
+                "recipe/recipe.yaml",
+                repo_root / "recipe/recipe.yaml",
+                r'(?m)^\s*version:\s*["\']?([^"\'\s]+)["\']?',
+            ),
+            (
+                "conda-recipe/recipe.yaml",
+                repo_root / "conda-recipe/recipe.yaml",
+                r'(?m)^\s*version:\s*["\']?([^"\'\s]+)["\']?',
+            ),
+            ("aur/PKGBUILD", repo_root / "aur/PKGBUILD", r"(?m)^pkgver\s*=\s*([^\s]+)"),
+            ("aur/.SRCINFO", repo_root / "aur/.SRCINFO", r"(?m)^\s*pkgver\s*=\s*([^\s]+)"),
+            (
+                "debian/changelog",
+                repo_root / "debian/changelog",
+                r"^yfinance-ta-patterns\s*\(([^)-]+)",
+            ),
+            (
+                "uv.lock",
+                repo_root / "uv.lock",
+                r'(?ms)\[\[package\]\]\s+name = "yfinance-ta-patterns"\s+version = "([^"]+)"',
+            ),
+            (
+                "tests/test_pypy_compat_v55.py",
+                repo_root / "tests/test_pypy_compat_v55.py",
+                r'assert\s+ytp\.__version__\s*==\s*["\']([^"\']+)["\']',
+            ),
+            (
+                "tests/test_python316_compat.py",
+                repo_root / "tests/test_python316_compat.py",
+                r'assert\s+ytp\.__version__\s*==\s*["\']([^"\']+)["\']',
+            ),
+        ]
+        for name, file_path, pat in version_checks:
+            if file_path.is_file():
+                content = file_path.read_text(encoding="utf-8")
+                m = re.search(pat, content)
+                assert m is not None, f"Version pattern not found in {name}"
+                matched_ver = m.group(1)
+                assert matched_ver == __version__, (
+                    f"Version mismatch in {name}: found '{matched_ver}', expected '{__version__}'"
+                )
 
 
 def test_all_public_symbols_exported():
