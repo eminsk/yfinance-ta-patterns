@@ -3,7 +3,6 @@ context:
   version: "0.3.72"
   python_min: "3.9"
 
-
 package:
   name: ${{ name }}
   version: ${{ version }}

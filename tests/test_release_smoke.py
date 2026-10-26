@@ -127,10 +127,11 @@ def test_version_sync_mismatch_and_missing_sources_detected(tmp_path: Path):
     # 2. Populate all files from repo_root
     for _label, rel_path, _pattern in verify_mod.VERSION_SOURCES:
         src_file = repo_root / rel_path
-        if src_file.is_file():
-            dest = tmp_path / rel_path
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(src_file.read_text(encoding="utf-8-sig"), encoding="utf-8")
+        if not src_file.is_file():
+            pytest.skip(f"{rel_path} is not part of this source tree")
+        dest = tmp_path / rel_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(src_file.read_text(encoding="utf-8-sig"), encoding="utf-8")
 
     # In clean state, all 12 sources must verify cleanly
     verified = verify_mod.check_version_sync(tmp_path, __version__)
@@ -174,6 +175,141 @@ def test_version_sync_mismatch_and_missing_sources_detected(tmp_path: Path):
     with pytest.raises(AssertionError) as exc_info:
         verify_mod.check_version_sync(tmp_path, "0.9.9")
     assert "reinstall it (pip install -e .) and re-run" in str(exc_info.value)
+
+
+# The tests below pin the behaviour of `check_version_sync` that the test above does not reach:
+# each source is enforced on its own, a missing source or version line must stay loud in a
+# checkout (and only there), and harmless file quirks must not raise a false alarm.
+
+
+def _rewrite(path: Path, pattern: str, replacement: str) -> None:
+    """Replace exactly one match of `pattern` in `path` (fails loudly if the file format drifts)."""
+    text = path.read_text(encoding="utf-8")
+    text, count = re.subn(pattern, replacement, text, count=1, flags=re.MULTILINE)
+    assert count == 1, f"{path.name}: {pattern!r} not found"
+    path.write_text(text, encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def verify_mod():
+    """scripts/verify_release.py as a module; the tests are skipped where it is not shipped."""
+    module = _load_verify_release()
+    if module is None:
+        pytest.skip("scripts/verify_release.py not present in sdist")
+    return module
+
+
+@pytest.fixture
+def tree(tmp_path: Path, verify_mod, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A fake checkout: a ``.git`` marker plus a copy of every version-carrying file of this repo.
+
+    GITHUB_ACTIONS is removed so that the ``.git`` marker alone decides between strict and lenient.
+    """
+    root = Path(__file__).resolve().parent.parent
+    sources = [rel_path for _label, rel_path, _pattern in verify_mod.VERSION_SOURCES]
+    if not all((root / rel_path).is_file() for rel_path in sources):
+        pytest.skip("not a full source checkout")
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    (tmp_path / ".git").mkdir()
+    for rel_path in sources:
+        (tmp_path / rel_path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel_path).write_bytes((root / rel_path).read_bytes())
+    return tmp_path
+
+
+def test_every_missing_source_is_reported_in_a_checkout(
+    tmp_path: Path, verify_mod, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    (tmp_path / ".git").mkdir()
+    with pytest.raises(AssertionError) as exc_info:
+        verify_mod.check_version_sync(tmp_path, __version__)
+    for label, rel_path, _pattern in verify_mod.VERSION_SOURCES:
+        assert f"Version source missing: {label} (expected at {rel_path})" in str(exc_info.value)
+
+
+def test_missing_source_is_tolerated_only_outside_a_checkout(
+    tree: Path, verify_mod, monkeypatch: pytest.MonkeyPatch
+):
+    """An sdist ships only some of the files, but a source checkout must never silently lose one."""
+    (tree / "aur" / "PKGBUILD").unlink()
+    with pytest.raises(AssertionError, match="Version source missing: aur/PKGBUILD"):
+        verify_mod.check_version_sync(tree, __version__)  # strict: the .git marker
+
+    (tree / ".git").rmdir()
+    verified = verify_mod.check_version_sync(tree, __version__)  # lenient: skipped, not an error
+    assert len(verified) == len(verify_mod.VERSION_SOURCES) - 1
+    assert "aur/PKGBUILD" not in verified
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")  # a CI job is strict even without a .git entry
+    with pytest.raises(AssertionError, match="Version source missing: aur/PKGBUILD"):
+        verify_mod.check_version_sync(tree, __version__)
+
+
+def test_git_file_of_a_worktree_marks_a_checkout(tree: Path, verify_mod):
+    """In a git worktree or a submodule `.git` is a file, not a directory."""
+    (tree / ".git").rmdir()
+    (tree / ".git").write_text("gitdir: /elsewhere/.git/worktrees/wt\n", encoding="utf-8")
+    (tree / "aur" / "PKGBUILD").unlink()
+    with pytest.raises(AssertionError, match="Version source missing: aur/PKGBUILD"):
+        verify_mod.check_version_sync(tree, __version__)
+
+
+def test_version_line_gone_from_a_source_is_reported(tree: Path, verify_mod):
+    _rewrite(tree / "aur" / "PKGBUILD", r"^pkgver=.*$", "# pkgver removed")
+    with pytest.raises(AssertionError, match="Version pattern not found in aur/PKGBUILD"):
+        verify_mod.check_version_sync(tree, __version__)
+
+
+def test_each_source_is_enforced_individually(tree: Path, verify_mod):
+    """A stale version in any single source, the .SRCINFO download URL included, is reported."""
+    for label, rel_path, pattern in verify_mod.VERSION_SOURCES:
+        path = tree / rel_path
+        original = path.read_text(encoding="utf-8")
+        match = re.search(pattern, original)
+        assert match is not None, f"{label}: pattern does not match the file"
+        start, end = match.span(1)
+        path.write_text(original[:start] + "0.0.1" + original[end:], encoding="utf-8")
+        expected = re.escape(f"Version mismatch in {label}: found '0.0.1'")
+        with pytest.raises(AssertionError, match=expected):
+            verify_mod.check_version_sync(tree, __version__)
+        path.write_text(original, encoding="utf-8")
+
+
+def test_reinstall_hint_is_shown_only_when_all_files_agree(tree: Path, verify_mod):
+    """A stale installed package is blamed only if every file carries the same version."""
+    _rewrite(tree / "pyproject.toml", r'^version\s*=\s*".*"$', 'version = "0.0.1"')
+    with pytest.raises(AssertionError) as exc_info:
+        verify_mod.check_version_sync(tree, "9.9.9")
+    message = str(exc_info.value)
+    assert "reinstall" not in message
+    assert "found '0.0.1'" in message
+    assert f"found '{__version__}'" in message
+
+
+@pytest.mark.parametrize(
+    ("rel_path", "transform"),
+    [
+        ("CHANGELOG.md", lambda raw: b"## [Unreleased]\n\n" + raw),
+        ("debian/changelog", lambda raw: b"\xef\xbb\xbf" + raw),
+        ("debian/changelog", lambda raw: b"\n" + raw),
+    ],
+    ids=["unreleased-section", "utf8-bom", "leading-blank-line"],
+)
+def test_harmless_file_quirks_do_not_raise_a_false_alarm(
+    tree: Path, verify_mod, rel_path, transform
+):
+    path = tree / rel_path
+    path.write_bytes(transform(path.read_bytes()))
+    assert len(verify_mod.check_version_sync(tree, __version__)) == len(verify_mod.VERSION_SOURCES)
+
+
+def test_crlf_checkout_is_accepted(tree: Path, verify_mod):
+    """Windows checkouts with core.autocrlf (the Windows CI jobs) verify like LF ones."""
+    for _label, rel_path, _pattern in verify_mod.VERSION_SOURCES:
+        path = tree / rel_path
+        path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    assert len(verify_mod.check_version_sync(tree, __version__)) == len(verify_mod.VERSION_SOURCES)
 
 
 def test_all_public_symbols_exported():
