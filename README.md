@@ -204,26 +204,81 @@ pip install "yfinance-ta-patterns[talib]"
 
 ## 🤖 Native MCP (Model Context Protocol) Server
 
-Connect **yfinance-ta-patterns** directly to **Claude Code**, **Antigravity**, **Claude Desktop**, **Cursor**, or **Windsurf** via the built-in `yfinance-ta-mcp` JSON-RPC 2.0 server (`ta_scan_symbol`, `ta_scan_watchlist`, `ta_backtest_patterns`, `ta_list_patterns`, `ta_get_economic_calendar`, `ta_get_news`):
+Connect **yfinance-ta-patterns** directly to **Antigravity**, **Claude Code**, **Claude Desktop**, **Cursor**, or **Windsurf** via the built-in `yfinance-ta-mcp` JSON-RPC 2.0 server.
 
-- **Latest Protocol Spec (`2025-11-25`)**: Full MCP lifecycle version negotiation supporting `2024-11-05`, `2025-03-26`, `2025-06-18`, and `2025-11-25`.
-- **Institutional Tool Metadata**: Includes human-readable `title`, `annotations` (`readOnlyHint: true`, `openWorldHint`), and detailed JSON `outputSchema` for every tool.
-- **Token-Optimized Output**: Emits raw UTF-8 without token-wasting `\uXXXX` escaping for Cyrillic and currency symbols (`€`, `£`, `¥`). `ta_scan_watchlist` features `compact: true` by default to comfortably remain below Claude Code's 10,000-token tool output threshold.
-- **Verified Macro Calendar**: `ta_get_economic_calendar` retrieves live macroeconomic events mapped to asset currencies with explicit `UTC` timestamps, returning clean `source: "unavailable"` when feeds are offline (zero mock/hallucinated macroeconomic data).
-- **Market News Headlines**: `ta_get_news` retrieves recent financial market headlines, publisher attribution, and publication timestamps directly for the selected ticker symbol with resilient fallback handling.
+### Available MCP Tools
 
-#### Option 1: Claude Code CLI
+| Tool Name | Key Arguments | Purpose |
+|:---|:---|:---|
+| `ta_scan_symbol` | `symbol`, `timeframe`, `period`, `min_confidence`, `include_news` | Full scan of an asset with institutional AI Confluence Scoring (Trend + RSI + Volume + ATR), actionable setups (Entry, SL, TP1, TP2), event risk warnings, and news catalysts. |
+| `ta_scan_watchlist` | `symbols` (up to 25), `timeframe`, `min_confidence`, `compact` | Batch portfolio scanner that ranks all detected candlestick setups across Forex, Equities, or Crypto descending by AI Confluence Score. |
+| `ta_get_economic_calendar` | `currency`, `importance`, `start_date`, `end_date` | Live macroeconomic calendar events mapped to currencies (`EUR`, `USD`, `GBP`, `JPY`) with forecast, previous, and impact grading. |
+| `ta_get_news` | `symbol`, `max_items` | Real-time financial headlines, provider attribution, and publication timestamps directly from Yahoo Finance. |
+| `ta_backtest_patterns` | `symbol`, `timeframe`, `holding_period`, `commission_pct` | Next-open (`Open[i+1]`) backtest engine calculating Win Rate, Profit Factor, Sharpe Ratio, and Maximum Drawdown. |
+| `ta_list_patterns` | *(none)* | Complete roster of 61 supported candlestick patterns and runtime acceleration status. |
+
+---
+
+### 🌐 Pre-Session Eurozone & Macro-Confluence Playbook
+
+Before the European market open (**07:00–08:00 UTC / 10:00–11:00 MSK**), institutional traders evaluate macroeconomic catalysts alongside technical market structure to filter out erratic volatility. 
+
+#### Recommended Pre-Eurozone Workflow:
+1. **Macro Risk Audit:** Call `ta_get_economic_calendar(currency="EUR", importance="high")` to identify high-impact European Central Bank (ECB) rate decisions, German CPI, Eurozone GDP, or PMI releases scheduled for the session.
+2. **Predictability Watchlist Scan:** Run `ta_scan_watchlist` across European currency crosses or Eurozone blue-chip equities with a high confidence threshold (`min_confidence: 0.65` or `0.70`).
+3. **News Sentiment Check:** If a setup triggers on a key symbol (e.g., `EURUSD=X`), scan recent news via `ta_scan_symbol(symbol="EURUSD=X", include_news=True)` to ensure geopolitical or central bank breaking news does not invalidate technical structure.
+
+#### Top Curated Asset Baskets for Pre-Session Scanning:
+- **Eurozone & European Forex Crosses (6 pairs):**
+  `['EURUSD=X', 'EURGBP=X', 'EURJPY=X', 'EURCHF=X', 'EURAUD=X', 'EURCAD=X']`
+- **Eurozone Equities (Top 5 Blue-Chips):**
+  `['SAP.DE', 'ASML.AS', 'MC.PA', 'SIE.DE', 'AIR.PA']`
+- **Major Cryptocurrencies:**
+  `['BTC-USD', 'ETH-USD', 'SOL-USD', 'BNB-USD', 'XRP-USD']`
+
+---
+
+### 🧠 Frontier AI Agent Prompts (Claude, OpenAI o3, DeepSeek, Gemini)
+
+Send these structured prompts to your AI agents to trigger automated quantitative analysis:
+
+#### Prompt 1: Pre-European Session Market Brief
+```text
+You are a Senior Quantitative Portfolio Manager and Technical Analyst.
+Before the European market open, perform a structured risk-adjusted assessment:
+1. Use `ta_get_economic_calendar` with currency="EUR" and importance="high" to identify high-impact events for today.
+2. Scan the Eurozone basket ['EURUSD=X', 'EURGBP=X', 'EURJPY=X', 'EURCHF=X', 'EURAUD=X', 'EURCAD=X'] using `ta_scan_watchlist` on the '1h' timeframe with min_confidence=0.65.
+3. For the top-ranked setups, evaluate confluence: Trend (EMA 20/50/200), RSI momentum, and ATR-based risk/reward.
+4. If an asset has an imminent high-impact macro event within 60 minutes, issue an explicit risk warning to defer entry.
+5. Provide a concise Trade Execution Table: Symbol | Direction | Confluence | Entry | Stop-Loss | Take-Profit | R:R.
+```
+
+#### Prompt 2: Deep-Dive Single Asset Confluence Brief
+```text
+Review symbol '{SYMBOL}' for the current working week:
+1. Execute `ta_scan_symbol` with symbol='{SYMBOL}', timeframe='4h', period='60d', and include_news=True.
+2. Evaluate pattern validity under current trend regime (EMA 20/50/200) and RSI momentum exhaustion.
+3. Review upcoming macroeconomic calendar releases and recent news headlines to detect fundamental catalysts.
+4. Critique ATR-based stop-loss and take-profit targets, recommending optimal risk-adjusted position sizing.
+5. Deliver a final Go / No-Go investment decision with clear rationale.
+```
+
+---
+
+#### Client Configuration
+
+##### Option 1: Claude Code CLI
 
 ```bash
 # Recommended: install once as a global tool (~0.4s instant startup, avoids uvx cold timeouts)
 uv tool install yfinance-ta-patterns
 claude mcp add yfinance-ta -- yfinance-ta-mcp
 
-# Or zero-install execution via uvx (pinned version recommended for reproducibility):
-claude mcp add yfinance-ta -- uvx --from "yfinance-ta-patterns>=0.3.49" yfinance-ta-mcp
+# Or zero-install execution via uvx:
+claude mcp add yfinance-ta -- uvx --from "yfinance-ta-patterns>=0.3.74" yfinance-ta-mcp
 ```
 
-#### Option 2: Antigravity / Claude Desktop / Cursor / Windsurf (`mcp_config.json`)
+##### Option 2: Antigravity / Claude Desktop / Cursor / Windsurf (`mcp_config.json`)
 
 ```json
 {
@@ -242,7 +297,7 @@ Or zero-install via `uvx`:
   "mcpServers": {
     "yfinance-ta": {
       "command": "uvx",
-      "args": ["--from", "yfinance-ta-patterns", "yfinance-ta-mcp"]
+      "args": ["--from", "yfinance-ta-patterns>=0.3.74", "yfinance-ta-mcp"]
     }
   }
 }
@@ -633,6 +688,8 @@ If you find this project valuable, encounter issues, or would like to support on
 
 See [CHANGELOG.md](CHANGELOG.md) for full detailed release history, technical audit notes, and benchmark comparisons.
 
+* 🚀 **v0.3.74** — Pre-session Eurozone & macro-confluence scanning workflows, strict `mypy` typing safety in `AIMarketAnalyst`, broadened `yfinance>=0.2.54` base dependency range eliminating PyPy and Windows No-GIL wheel conflicts, pinned Python 3.8/3.9 runners to `ubuntu-22.04`, and 100% CI pass rate (**52/52 jobs passed**, **613 tests passed**).
+* 🚀 **v0.3.73** — Multi-source resilient economic calendar (native `yfinance.Calendars` + ForexFactory weekly JSON fallback), upstream Yahoo Finance news restoration (`yfinance>=1.8.0`), and enriched MCP `ta_scan_symbol` / `ta_market_analyst_prompt` with weekly macroeconomic events and news catalysts.
 * 🚀 **v0.3.72** — Clarified exact verified runtime scopes in documentation: Tier-1 Linux x86_64, Windows & macOS CI matrices, wheels-only resolution for free-threaded Python 3.13t, and explicit PyPI dependency boundaries for PyPy and CPython 3.16.
 * 🚀 **v0.3.71** — Fixed MCP watchlist concurrent scan race condition on pandas 2.x shared `Index._cache` via `_isolated_frame()`, preventing spurious duplicate timestamp errors, and expanded test suite (**602 tests passed**).
 * 🚀 **v0.3.70** — Pinned MCP server clock in event risk tests to UTC midday, eliminating the 00:00–00:16 UTC test failure window, added 15-minute event risk grace window boundary tests, and expanded test suite (**599 tests passed**).

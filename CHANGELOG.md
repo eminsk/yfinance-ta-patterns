@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.74] - 2026-11-15
+
+### Added & Enhanced
+- **Pre-Session Eurozone & Macro-Confluence Watchlist Scanning**:
+  - Validated and documented end-to-end pre-session scanning workflows across European forex crosses (`EURUSD=X`, `EURGBP=X`, `EURJPY=X`, `EURCHF=X`), Eurozone equities (`SAP.DE`, `ASML.AS`, `MC.PA`), and crypto assets via `ta_scan_watchlist` and `ta_get_economic_calendar`.
+  - Tuned institutional AI Confluence Scoring filters (`min_confidence=0.65` / `0.70`) for deterministic multi-factor predictability ranking (Trend alignment + Wilder RSI-14 + RVOL volume surge + ATR volatility buffers).
+- **Strict Typing Safety (`ai/analyst.py`)**:
+  - Fixed `mypy` strict type checking on news catalyst summary slicing in `AIMarketAnalyst.to_llm_prompt()`.
+- **Universal Packaging & Cross-Platform Wheel Matrix Parity (`pyproject.toml`, `ci.yml`)**:
+  - Restored base `yfinance>=0.2.54` dependency range with backward-compatible dynamic degradation, eliminating multi-platform version resolution conflicts on PyPy (3.8–3.12) and Windows free-threaded No-GIL (3.13t/3.14t) wheel installations.
+  - Pinned legacy test matrix runners for Python 3.8 and 3.9 to `ubuntu-22.04`, resolving GitHub Actions Ubuntu 26.04 EOL image dropouts.
+  - Achieved 100% clean pass rate across all 52 CI matrix jobs.
+
 ## [0.3.73] - 2026-11-15
 
 ### Fixed & Enhanced

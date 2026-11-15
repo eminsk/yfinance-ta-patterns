@@ -4364,7 +4364,7 @@ wheels = [
 
 [[package]]
 name = "yfinance-ta-patterns"
-version = "0.3.73"
+version = "0.3.74"
 source = { editable = "." }
 dependencies = [
     { name = "multitasking", marker = "python_full_version < '3.9'" },

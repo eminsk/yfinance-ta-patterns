@@ -1,3 +1,13 @@
+yfinance-ta-patterns (0.3.74-1) unstable; urgency=medium
+
+  * Release v0.3.74: Pre-session Eurozone & macro-confluence scanning, typing fixes, and universal wheel matrix parity:
+    - MCP ta_scan_watchlist and ta_get_economic_calendar support pre-Eurozone session multi-asset ranking and risk filtering.
+    - Resolved mypy strict type indexing on news catalyst summary slicing in AIMarketAnalyst.
+    - Broadened base yfinance dependency specifier for seamless PyPy and Windows free-threaded No-GIL wheel installations.
+    - Updated matrix runner targeting for Python 3.8/3.9 on ubuntu-22.04, achieving 100% CI pass rate (52/52 jobs).
+
+ -- eminsk <M_N_N@tut.by>  Sun, 15 Nov 2026 17:00:00 +0000
+
 yfinance-ta-patterns (0.3.73-1) unstable; urgency=medium
 
   * Release v0.3.73: Resilient economic calendar, news restoration, and AI confluence enhancements:
