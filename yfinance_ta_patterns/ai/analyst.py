@@ -340,7 +340,8 @@ class AIMarketAnalyst:
         if news:
             n_lines = []
             for n in news[:5]:
-                summary_part = f" - {n.get('summary')[:150]}..." if n.get("summary") else ""
+                summary_val = n.get("summary")
+                summary_part = f" - {str(summary_val)[:150]}..." if summary_val else ""
                 n_lines.append(f"- [{n.get('publisher', 'News')}] {n.get('title')}{summary_part}")
             news_section = "\n### Key Market News Catalysts:\n" + "\n".join(n_lines) + "\n"
 
