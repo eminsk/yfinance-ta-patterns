@@ -1,3 +1,12 @@
+yfinance-ta-patterns (0.3.75-1) unstable; urgency=medium
+
+  * Release v0.3.75: Native institutional watchlist presets and full-portfolio 56-pair scanning:
+    - Added MCP watchlist presets: 'euro_pairs' (7 EUR crosses), 'all_forex' (56 pairs), 'majors', and 'crypto'.
+    - Omitting 'symbols' in ta_scan_watchlist now automatically defaults to scanning all 56 Forex currency pairs (parity with CLI).
+    - Expanded MAX_WATCHLIST_SYMBOLS to 60 with 12-worker concurrent execution and 35s timeout.
+
+ -- eminsk <M_N_N@tut.by>  Sun, 15 Nov 2026 17:20:00 +0000
+
 yfinance-ta-patterns (0.3.74-1) unstable; urgency=medium
 
   * Release v0.3.74: Pre-session Eurozone & macro-confluence scanning, typing fixes, and universal wheel matrix parity:

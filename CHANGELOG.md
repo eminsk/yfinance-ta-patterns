@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.75] - 2026-11-15
+
+### Added & Enhanced
+- **MCP Portfolio Presets & Full 56-Pair Forex Scanning (`mcp_server.py`)**:
+  - Added institutional preset parameter `preset` to `ta_scan_watchlist` supporting `'euro_pairs'`, `'all_forex'`, `'majors'`, `'crypto'`, and `'eu_equities'`.
+  - Omitting `symbols` now defaults to scanning all 56 major & cross Forex currency pairs, matching CLI `yftp` behavior.
+  - Increased `MAX_WATCHLIST_SYMBOLS` to 60 with 12-worker multi-threaded concurrency and 35.0s timeout limit.
+
 ## [0.3.74] - 2026-11-15
 
 ### Added & Enhanced

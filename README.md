@@ -688,6 +688,7 @@ If you find this project valuable, encounter issues, or would like to support on
 
 See [CHANGELOG.md](CHANGELOG.md) for full detailed release history, technical audit notes, and benchmark comparisons.
 
+* 🚀 **v0.3.75** — Portfolio presets (`euro_pairs`, `all_forex`, `majors`, `crypto`) in MCP `ta_scan_watchlist`, automatic 56-pair default scanning when `symbols` is omitted (matching CLI `yftp`), expanded `MAX_WATCHLIST_SYMBOLS=60` with 12-worker multi-threading.
 * 🚀 **v0.3.74** — Pre-session Eurozone & macro-confluence scanning workflows, strict `mypy` typing safety in `AIMarketAnalyst`, broadened `yfinance>=0.2.54` base dependency range eliminating PyPy and Windows No-GIL wheel conflicts, pinned Python 3.8/3.9 runners to `ubuntu-22.04`, and 100% CI pass rate (**52/52 jobs passed**, **613 tests passed**).
 * 🚀 **v0.3.73** — Multi-source resilient economic calendar (native `yfinance.Calendars` + ForexFactory weekly JSON fallback), upstream Yahoo Finance news restoration (`yfinance>=1.8.0`), and enriched MCP `ta_scan_symbol` / `ta_market_analyst_prompt` with weekly macroeconomic events and news catalysts.
 * 🚀 **v0.3.72** — Clarified exact verified runtime scopes in documentation: Tier-1 Linux x86_64, Windows & macOS CI matrices, wheels-only resolution for free-threaded Python 3.13t, and explicit PyPI dependency boundaries for PyPy and CPython 3.16.
