@@ -44,9 +44,9 @@ SUPPORTED_PROTOCOL_VERSIONS: tuple[str, ...] = (
 )
 LATEST_PROTOCOL_VERSION = "2025-11-25"
 
-MAX_WATCHLIST_SYMBOLS = 25
+MAX_WATCHLIST_SYMBOLS = 60
 DEFAULT_MAX_RESULTS = 25
-MAX_RESULTS_LIMIT = 50
+MAX_RESULTS_LIMIT = 60
 
 SUPPORTED_TIMEFRAMES = [
     "1m",
@@ -180,7 +180,8 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
         "name": "ta_scan_watchlist",
         "title": "Scan Watchlist Patterns & Confluence Ranking",
         "description": (
-            "Scan multiple ticker symbols in batch (up to 25 symbols) and rank all detected "
+            "Scan multiple ticker symbols in batch (up to 60 symbols) or institutional presets "
+            "(e.g. 'all_forex', 'euro_pairs', 'majors', 'crypto') and rank all detected "
             "candlestick pattern setups across the watchlist by AI Confluence Score descending."
         ),
         "annotations": {
@@ -193,11 +194,20 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "symbols": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "minItems": 1,
                     "maxItems": MAX_WATCHLIST_SYMBOLS,
                     "description": (
-                        f"List of ticker symbols (max {MAX_WATCHLIST_SYMBOLS}, "
-                        "e.g. ['AAPL', 'NVDA', 'MSFT', 'BTC-USD'])"
+                        f"List of ticker symbols (up to {MAX_WATCHLIST_SYMBOLS}, e.g. ['EURUSD=X', 'AAPL', 'BTC-USD']). "
+                        "If omitted or set to ['ALL'] / ['FOREX'], automatically scans all 56 Forex currency pairs (matches CLI behavior). "
+                        "Supports aliases: 'EURO', 'FOREX', 'MAJORS', 'CRYPTO'."
+                    ),
+                },
+                "preset": {
+                    "type": "string",
+                    "enum": ["all_forex", "euro_pairs", "majors", "crypto", "eu_equities"],
+                    "description": (
+                        "Pre-configured institutional market basket to scan. Ideal before the European session: "
+                        "'euro_pairs' (7 EUR crosses) or 'all_forex' (all 56 currency pairs). "
+                        "Overrides 'symbols' if provided."
                     ),
                 },
                 "timeframe": {
@@ -241,7 +251,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                     ),
                 },
             },
-            "required": ["symbols"],
+            "required": [],
             "additionalProperties": False,
         },
         "outputSchema": {
@@ -655,15 +665,50 @@ def _resolve_mcp_period(timeframe: str, period: Any, default_period: str = "6mo"
     return MarketDataLoader._clamp_period_for_interval(raw_period, norm_tf)
 
 
-def _normalize_watchlist_symbols(raw_symbols: Any) -> list[str]:
-    """Validate and normalize watchlist symbols input (accepts list or comma-separated string)."""
-    if raw_symbols is None:
-        raise ValueError("Parameter 'symbols' is required and must be a non-empty list of tickers.")
+WATCHLIST_PRESETS: dict[str, list[str]] = {
+    "all_forex": list(FOREX_56_PAIRS),
+    "all": list(FOREX_56_PAIRS),
+    "forex": list(FOREX_56_PAIRS),
+    "all_pairs": list(FOREX_56_PAIRS),
+    "pairs": list(FOREX_56_PAIRS),
+    "forex_56": list(FOREX_56_PAIRS),
+    "*": list(FOREX_56_PAIRS),
+    "euro_pairs": ["EURUSD=X", "EURGBP=X", "EURJPY=X", "EURCHF=X", "EURAUD=X", "EURCAD=X", "EURNZD=X"],
+    "euro": ["EURUSD=X", "EURGBP=X", "EURJPY=X", "EURCHF=X", "EURAUD=X", "EURCAD=X", "EURNZD=X"],
+    "eurozone": ["EURUSD=X", "EURGBP=X", "EURJPY=X", "EURCHF=X", "EURAUD=X", "EURCAD=X", "EURNZD=X"],
+    "euro_crosses": ["EURUSD=X", "EURGBP=X", "EURJPY=X", "EURCHF=X", "EURAUD=X", "EURCAD=X", "EURNZD=X"],
+    "majors": ["EURUSD=X", "GBPUSD=X", "USDJPY=X", "USDCHF=X", "AUDUSD=X", "USDCAD=X", "NZDUSD=X"],
+    "crypto": ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD"],
+    "eu_equities": ["SAP.DE", "ASML.AS", "MC.PA", "SIE.DE", "AIR.PA"],
+}
 
-    tokens: list[str] = []
+
+def _normalize_watchlist_symbols(
+    raw_symbols: Any = None,
+    preset: str | None = None,
+) -> list[str]:
+    """Validate and normalize watchlist symbols input (accepts list, string, or preset)."""
+    if preset:
+        key = str(preset).strip().lower()
+        if key in WATCHLIST_PRESETS:
+            return list(WATCHLIST_PRESETS[key])
+        raise ValueError(f"Unknown preset {preset!r}. Supported presets: {sorted(WATCHLIST_PRESETS.keys())}")
+
+    if raw_symbols is None or (isinstance(raw_symbols, (list, tuple)) and not raw_symbols):
+        # Default behavior: scan all 56 Forex pairs (matches CLI behavior)
+        return list(FOREX_56_PAIRS)
+
     if isinstance(raw_symbols, str):
+        cleaned_str = raw_symbols.strip().lower()
+        if cleaned_str in WATCHLIST_PRESETS:
+            return list(WATCHLIST_PRESETS[cleaned_str])
         tokens = [s.strip() for s in re.split(r"[,;\s]+", raw_symbols) if s.strip()]
     elif isinstance(raw_symbols, Sequence) and not isinstance(raw_symbols, (bytes, bytearray)):
+        if len(raw_symbols) == 1 and isinstance(raw_symbols[0], str):
+            single_key = raw_symbols[0].strip().lower()
+            if single_key in WATCHLIST_PRESETS:
+                return list(WATCHLIST_PRESETS[single_key])
+        tokens = []
         for item in raw_symbols:
             if not isinstance(item, str):
                 raise ValueError(
@@ -674,7 +719,7 @@ def _normalize_watchlist_symbols(raw_symbols: Any) -> list[str]:
                     tokens.append(part)
     else:
         raise ValueError(
-            "Parameter 'symbols' must be an array of ticker strings (e.g. ['AAPL', 'NVDA'])."
+            "Parameter 'symbols' must be an array of ticker strings (e.g. ['AAPL', 'NVDA']) or preset alias."
         )
 
     deduped: list[str] = []
@@ -1338,7 +1383,9 @@ class YFinanceTAMCPServer:
             return report
 
         if name == "ta_scan_watchlist":
-            symbols = _normalize_watchlist_symbols(args.get("symbols"))
+            symbols = _normalize_watchlist_symbols(
+                args.get("symbols"), preset=args.get("preset")
+            )
             timeframe = _validate_mcp_timeframe(args.get("timeframe"))
             period = _resolve_mcp_period(timeframe, args.get("period"), default_period="6mo")
             min_conf = _parse_float_param(
@@ -1420,8 +1467,8 @@ class YFinanceTAMCPServer:
                 except Exception as exc:
                     return sym, None, str(exc)
 
-            max_workers = min(len(symbols), 8)
-            timeout_limit = 20.0
+            max_workers = min(len(symbols), 12)
+            timeout_limit = 35.0
             deadline = time.monotonic() + timeout_limit
             executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
             future_to_sym = {executor.submit(_scan_one, sym): sym for sym in symbols}

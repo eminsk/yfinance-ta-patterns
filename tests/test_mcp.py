@@ -1253,3 +1253,47 @@ def test_mcp_backtest_patterns_filter_news() -> None:
     data = resp["result"]["structuredContent"]
     assert data["filter_news"] is True
     assert "news_dates_filtered" in data
+
+
+def test_mcp_scan_watchlist_presets_and_all_forex() -> None:
+    """Verify ta_scan_watchlist supports preset aliases and defaults to 56 Forex pairs."""
+    from yfinance_ta_patterns.forex_data_loader import FOREX_56_PAIRS
+    from yfinance_ta_patterns.mcp_server import _normalize_watchlist_symbols
+
+    # 1. Default when omitted or empty -> all 56 Forex pairs
+    assert len(_normalize_watchlist_symbols(None)) == len(FOREX_56_PAIRS)
+    assert len(_normalize_watchlist_symbols([])) == len(FOREX_56_PAIRS)
+
+    # 2. Preset 'euro_pairs' -> 7 European currency crosses
+    euro = _normalize_watchlist_symbols(preset="euro_pairs")
+    assert "EURUSD=X" in euro
+    assert "EURGBP=X" in euro
+    assert len(euro) == 7
+
+    # 3. String alias 'EURO' in symbols argument
+    euro_alias = _normalize_watchlist_symbols("EURO")
+    assert euro_alias == euro
+
+    # 4. List alias ['FOREX'] in symbols argument
+    fx_alias = _normalize_watchlist_symbols(["FOREX"])
+    assert len(fx_alias) == len(FOREX_56_PAIRS)
+
+    # 5. Live mock handle_request with preset='euro_pairs'
+    df = _make_sample_ohlcv()
+    server = YFinanceTAMCPServer(data_fetcher=lambda s, p, i: df.copy())
+    resp = server.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 99,
+            "method": "tools/call",
+            "params": {
+                "name": "ta_scan_watchlist",
+                "arguments": {"preset": "euro_pairs", "compact": True},
+            },
+        }
+    )
+    assert resp is not None
+    assert resp["result"]["isError"] is False
+    res_data = resp["result"]["structuredContent"]
+    assert res_data["symbols_requested"] == 7
+    assert res_data["symbols_scanned"] == 7
