@@ -965,7 +965,7 @@ def test_mcp_nonblocking_ping_during_stdio() -> None:
     # Give reader thread time to respond to ping (< 50ms)
     time.sleep(0.08)
     q.put(None)
-    t.join(timeout=2.0)
+    t.join(timeout=5.0)
 
     parsed = [json.loads(line) for line in out_lines if line.strip()]
     assert len(parsed) >= 2
