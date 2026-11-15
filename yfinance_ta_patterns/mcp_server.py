@@ -132,6 +132,11 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                     "default": False,
                     "description": "If true, include a human-readable markdown_brief alongside structured JSON patterns",
                 },
+                "include_news": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "If true, include recent market news headlines affecting this ticker",
+                },
                 "compact": {
                     "type": "boolean",
                     "default": True,
@@ -167,6 +172,7 @@ MCP_TOOLS_SCHEMA: list[dict[str, Any]] = [
                 "market_summary": {"type": "object"},
                 "markdown_brief": {"type": "string"},
                 "event_risk": {"type": "object"},
+                "news": {"type": "array"},
             },
         },
     },
@@ -970,7 +976,22 @@ class YFinanceTAMCPServer:
                     df = self._fetch_ohlcv(symbol, period, timeframe)
                     analyst = AIMarketAnalyst(df, symbol=symbol, timeframe=timeframe)
                     analyst.analyze(min_confidence=0.4, lookback_bars=3)
-                    prompt_text = analyst.to_llm_prompt()
+                    cal_events = []
+                    with contextlib.suppress(Exception), InvestingCalendar(
+                        http_fetcher=self._calendar_fetcher, timeout=3.0
+                    ) as cal:
+                        cal_res = cal.get_events_for_symbol(
+                            symbol=symbol, days=7, importances=["2", "3"], limit=10
+                        )
+                        cal_events = cal_res.get("events", [])
+                    news_items = []
+                    with contextlib.suppress(Exception):
+                        news_res = self._call_tool("ta_get_news", {"symbol": symbol, "limit": 5})
+                        if isinstance(news_res, dict):
+                            news_items = news_res.get("news", [])
+                    prompt_text = analyst.to_llm_prompt(
+                        news=news_items, economic_events=cal_events
+                    )
                 return {
                     "jsonrpc": "2.0",
                     "id": req_id,
@@ -1111,6 +1132,7 @@ class YFinanceTAMCPServer:
                 args.get("lookback_bars"), "lookback_bars", 1, 60, default=3
             )
             include_brief = bool(args.get("include_brief", False))
+            include_news = bool(args.get("include_news", False))
             compact = True if args.get("compact") is None else bool(args.get("compact"))
             max_patterns = _parse_int_param(
                 args.get("max_patterns"), "max_patterns", 1, 50, default=25
@@ -1301,8 +1323,18 @@ class YFinanceTAMCPServer:
                 }
             report["event_risk"] = event_risk
 
+            news_items: list[dict[str, Any]] = []
+            if include_news:
+                with contextlib.suppress(Exception):
+                    news_data = self._call_tool("ta_get_news", {"symbol": symbol, "limit": 5})
+                    if isinstance(news_data, dict):
+                        news_items = news_data.get("news", [])
+                report["news"] = news_items
+
             if include_brief:
-                report["markdown_brief"] = analyst.generate_brief()
+                report["markdown_brief"] = analyst.generate_brief(
+                    event_risk=event_risk, news=news_items if include_news else None
+                )
             return report
 
         if name == "ta_scan_watchlist":

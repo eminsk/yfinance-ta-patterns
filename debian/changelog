@@ -1,3 +1,12 @@
+yfinance-ta-patterns (0.3.73-1) unstable; urgency=medium
+
+  * Release v0.3.73: Resilient economic calendar, news restoration, and AI confluence enhancements:
+    - Multi-source economic calendar: native yfinance.Calendars + ForexFactory weekly feed + HTML fallback.
+    - Upgraded yfinance constraint to >=1.8.0, fixing Yahoo Finance news endpoint outage.
+    - Enriched MCP ta_scan_symbol and ta_market_analyst_prompt with current week macroeconomic events and news catalysts.
+
+ -- eminsk <M_N_N@tut.by>  Sun, 15 Nov 2026 15:45:00 +0000
+
 yfinance-ta-patterns (0.3.72-1) unstable; urgency=medium
 
   * Release v0.3.72: Update verified runtime scopes and platform documentation:

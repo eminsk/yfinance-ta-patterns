@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
+import json
 import logging
 import re
 import time
@@ -12,6 +13,8 @@ import warnings
 from collections.abc import Callable, Iterable, Mapping
 from html.parser import HTMLParser
 from typing import Any, ClassVar
+
+import pandas as pd
 
 from .data import _CURRENCY_CODES, classify_asset, normalize_ticker, resolve_asset_currencies
 
@@ -248,6 +251,53 @@ _ISO3_TO_CURRENCY: dict[str, str] = {
     "COL": "COP",
     "ARE": "AED",
 }
+
+_YF_REGION_MAP: dict[str, tuple[str, str]] = {
+    "US": ("United States", "USD"),
+    "USA": ("United States", "USD"),
+    "USD": ("United States", "USD"),
+    "EU": ("Euro Zone", "EUR"),
+    "EUR": ("Euro Zone", "EUR"),
+    "DE": ("Germany", "EUR"),
+    "DEU": ("Germany", "EUR"),
+    "FR": ("France", "EUR"),
+    "FRA": ("France", "EUR"),
+    "IT": ("Italy", "EUR"),
+    "ITA": ("Italy", "EUR"),
+    "ES": ("Spain", "EUR"),
+    "ESP": ("Spain", "EUR"),
+    "GB": ("United Kingdom", "GBP"),
+    "GBR": ("United Kingdom", "GBP"),
+    "GBP": ("United Kingdom", "GBP"),
+    "JP": ("Japan", "JPY"),
+    "JPN": ("Japan", "JPY"),
+    "JPY": ("Japan", "JPY"),
+    "CA": ("Canada", "CAD"),
+    "CAN": ("Canada", "CAD"),
+    "CAD": ("Canada", "CAD"),
+    "AU": ("Australia", "AUD"),
+    "AUS": ("Australia", "AUD"),
+    "AUD": ("Australia", "AUD"),
+    "NZ": ("New Zealand", "NZD"),
+    "NZL": ("New Zealand", "NZD"),
+    "NZD": ("New Zealand", "NZD"),
+    "CH": ("Switzerland", "CHF"),
+    "CHE": ("Switzerland", "CHF"),
+    "CHF": ("Switzerland", "CHF"),
+    "CN": ("China", "CNY"),
+    "CHN": ("China", "CNY"),
+    "CNY": ("China", "CNY"),
+}
+
+_HIGH_IMPACT_KW = re.compile(
+    r"\b(cpi|ppi|gdp|interest\s+rate|fed|fomc|nfp|payroll|unemployment|retail\s+sales|pmi|ism|michigan|mich|sentiment|inflation|central\s+bank|monetary|rate\s+decision)\b",
+    re.I,
+)
+_MED_IMPACT_KW = re.compile(
+    r"\b(housing|building|durable|trade\s+balance|confidence|factory|production|inventories|auction|orders|claim|claims)\b",
+    re.I,
+)
+
 
 
 def normalize_importance_filter(importances: Iterable[Any] | str | None) -> list[str] | None:
@@ -781,7 +831,7 @@ class InvestingCalendar:
             _CALENDAR_FAIL_TIMEOUT[url] = self._timeout
         return content
 
-    def _fetch_from_feed(
+    def _fetch_from_html_feed(
         self,
         date_from: str,
         date_to: str,
@@ -924,6 +974,220 @@ class InvestingCalendar:
             )
 
         return events, "live", None
+
+    def _fetch_from_yfinance(
+        self,
+        date_from: str,
+        date_to: str,
+        countries: Iterable[Any] | None = None,
+        importances: Iterable[Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fetch economic events from Yahoo Finance native economic calendar."""
+        try:
+            import yfinance as yf
+
+            cal = yf.Calendars()
+            df = cal.get_economic_events_calendar(start=date_from, end=date_to, limit=100)
+            if df is None or df.empty:
+                return []
+        except Exception as exc:
+            logger.debug("yfinance economic calendar fetch failed: %s", exc)
+            return []
+
+        imp_filter = set(map(str, importances)) if importances else None
+        country_filter: set[str] | None = None
+        if countries:
+            country_filter = set()
+            for c in countries:
+                c_clean = str(c).lower().strip()
+                if c_clean:
+                    country_filter.add(c_clean)
+                    if c_clean in self.COUNTRY_MAP:
+                        c_name, c_curr = self.COUNTRY_MAP[c_clean]
+                        country_filter.add(c_name.lower())
+                        country_filter.add(c_curr.lower())
+
+        events: list[dict[str, Any]] = []
+        for idx, (event_name, row) in enumerate(df.iterrows()):
+            reg = str(row.get("Region", "")).strip().upper()
+            c_name, curr = _YF_REGION_MAP.get(reg, (reg, reg))
+            ev_str = str(event_name).rstrip("*").strip()
+            if len(ev_str) > 120:
+                ev_str = ev_str[:117] + "..."
+
+            if country_filter:
+                candidates = {c_name.lower(), curr.lower(), reg.lower()}
+                if not (candidates & country_filter):
+                    continue
+
+            ev_time = row.get("Event Time")
+            event_date = ""
+            time_str = ""
+            if ev_time is not None and not str(ev_time).startswith("NaT"):
+                try:
+                    if hasattr(ev_time, "strftime"):
+                        event_date = ev_time.strftime("%Y-%m-%d")
+                        if getattr(ev_time, "hour", 0) != 0 or getattr(ev_time, "minute", 0) != 0:
+                            time_str = ev_time.strftime("%Y-%m-%d %H:%M UTC")
+                        else:
+                            time_str = ev_time.strftime("%Y-%m-%d UTC")
+                    else:
+                        time_str = str(ev_time)
+                        event_date = time_str[:10]
+                except Exception:
+                    time_str = str(ev_time)
+                    event_date = time_str[:10]
+
+            if date_from and event_date and event_date < date_from:
+                continue
+            if date_to and event_date and event_date > date_to:
+                continue
+
+            if _HIGH_IMPACT_KW.search(ev_str):
+                importance = "3"
+            elif _MED_IMPACT_KW.search(ev_str):
+                importance = "2"
+            else:
+                importance = "1"
+
+            if imp_filter and importance not in imp_filter:
+                continue
+
+            act_val = row.get("Actual")
+            actual = str(act_val).strip() if pd.notna(act_val) and str(act_val).strip() != "" else "—"
+            exp_val = row.get("Expected")
+            forecast = str(exp_val).strip() if pd.notna(exp_val) and str(exp_val).strip() != "" else "—"
+            last_val = row.get("Last")
+            previous = str(last_val).strip() if pd.notna(last_val) and str(last_val).strip() != "" else "—"
+
+            events.append(
+                {
+                    "id": f"yf_{idx + 1}",
+                    "time": time_str,
+                    "country": c_name,
+                    "currency": curr,
+                    "importance": importance,
+                    "event": ev_str,
+                    "actual": actual,
+                    "forecast": forecast,
+                    "previous": previous,
+                }
+            )
+        return events
+
+    def _fetch_from_forexfactory(
+        self,
+        date_from: str,
+        date_to: str,
+        countries: Iterable[Any] | None = None,
+        importances: Iterable[Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fetch economic events from ForexFactory weekly JSON feed with caching."""
+        ff_url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+        raw_json = self._download_feed_html(ff_url)
+        if not raw_json:
+            return []
+        try:
+            items = json.loads(raw_json)
+            if not isinstance(items, list):
+                return []
+        except Exception:
+            return []
+
+        imp_map = {"high": "3", "medium": "2", "low": "1", "3": "3", "2": "2", "1": "1"}
+        imp_filter = set(map(str, importances)) if importances else None
+        country_filter: set[str] | None = None
+        if countries:
+            country_filter = set()
+            for c in countries:
+                c_clean = str(c).lower().strip()
+                if c_clean:
+                    country_filter.add(c_clean)
+                    if c_clean in self.COUNTRY_MAP:
+                        c_name, c_curr = self.COUNTRY_MAP[c_clean]
+                        country_filter.add(c_name.lower())
+                        country_filter.add(c_curr.lower())
+
+        events: list[dict[str, Any]] = []
+        for idx, item in enumerate(items):
+            if not isinstance(item, dict):
+                continue
+            curr = str(item.get("country", "")).strip().upper()
+            c_name, _ = _YF_REGION_MAP.get(curr, (curr, curr))
+            if country_filter:
+                candidates = {curr.lower(), c_name.lower()}
+                if not (candidates & country_filter):
+                    continue
+
+            raw_imp = str(item.get("impact", "")).lower().strip()
+            importance = imp_map.get(raw_imp, "1")
+            if imp_filter and importance not in imp_filter:
+                continue
+
+            date_raw = str(item.get("date", "")).strip()
+            time_str = ""
+            event_date = ""
+            if date_raw:
+                try:
+                    dt_val = dt.datetime.fromisoformat(date_raw).astimezone(dt.timezone.utc)
+                    time_str = dt_val.strftime("%Y-%m-%d %H:%M UTC")
+                    event_date = dt_val.strftime("%Y-%m-%d")
+                except Exception:
+                    time_str = date_raw
+                    event_date = date_raw[:10]
+            if date_from and event_date and event_date < date_from:
+                continue
+            if date_to and event_date and event_date > date_to:
+                continue
+
+            title = str(item.get("title", "")).strip()
+            if len(title) > 120:
+                title = title[:117] + "..."
+
+            act = str(item.get("actual") or "—").strip()
+            fc = str(item.get("forecast") or "—").strip()
+            prev = str(item.get("previous") or "—").strip()
+
+            events.append(
+                {
+                    "id": f"ff_{idx + 1}",
+                    "time": time_str,
+                    "country": c_name,
+                    "currency": curr,
+                    "importance": importance,
+                    "event": title,
+                    "actual": act if act else "—",
+                    "forecast": fc if fc else "—",
+                    "previous": prev if prev else "—",
+                }
+            )
+        return events
+
+    def _fetch_from_feed(
+        self,
+        date_from: str,
+        date_to: str,
+        countries: Iterable[Any] | None = None,
+        importances: Iterable[Any] | None = None,
+    ) -> tuple[list[dict[str, Any]], str, str | None]:
+        """Fetch economic events using multi-source resilient pipeline."""
+        # If test mock fetcher is injected, use the legacy HTML parsing pipeline
+        if self._http_fetcher is not None:
+            return self._fetch_from_html_feed(date_from, date_to, countries, importances)
+
+        # 1. Primary native: yfinance Calendars
+        yf_events = self._fetch_from_yfinance(date_from, date_to, countries, importances)
+        if yf_events:
+            return yf_events, "live", None
+
+        # 2. Resilient fallback: ForexFactory weekly feed
+        ff_events = self._fetch_from_forexfactory(date_from, date_to, countries, importances)
+        if ff_events:
+            return ff_events, "live", None
+
+        # 3. HTML feed fallback (TradingEconomics / Investing.com)
+        return self._fetch_from_html_feed(date_from, date_to, countries, importances)
+
 
     def get_events(
         self,

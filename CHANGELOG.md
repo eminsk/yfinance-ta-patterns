@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.73] - 2026-11-15
+
+### Fixed & Enhanced
+- **Multi-Source Resilient Economic Calendar (`economic_calendar.py`)**:
+  - Integrated native `yfinance.Calendars.get_economic_events_calendar()` as the primary engine for live macroeconomic releases, bypassing third-party web scrapers that triggered HTTP 403 / anti-bot challenges.
+  - Added ForexFactory weekly JSON feed (`nfs.faireconomy.media`) with 15-minute TTL caching as a secondary high-resilience fallback.
+  - Retained HTML parser fallback for backwards compatibility and test harnesses.
+- **Upstream Yahoo Finance News Restoration (`mcp_server.py`, `pyproject.toml`)**:
+  - Upgraded dependency constraint to `yfinance>=1.8.0`, resolving the upstream `*** YAHOO! FINANCE IS CURRENTLY DOWN! ***` error caused by Yahoo deprecating `/xhr/ncp` endpoints.
+  - Verified news normalization in `_format_news_item` for modern nested `content` structures (title, provider, canonicalUrl, pubDate, summary).
+- **Macroeconomic & News AI Confluence Briefs (`ai/analyst.py`, `mcp_server.py`)**:
+  - Added `include_news: bool` parameter to `ta_scan_symbol` MCP tool schema and response payload.
+  - Enhanced `AIMarketAnalyst.generate_brief()` and `to_llm_prompt()` with macroeconomic calendar events for the current working week and recent market news catalysts.
+  - Enriched `ta_market_analyst_prompt` to synthesize technical candlestick patterns with live weekly economic event risks and news headlines.
+
 ## [0.3.72] - 2026-10-24
 
 ### Documentation

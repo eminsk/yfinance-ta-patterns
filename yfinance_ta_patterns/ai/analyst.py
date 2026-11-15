@@ -180,6 +180,9 @@ class AIMarketAnalyst:
         self,
         symbol_or_results: str | list[PatternConfidenceResult] | None = None,
         timeframe: str | None = None,
+        *,
+        event_risk: dict[str, Any] | None = None,
+        news: list[dict[str, Any]] | None = None,
     ) -> str:
         """Format an executive markdown brief of technical findings."""
         symbol, tf, results = self._resolve_context(symbol_or_results, timeframe)
@@ -209,40 +212,67 @@ class AIMarketAnalyst:
 
         if not results:
             lines.append("No active patterns identified matching the selected criteria.")
-            return "\n".join(lines)
-
-        for i, res in enumerate(results[:5], 1):
-            grade_badge = f"[{res.grade.value}]"
-            conf_pct = f"{res.confidence * 100:.1f}%"
-            lines.append(f"### {i}. {res.pattern_name} - {grade_badge} (Confluence: {conf_pct})")
-            ts_str = format_timestamp(res.timestamp, tf, include_tz=True)
-            lines.append(f"- **Timestamp:** `{ts_str}` | **Regime:** `{res.trend_regime}`")
-            atr_str = format_price(res.atr) if res.atr is not None else "-"
-            lines.append(
-                f"- **Metrics:** RVOL: `{res.rvol:.2f}x` | RSI(14): `{res.rsi:.1f}` | ATR: `{atr_str}`"
-            )
-
-            if res.confluence_factors:
-                lines.append("- **Confluence Drivers:**")
-                for c in res.confluence_factors:
-                    lines.append(f"  * {c}")
-
-            if res.risk_factors:
-                lines.append("- **Risk & Caveats:**")
-                for rf in res.risk_factors:
-                    lines.append(f"  * {rf}")
-
-            if res.trade_setup:
-                ts = res.trade_setup
-                entry_str = format_price(ts.entry_price)
-                sl_str = format_price(ts.stop_loss)
-                tp1_str = format_price(ts.take_profit_1)
-                tp2_str = format_price(ts.take_profit_2)
+        else:
+            for i, res in enumerate(results[:5], 1):
+                grade_badge = f"[{res.grade.value}]"
+                conf_pct = f"{res.confidence * 100:.1f}%"
+                lines.append(f"### {i}. {res.pattern_name} - {grade_badge} (Confluence: {conf_pct})")
+                ts_str = format_timestamp(res.timestamp, tf, include_tz=True)
+                lines.append(f"- **Timestamp:** `{ts_str}` | **Regime:** `{res.trend_regime}`")
+                atr_str = format_price(res.atr) if res.atr is not None else "-"
                 lines.append(
-                    f"- **Trade Setup:** `{ts.direction}` @ `{entry_str}` | "
-                    f"Stop: `{sl_str}` | TP1: `{tp1_str}` | TP2: `{tp2_str}` "
-                    f"(R/R: `{ts.risk_reward_ratio:.1f}:1`)"
+                    f"- **Metrics:** RVOL: `{res.rvol:.2f}x` | RSI(14): `{res.rsi:.1f}` | ATR: `{atr_str}`"
                 )
+
+                if res.confluence_factors:
+                    lines.append("- **Confluence Drivers:**")
+                    for c in res.confluence_factors:
+                        lines.append(f"  * {c}")
+
+                if res.risk_factors:
+                    lines.append("- **Risk & Caveats:**")
+                    for rf in res.risk_factors:
+                        lines.append(f"  * {rf}")
+
+                if res.trade_setup:
+                    ts = res.trade_setup
+                    entry_str = format_price(ts.entry_price)
+                    sl_str = format_price(ts.stop_loss)
+                    tp1_str = format_price(ts.take_profit_1)
+                    tp2_str = format_price(ts.take_profit_2)
+                    lines.append(
+                        f"- **Trade Setup:** `{ts.direction}` @ `{entry_str}` | "
+                        f"Stop: `{sl_str}` | TP1: `{tp1_str}` | TP2: `{tp2_str}` "
+                        f"(R/R: `{ts.risk_reward_ratio:.1f}:1`)"
+                    )
+                lines.append("")
+
+        if event_risk and isinstance(event_risk, dict):
+            lines.append("---")
+            lines.append("## Macroeconomic Event Risk (Current Week)")
+            if event_risk.get("has_high_impact_event"):
+                lines.append(
+                    f"- **High-Impact Event Warning:** `{event_risk.get('nearest_event')}` "
+                    f"({event_risk.get('currency')}) in `{event_risk.get('hours_until')}h` at `{event_risk.get('event_time')}`"
+                )
+            elif event_risk.get("status") == "ok":
+                lines.append("- **Event Risk Status:** `Clear` (no high-impact events within 48h window)")
+            elif event_risk.get("message"):
+                lines.append(f"- **Event Risk Status:** `{event_risk.get('message')}`")
+            lines.append("")
+
+        if news and isinstance(news, list) and len(news) > 0:
+            lines.append("---")
+            lines.append("## Recent Market News Catalysts")
+            for item in news[:5]:
+                title = item.get("title", "")
+                pub = item.get("publisher", "")
+                ptime = item.get("publish_time", "")
+                summary = item.get("summary", "")
+                meta_str = f" ({pub}, {ptime})" if pub or ptime else ""
+                lines.append(f"- **{title}**{meta_str}")
+                if summary:
+                    lines.append(f"  {summary[:200]}...")
             lines.append("")
 
         return "\n".join(lines)
@@ -283,16 +313,47 @@ class AIMarketAnalyst:
         self,
         symbol_or_results: str | list[PatternConfidenceResult] | None = None,
         timeframe: str | None = None,
+        *,
+        event_risk: dict[str, Any] | None = None,
+        news: list[dict[str, Any]] | None = None,
+        economic_events: list[dict[str, Any]] | None = None,
     ) -> str:
         """Create a tailored prompt for frontier reasoning LLMs (Claude 3.7 Sonnet, o3-mini, DeepSeek-R1, Gemini 2.5) to provide second-opinion analysis."""
-        brief = self.generate_brief(symbol_or_results, timeframe)
+        brief = self.generate_brief(
+            symbol_or_results, timeframe, event_risk=event_risk, news=news
+        )
+        macro_section = ""
+        if economic_events:
+            ev_lines = []
+            for ev in economic_events[:7]:
+                ev_lines.append(
+                    f"- {ev.get('time')}: [{ev.get('currency')}] {ev.get('event')} "
+                    f"(Impact: {ev.get('importance')}, Forecast: {ev.get('forecast')}, Prev: {ev.get('previous')})"
+                )
+            macro_section = (
+                "\n### Upcoming Economic Calendar Events (Current Working Week):\n"
+                + "\n".join(ev_lines)
+                + "\n"
+            )
+
+        news_section = ""
+        if news:
+            n_lines = []
+            for n in news[:5]:
+                summary_part = f" - {n.get('summary')[:150]}..." if n.get("summary") else ""
+                n_lines.append(f"- [{n.get('publisher', 'News')}] {n.get('title')}{summary_part}")
+            news_section = "\n### Key Market News Catalysts:\n" + "\n".join(n_lines) + "\n"
+
         return (
             "You are a Senior Quantitative Portfolio Manager and Technical Analyst.\n"
-            "Review the following algorithmic pattern detection and market intelligence report.\n"
+            "Review the following algorithmic pattern detection, macroeconomic events, and market news intelligence report.\n"
             "Perform a rigorous step-by-step risk-adjusted evaluation:\n"
             "1. Evaluate whether the identified pattern setups offer positive expected value (+EV) under current trend regime.\n"
-            "2. Assess macroeconomic, liquidity, volatility (Wilder ATR), and correlation risks.\n"
-            "3. Critique the ATR-based stop-loss and take-profit targets, and recommend optimal risk-adjusted position sizing.\n\n"
-            f"{brief}\n\n"
+            "2. Assess macroeconomic event catalysts (economic calendar releases), volatility (Wilder ATR), and market sentiment from news.\n"
+            "3. Critique the ATR-based stop-loss and take-profit targets, and recommend optimal risk-adjusted position sizing.\n"
+            "4. Provide concrete go/no-go trade decision for the current working week.\n\n"
+            f"{brief}\n"
+            f"{macro_section}"
+            f"{news_section}\n"
             "Provide your structured investment committee assessment with clear trade execution guidance."
         )
