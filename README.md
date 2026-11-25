@@ -11,6 +11,7 @@
 [![PyPy](https://img.shields.io/badge/PyPy-3.8%20--%203.12-orange.svg)](https://www.pypy.org/)
 [![No-GIL](https://img.shields.io/badge/No--GIL-3.14t-purple.svg)](https://peps.python.org/pep-0703/)
 [![MCP Server](https://img.shields.io/badge/MCP-Native_Stdio_Server-00a67e.svg)](#native-mcp-model-context-protocol-server-for-ai-agents)
+[![Glama MCP Server](https://glama.ai/mcp/servers/eminsk/yfinance-ta-patterns/badges/score.svg)](https://glama.ai/mcp/servers/eminsk/yfinance-ta-patterns)
 [![CI](https://github.com/eminsk/yfinance-ta-patterns/actions/workflows/ci.yml/badge.svg)](https://github.com/eminsk/yfinance-ta-patterns/actions)
 [![GitHub Stars](https://img.shields.io/github/stars/eminsk/yfinance-ta-patterns?style=flat&logo=github)](https://github.com/eminsk/yfinance-ta-patterns/stargazers)
 [![GitHub Issues](https://img.shields.io/github/issues/eminsk/yfinance-ta-patterns?style=flat&color=red&logo=github)](https://github.com/eminsk/yfinance-ta-patterns/issues)
@@ -567,7 +568,9 @@ print(report_df)
 <a id="native-mcp-model-context-protocol-server-for-ai-agents"></a>
 ## 🤖 Native MCP (Model Context Protocol) Server for AI Agents
 
-`yfinance-ta-patterns` includes a built-in, zero-overhead **Native MCP JSON-RPC 2.0 Server** (`yfinance-ta-mcp`) that exposes institutional technical analysis, candlestick pattern scanning, AI confluence scoring, trade setups, macroeconomic calendars, and market news directly to AI coding assistants and autonomous agent runtimes (**Claude Code**, **Claude Desktop**, **Cursor**, **Windsurf**, **Google Antigravity**, **Gemini CLI**, and any client supporting the [Model Context Protocol](https://modelcontextprotocol.io/)).
+[![eminsk/yfinance-ta-patterns MCP server](https://glama.ai/mcp/servers/eminsk/yfinance-ta-patterns/badges/score.svg)](https://glama.ai/mcp/servers/eminsk/yfinance-ta-patterns)
+
+`yfinance-ta-patterns` includes a built-in, zero-overhead **Native MCP JSON-RPC 2.0 Server** (`yfinance-ta-mcp`) listed on [Glama MCP](https://glama.ai/mcp/servers/eminsk/yfinance-ta-patterns) that exposes institutional technical analysis, candlestick pattern scanning, AI confluence scoring, trade setups, macroeconomic calendars, and market news directly to AI coding assistants and autonomous agent runtimes (**Claude Code**, **Claude Desktop**, **Cursor**, **Windsurf**, **Google Antigravity**, **Gemini CLI**, and any client supporting the [Model Context Protocol](https://modelcontextprotocol.io/)).
 
 Optimized for **Frontier Reasoning Models** (**Claude 3.7 Sonnet** with Extended Thinking, **OpenAI o3-mini / o1**, **DeepSeek-R1**, **Gemini 2.5 Pro / Flash**, and **GPT-4.5**).
 
